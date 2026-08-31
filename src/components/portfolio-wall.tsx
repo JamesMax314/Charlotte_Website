@@ -11,7 +11,15 @@ import { canvasHeightRatio, coverImage, inReadingOrder, type PortfolioItem } fro
  * desktop proportions cannot survive being squeezed to a phone.
  */
 
-function Tile({ item, priority }: { item: PortfolioItem; priority?: boolean }) {
+function Tile({
+  item,
+  priority,
+  showName,
+}: {
+  item: PortfolioItem;
+  priority?: boolean;
+  showName: boolean;
+}) {
   const cover = coverImage(item);
   if (!cover) return null;
 
@@ -32,17 +40,25 @@ function Tile({ item, priority }: { item: PortfolioItem; priority?: boolean }) {
         and the overlay is also focus-visible so keyboard users are not left
         without it.
       */}
-      <span
-        className="bg-ink/70 text-paper absolute inset-0 flex items-center justify-center p-4 text-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
-        aria-hidden="true"
-      >
-        <span className="font-display text-lg tracking-tight text-balance">{item.name}</span>
-      </span>
+      {showName && (
+        <span
+          className="bg-ink/70 text-paper absolute inset-0 flex items-center justify-center p-4 text-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
+          aria-hidden="true"
+        >
+          <span className="font-display text-lg tracking-tight text-balance">{item.name}</span>
+        </span>
+      )}
     </Link>
   );
 }
 
-export function PortfolioWall({ items }: { items: PortfolioItem[] }) {
+export function PortfolioWall({
+  items,
+  showNamesOnHover,
+}: {
+  items: PortfolioItem[];
+  showNamesOnHover: boolean;
+}) {
   const shown = items.filter((item) => coverImage(item));
   if (shown.length === 0) return null;
 
@@ -52,7 +68,7 @@ export function PortfolioWall({ items }: { items: PortfolioItem[] }) {
     <>
       <div className="flex flex-col gap-10 md:hidden">
         {inReadingOrder(shown).map((item, i) => (
-          <Tile key={item.id} item={item} priority={i === 0} />
+          <Tile key={item.id} item={item} priority={i === 0} showName={showNamesOnHover} />
         ))}
       </div>
 
@@ -77,7 +93,7 @@ export function PortfolioWall({ items }: { items: PortfolioItem[] }) {
               zIndex: item.z,
             }}
           >
-            <Tile item={item} priority={i === 0} />
+            <Tile item={item} priority={i === 0} showName={showNamesOnHover} />
           </div>
         ))}
       </div>

@@ -150,6 +150,15 @@ export const siteSettings = sqliteTable("site_settings", {
   /** Home page copy, editable by the artist. */
   homeTitle: text("home_title").notNull().default(""),
   homeBlurb: text("home_blurb").notNull().default(""),
+
+  /**
+   * How the wall behaves. Percentages of canvas width, like every other
+   * portfolio measurement.
+   */
+  gutterEnabled: integer("gutter_enabled", { mode: "boolean" }).notNull().default(false),
+  gutter: real("gutter").notNull().default(2),
+  snapEnabled: integer("snap_enabled", { mode: "boolean" }).notNull().default(true),
+  showNamesOnHover: integer("show_names_on_hover", { mode: "boolean" }).notNull().default(true),
   etsyShopUrl: text("etsy_shop_url").notNull().default(""),
   contactEmail: text("contact_email").notNull().default(""),
   instagramUrl: text("instagram_url").notNull().default(""),

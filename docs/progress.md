@@ -88,6 +88,16 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **The gutter shifts snap targets; it does not forbid closeness.** With the gap on,
+  pieces snap to sit a gutter apart rather than flush, while alignment guides (edge to
+  edge, centre to centre) stay available so work can still be stacked in a column.
+  Overlap remains possible on purpose. With the gap off the abutting guides collapse onto
+  the neighbour's edges, which is the flush behaviour.
+
+- **Page settings save on change, not behind a Save button.** They are switches the
+  artist flips while looking at the wall; an unsaved change would make the editor lie
+  about what visitors see.
+
 - **Snap targets are computed once per gesture, not per frame.** The other pieces cannot
   move while one is being dragged, so `collectGuides` runs in `begin` and is carried on
   the drag ref. Snapping considers all six candidate edges of the moving piece — leading,

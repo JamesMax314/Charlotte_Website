@@ -58,6 +58,42 @@ export async function updateHomeCopy(formData: FormData): Promise<void> {
   refresh();
 }
 
+/**
+ * How the wall behaves. Saved one field at a time so the toggles can apply
+ * immediately rather than behind a Save button.
+ */
+export async function updatePageSettings(patch: {
+  gutterEnabled?: boolean;
+  gutter?: number;
+  snapEnabled?: boolean;
+  showNamesOnHover?: boolean;
+}): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  const values = {
+    ...(patch.gutterEnabled === undefined ? {} : { gutterEnabled: patch.gutterEnabled }),
+    // A gutter wider than a fifth of the wall is not a gutter any more.
+    ...(patch.gutter === undefined ? {} : { gutter: Math.min(Math.max(patch.gutter, 0), 20) }),
+    ...(patch.snapEnabled === undefined ? {} : { snapEnabled: patch.snapEnabled }),
+    ...(patch.showNamesOnHover === undefined ? {} : { showNamesOnHover: patch.showNamesOnHover }),
+  };
+  if (Object.keys(values).length === 0) return;
+
+  const existing = await db
+    .select({ id: schema.siteSettings.id })
+    .from(schema.siteSettings)
+    .where(eq(schema.siteSettings.id, 1));
+
+  if (existing.length === 0) {
+    await db.insert(schema.siteSettings).values({ id: 1, ...values });
+  } else {
+    await db.update(schema.siteSettings).set(values).where(eq(schema.siteSettings.id, 1));
+  }
+
+  refresh();
+}
+
 // ---------------------------------------------------------------- pieces
 
 export async function createPortfolioItem(): Promise<void> {

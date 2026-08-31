@@ -27,7 +27,7 @@ export default async function HomePage() {
       </Container>
 
       <Container className="pb-16">
-        <PortfolioWall items={items} />
+        <PortfolioWall items={items} showNamesOnHover={settings.showNamesOnHover} />
       </Container>
     </>
   );

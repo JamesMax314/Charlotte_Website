@@ -22,6 +22,21 @@ describe("collectGuides", () => {
     expect(horizontal).toEqual([0, 140]);
   });
 
+  it("adds abutting guides a gutter away from each neighbour", () => {
+    const { vertical } = collectGuides([rect(40, 0, 20, 10)], 100, 3);
+    expect(vertical).toContain(37); // sit to the left, 3 apart
+    expect(vertical).toContain(63); // sit to the right, 3 apart
+    // Alignment guides survive: stacking pieces with flush left edges must
+    // still be possible while a gutter is on.
+    expect(vertical).toContain(40);
+  });
+
+  it("collapses abutting guides onto the edges when there is no gutter", () => {
+    const withoutGutter = collectGuides([rect(40, 0, 20, 10)], 100, 0);
+    const implicit = collectGuides([rect(40, 0, 20, 10)], 100);
+    expect(withoutGutter).toEqual(implicit);
+  });
+
   it("does not repeat a guide shared by several pieces", () => {
     const { vertical } = collectGuides([rect(10, 0, 20, 5), rect(10, 40, 20, 5)], 100);
     expect(vertical.filter((v) => v === 10)).toHaveLength(1);

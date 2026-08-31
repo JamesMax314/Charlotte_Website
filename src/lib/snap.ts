@@ -46,13 +46,19 @@ export const rectOf = (item: { x: number; y: number; width: number }, aspect: nu
  * Every line a dragged piece can snap to: the edges and centre of each other
  * piece, plus the canvas edges and its vertical centre line.
  */
-export const collectGuides = (others: Rect[], canvasHeight: number): Guides => {
+export const collectGuides = (others: Rect[], canvasHeight: number, gutter = 0): Guides => {
   const vertical = [0, 50, 100];
   const horizontal = [0, canvasHeight];
 
   for (const r of others) {
+    // Alignment guides: line an edge or centre up with a neighbour's.
     vertical.push(r.x, r.x + r.width / 2, r.x + r.width);
     horizontal.push(r.y, r.y + r.height / 2, r.y + r.height);
+
+    // Abutting guides: sit beside a neighbour, a gutter apart. With no gutter
+    // these land on the neighbour's edges, so pieces butt up flush.
+    vertical.push(r.x - gutter, r.x + r.width + gutter);
+    horizontal.push(r.y - gutter, r.y + r.height + gutter);
   }
 
   return { vertical: dedupe(vertical), horizontal: dedupe(horizontal) };

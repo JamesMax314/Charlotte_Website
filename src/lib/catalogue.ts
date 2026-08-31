@@ -127,6 +127,10 @@ const SETTINGS_FALLBACK = {
   homeTitle: "Drawn to explain.",
   homeBlurb:
     "I make illustrated maps, editorial spreads and sequences — drawings that carry information as well as atmosphere.",
+  gutterEnabled: false,
+  gutter: 2,
+  snapEnabled: true,
+  showNamesOnHover: true,
   etsyShopUrl: "https://www.etsy.com/",
   contactEmail: "hello@example.com",
   instagramUrl: "https://www.instagram.com/",

@@ -1,5 +1,6 @@
 import { Container } from "@/components/container";
 import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
+import { PageSettingsPanel } from "@/components/admin/page-settings";
 import { getAllPortfolioItems } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { requireSession } from "@/lib/auth";
@@ -60,8 +61,21 @@ export default async function PortfolioAdminPage() {
         </button>
       </form>
 
+      <PageSettingsPanel
+        settings={{
+          gutterEnabled: settings.gutterEnabled,
+          gutter: settings.gutter,
+          snapEnabled: settings.snapEnabled,
+          showNamesOnHover: settings.showNamesOnHover,
+        }}
+      />
+
       <h2 className="text-graphite mb-3 text-xs tracking-[0.18em] uppercase">The wall</h2>
-      <PortfolioCanvas items={items} />
+      <PortfolioCanvas
+        items={items}
+        snapEnabled={settings.snapEnabled}
+        gutter={settings.gutterEnabled ? settings.gutter : 0}
+      />
 
       <p className="text-graphite mt-4 max-w-2xl text-xs">
         This arrangement is what visitors see on a computer. On a phone the pieces stack in reading

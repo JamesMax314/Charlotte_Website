@@ -38,7 +38,16 @@ type Drag = {
 /** Below this, a pointer gesture is a tap (open the piece), not a drag. */
 const DRAG_THRESHOLD_PX = 4;
 
-export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) {
+export function PortfolioCanvas({
+  items: initial,
+  snapEnabled,
+  gutter,
+}: {
+  items: PortfolioItem[];
+  snapEnabled: boolean;
+  /** Already resolved to 0 when the artist has the gap turned off. */
+  gutter: number;
+}) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState(initial);
@@ -110,6 +119,7 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
           .filter((other) => other.id !== item.id)
           .map((other) => rectOf(other, aspectOf(other))),
         ratio,
+        gutter,
       ),
     };
     dragRef.current = drag;
@@ -132,7 +142,7 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       const dy = asPercent(rawY);
 
       // Hold Alt to place a piece freely, ignoring the guides.
-      const snapping = !moveEvent.altKey;
+      const snapping = snapEnabled && !moveEvent.altKey;
 
       if (drag.mode === "move") {
         const loose = {
@@ -201,7 +211,9 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       <p className="text-graphite mb-3 h-5 text-xs" aria-live="polite">
         {saving
           ? "Saving layout…"
-          : "Drag to move, drag the bottom-right corner to resize, tap to edit. Edges snap to line up — hold Alt to place freely."}
+          : snapEnabled
+            ? "Drag to move, drag the bottom-right corner to resize, tap to edit. Edges snap to line up — hold Alt to place freely."
+            : "Drag to move, drag the bottom-right corner to resize, tap to edit."}
       </p>
 
       <div
