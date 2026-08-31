@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Container } from "./container";
 import { DrawnRule } from "./drawn-rule";
 import { Mark } from "./mark";
-import { getSiteSettings } from "@/lib/artworks";
+import { getSiteSettings } from "@/lib/catalogue";
 
 export async function SiteFooter() {
   const settings = await getSiteSettings();

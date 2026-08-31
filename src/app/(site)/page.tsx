@@ -4,7 +4,7 @@ import { Container } from "@/components/container";
 import { DrawnRule } from "@/components/drawn-rule";
 import { Mark } from "@/components/mark";
 import { ArtworkGrid } from "@/components/artwork-grid";
-import { getFeaturedArtworks } from "@/lib/artworks";
+import { getFeaturedArtworks } from "@/lib/catalogue";
 
 export default async function HomePage() {
   const featured = await getFeaturedArtworks();
@@ -73,3 +73,8 @@ export default async function HomePage() {
     </>
   );
 }
+
+// D1 is unreachable during `next build` (no binding outside the Worker), so
+// these render per request. Revisit with "use cache" once there is traffic
+// that justifies it — see docs/progress.md.
+export const dynamic = "force-dynamic";

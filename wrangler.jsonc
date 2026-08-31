@@ -15,19 +15,32 @@
       "service": "charlotte-website",
     },
   ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "charlotte-website",
+      // Local development ignores this. Before the first remote deploy run
+      //   pnpm exec wrangler d1 create charlotte-website
+      // and paste the returned uuid here.
+      "database_id": "PLACEHOLDER_RUN_D1_CREATE",
+      "migrations_dir": "migrations",
+    },
+  ],
   "r2_buckets": [
     {
       // Next's incremental cache. Create before first deploy:
-      //   npx wrangler r2 bucket create charlotte-website-opennext-cache
+      //   pnpm exec wrangler r2 bucket create charlotte-website-opennext-cache
       "binding": "NEXT_INC_CACHE_R2_BUCKET",
       "bucket_name": "charlotte-website-opennext-cache",
+    },
+    {
+      // Artwork uploads. Private: served only through the /media route.
+      //   pnpm exec wrangler r2 bucket create charlotte-website-media
+      "binding": "MEDIA",
+      "bucket_name": "charlotte-website-media",
     },
   ],
   "images": {
     "binding": "IMAGES",
   },
-
-  // Added in Phase 2, once the artist-facing admin needs them:
-  //   "d1_databases": [{ "binding": "DB", "database_name": "charlotte-website", "database_id": "..." }]
-  //   "r2_buckets": + { "binding": "MEDIA", "bucket_name": "charlotte-website-media" }
 }

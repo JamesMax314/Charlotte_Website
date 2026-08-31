@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/container";
 
+// The root layout's header and footer read site settings from D1, so this page
+// cannot be prerendered without baking in stale settings.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Privacy",
   description: "What this site collects, which is almost nothing.",

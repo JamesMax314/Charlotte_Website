@@ -48,9 +48,34 @@ Non-obvious decisions that the code alone does not explain.
   constraint, not an omission — do not add `prefers-color-scheme` handling without
   discussing it.
 
-- **The catalogue accessors in `src/lib/artworks.ts` are async on purpose.** They return
-  seeded arrays today and will run D1 queries in Phase 2. Keeping the signatures async now
-  means that swap touches no component. Do not "simplify" them to synchronous.
+- **There is no image optimizer on Cloudflare Workers.** `/_next/image` returns 404 in
+  the deployed Worker, and Cloudflare Images charges per transformation. Instead the
+  browser renders a fixed width ladder at upload time, `src/image-loader.ts` addresses
+  those objects by naming convention, and `/media` falls back to the base object when a
+  derivative is missing. Removing the custom loader silently breaks every image in
+  production while leaving `next dev` working — which is exactly how this was missed
+  until the worker was actually exercised.
+
+- **Every page is `force-dynamic`, and that is deliberate.** D1 is unreachable during
+  `next build` (no binding outside the Worker), so nothing can be prerendered against
+  real data. The root layout reads site settings, so this applies to every page, not just
+  the catalogue. `getSiteSettings` degrades to defaults when the binding is absent so CI
+  can still build. **Known debt:** this gives up the full-route cache entirely. Revisit
+  with `"use cache"` once traffic justifies it.
+
+- **The admin passphrase must stay machine-generated.** Auth uses a salted SHA-256, not
+  PBKDF2 or Argon2, because the Workers free tier allows roughly 10ms CPU per request and
+  a proper slow hash exceeds it. That trade is only sound because `pnpm admin:passphrase`
+  generates ~120 bits of entropy. Never accept a human-chosen passphrase.
+
+- **Server actions gate themselves.** Actions are routed independently of layouts, so the
+  admin layout's session check protects pages only. Every action and route handler calls
+  `requireSession()` / `hasValidSession()` itself. Removing one of those calls exposes it
+  with no visible symptom.
+
+- **Reordering is one `CASE` statement, not a write per row.** The whole rearrange lands
+  atomically in a single D1 round trip, so a dropped connection cannot leave the gallery
+  half-reordered.
 
 - **Archived and draft are different kinds of hidden.** Archived work is off the gallery
   but its URL still resolves, because a link shared two years ago must not 404. Drafts
@@ -72,9 +97,25 @@ Not yet done. Requires a Cloudflare account and these one-off steps:
 
 ```bash
 pnpm exec wrangler login
+
+# Storage
 pnpm exec wrangler r2 bucket create charlotte-website-opennext-cache
+pnpm exec wrangler r2 bucket create charlotte-website-media
+
+# Database — paste the returned uuid into wrangler.jsonc as database_id
+pnpm exec wrangler d1 create charlotte-website
+pnpm run db:migrate
+
+# Secrets. Generate both with `pnpm admin:passphrase`, which prints the
+# passphrase once — give that to the artist.
+pnpm exec wrangler secret put ADMIN_PASSPHRASE_HASH
+pnpm exec wrangler secret put SESSION_SECRET
+
 pnpm run deploy
 ```
+
+For local development instead: `cp .dev.vars.example .dev.vars`, fill it from
+`pnpm admin:passphrase`, then `pnpm db:migrate:local && pnpm seed`.
 
 Note `pnpm run deploy`, not `pnpm deploy` — the latter is a built-in pnpm command for
 workspace deployment and will not run the script.

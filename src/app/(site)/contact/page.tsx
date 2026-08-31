@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/container";
-import { getSiteSettings } from "@/lib/artworks";
+import { getSiteSettings } from "@/lib/catalogue";
+
+// The root layout's header and footer read site settings from D1, so this page
+// cannot be prerendered without baking in stale settings.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Contact",

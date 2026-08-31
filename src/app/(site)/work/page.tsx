@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/container";
 import { ArtworkGrid } from "@/components/artwork-grid";
-import { getPublishedArtworks } from "@/lib/artworks";
+import { getPublishedArtworks } from "@/lib/catalogue";
+
+// D1 is unreachable during `next build` (no binding outside the Worker), so
+// these render per request. Revisit with "use cache" once there is traffic
+// that justifies it — see docs/progress.md.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Work",

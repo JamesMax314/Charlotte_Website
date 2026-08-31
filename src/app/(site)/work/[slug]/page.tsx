@@ -4,15 +4,15 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { ArtworkViewer } from "@/components/artwork-viewer";
 import { BuyPanel } from "@/components/buy-panel";
-import { getArtworkBySlug, getRoutableSlugs } from "@/lib/artworks";
+import { getArtworkBySlug } from "@/lib/catalogue";
 import { SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
 
-export async function generateStaticParams() {
-  const slugs = await getRoutableSlugs();
-  return slugs.map((slug) => ({ slug }));
-}
+// D1 is unreachable during `next build` (no binding outside the Worker), so
+// these render per request. Revisit with "use cache" once there is traffic
+// that justifies it — see docs/progress.md.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;

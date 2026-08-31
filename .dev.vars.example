@@ -1,0 +1,4 @@
+# Local development secrets. Copy to .dev.vars (gitignored) and fill in.
+# Generate both with: pnpm admin:passphrase
+ADMIN_PASSPHRASE_HASH="sha256$<salt>$<digest>"
+SESSION_SECRET="<random base64>"

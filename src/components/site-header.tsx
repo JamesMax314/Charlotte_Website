@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Container } from "./container";
 import { Mark } from "./mark";
-import { getSiteSettings } from "@/lib/artworks";
+import { getSiteSettings } from "@/lib/catalogue";
 
 export async function SiteHeader() {
   const settings = await getSiteSettings();
