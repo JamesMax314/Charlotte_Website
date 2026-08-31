@@ -186,6 +186,12 @@ Non-obvious decisions that the code alone does not explain.
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
 
+- **The fade-in never hides content in server markup.** `.fade-target` is applied by
+  `src/components/fade-in.tsx` after it mounts, never rendered by the server. Markup that
+  started hidden would stay hidden for good if the script failed to load. A `<noscript>`
+  override and a `prefers-reduced-motion` rule cover the other two ways it could strand
+  content. The editor never fades — the artist has to see what she is arranging.
+
 - **Known debt: the custom 404 never renders.** `src/app/(site)/not-found.tsx` — the
   "Walked off somewhere" page with the mirrored mark — is not picked up, so both unmatched
   URLs and `notFound()` from a site route fall through to Next's default "This page could

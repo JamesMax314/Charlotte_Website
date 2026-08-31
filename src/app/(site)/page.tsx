@@ -16,7 +16,12 @@ export default async function HomePage() {
 
   return (
     <Container className="pt-16 pb-16 sm:pt-24">
-      <PortfolioWall items={items} texts={texts} showNamesOnHover={settings.showNamesOnHover} />
+      <PortfolioWall
+        items={items}
+        texts={texts}
+        showNamesOnHover={settings.showNamesOnHover}
+        fadeIn={settings.contentFadeIn}
+      />
     </Container>
   );
 }

@@ -44,6 +44,7 @@ export async function updatePageSettings(patch: {
   gutter?: number;
   snapEnabled?: boolean;
   showNamesOnHover?: boolean;
+  contentFadeIn?: boolean;
 }): Promise<void> {
   await requireSession();
   const db = await getDb();

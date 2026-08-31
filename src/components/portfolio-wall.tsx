@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { FadeIn } from "./fade-in";
 import {
   canvasHeightRatio,
   coverImage,
@@ -79,6 +80,11 @@ function Tile({
   );
 }
 
+/** Wraps a piece only when the artist has asked for the fade. */
+function MaybeFade({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return on ? <FadeIn>{children}</FadeIn> : <>{children}</>;
+}
+
 function TextBlock({
   text,
   clamped,
@@ -100,10 +106,13 @@ export function PortfolioWall({
   items,
   texts,
   showNamesOnHover,
+  fadeIn = false,
 }: {
   items: PortfolioItem[];
   texts: WallText[];
   showNamesOnHover: boolean;
+  /** Site only. The editor never fades, or the artist could not see her work. */
+  fadeIn?: boolean;
 }) {
   const shown = items.filter((item) => coverImage(item));
   if (shown.length === 0 && texts.length === 0) return null;
@@ -135,12 +144,9 @@ export function PortfolioWall({
               heading={entry.text.id === headingId}
             />
           ) : (
-            <Tile
-              key={entry.item.id}
-              item={entry.item}
-              priority={i === 0}
-              showName={showNamesOnHover}
-            />
+            <MaybeFade key={entry.item.id} on={fadeIn}>
+              <Tile item={entry.item} priority={i === 0} showName={showNamesOnHover} />
+            </MaybeFade>
           ),
         )}
       </div>
@@ -183,7 +189,9 @@ export function PortfolioWall({
               zIndex: item.z,
             }}
           >
-            <Tile item={item} priority={i === 0} showName={showNamesOnHover} />
+            <MaybeFade on={fadeIn}>
+              <Tile item={item} priority={i === 0} showName={showNamesOnHover} />
+            </MaybeFade>
           </div>
         ))}
       </div>

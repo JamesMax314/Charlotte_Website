@@ -8,6 +8,7 @@ export interface PageSettings {
   gutter: number;
   snapEnabled: boolean;
   showNamesOnHover: boolean;
+  contentFadeIn: boolean;
 }
 
 function Toggle({
@@ -65,7 +66,7 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
         </span>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-2">
           <Toggle
             label="Keep a gap between pieces"
@@ -105,6 +106,13 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
           hint="Visitors see the piece's name over the image when they point at it."
           checked={value.showNamesOnHover}
           onChange={(showNamesOnHover) => apply({ showNamesOnHover })}
+        />
+
+        <Toggle
+          label="Fade content in"
+          hint="Images fade in as a visitor scrolls down. Only on the site — the wall here never fades."
+          checked={value.contentFadeIn}
+          onChange={(contentFadeIn) => apply({ contentFadeIn })}
         />
       </div>
     </section>
