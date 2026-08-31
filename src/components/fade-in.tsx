@@ -28,6 +28,17 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
 
     el.classList.add("fade-target");
 
+    /*
+      Lock in the hidden state before anything can reveal it.
+
+      Reading the computed style forces a style recalculation, so `opacity: 0`
+      becomes the value a transition starts from. Without it an element already
+      on screen goes from class-added to revealed inside one frame, the browser
+      only ever paints the finished state, and the piece appears instantly
+      instead of fading.
+    */
+    void getComputedStyle(el).opacity;
+
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -43,8 +54,14 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
       { rootMargin: "0px 0px -8% 0px" },
     );
 
-    observer.observe(el);
-    return () => observer.disconnect();
+    // Observe on the next frame, so the hidden state has been painted once and
+    // pieces already in view fade in on load rather than snapping into place.
+    const frame = requestAnimationFrame(() => observer.observe(el));
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   return <div ref={ref}>{children}</div>;
