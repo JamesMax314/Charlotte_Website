@@ -48,6 +48,18 @@ Non-obvious decisions that the code alone does not explain.
   constraint, not an omission — do not add `prefers-color-scheme` handling without
   discussing it.
 
+- **The catalogue accessors in `src/lib/artworks.ts` are async on purpose.** They return
+  seeded arrays today and will run D1 queries in Phase 2. Keeping the signatures async now
+  means that swap touches no component. Do not "simplify" them to synchronous.
+
+- **Archived and draft are different kinds of hidden.** Archived work is off the gallery
+  but its URL still resolves, because a link shared two years ago must not 404. Drafts
+  resolve to nothing at all. `getArtworkBySlug` encodes both rules and is covered by tests.
+
+- **A cheap digital download must never set a card's "from" price.** Prints are the
+  headline product; advertising "From £12" beside a £65 print is accurate and misleading
+  at once. `headlinePricePence` prefers prints, and a test guards it.
+
 - **There is no `tailwind.config.ts`.** Tailwind v4 is CSS-first: the `@theme` block in
   `src/app/globals.css` is the equivalent, and is the correct place for token edits.
   (CLAUDE.md's UI-tweak rule names both files; only `globals.css` exists.)

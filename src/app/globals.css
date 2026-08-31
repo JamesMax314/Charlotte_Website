@@ -3,33 +3,35 @@
 /*
   Design tokens.
 
-  Per CLAUDE.md this file is the first place to edit for any UI tweak — colour
-  and type both resolve from here. Tailwind v4 is CSS-first, so there is no
-  tailwind.config.ts; the @theme block below is the equivalent.
+  Per CLAUDE.md this file is the first place to edit for any UI tweak. Tailwind v4
+  is CSS-first, so the @theme block below replaces tailwind.config.ts.
 
-  The site is deliberately light-only. Artwork is judged against a gallery wall,
-  and a dark theme changes how every image reads. Recorded as an invariant in
-  docs/progress.md.
+  Direction: the artist's mark is a loose hand-drawn contour figure, so the site is
+  built to feel drawn rather than typeset. The palette is a drawing desk — paper,
+  graphite, and biro blue — not a gallery wall.
+
+  Light-only by design: artwork is judged against a neutral ground, and a dark theme
+  changes how every image reads. See docs/progress.md.
 */
 :root {
-  --paper: #fbfaf7;
-  --paper-sunk: #f3f1eb;
-  --ink: #17150f;
-  --muted: #6e6759;
-  --line: #e3ded3;
-  --accent: #9a5b33;
+  --paper: #fbfbf9;
+  --paper-sunk: #f2f1ec;
+  --ink: #101010;
+  --graphite: #6d6a66;
+  --line: #dedcd6;
+  --biro: #2140d6;
 }
 
 @theme inline {
   --color-paper: var(--paper);
   --color-paper-sunk: var(--paper-sunk);
   --color-ink: var(--ink);
-  --color-muted: var(--muted);
+  --color-graphite: var(--graphite);
   --color-line: var(--line);
-  --color-accent: var(--accent);
+  --color-biro: var(--biro);
 
-  --font-display: var(--font-fraunces);
-  --font-sans: var(--font-inter);
+  --font-display: var(--font-bricolage);
+  --font-sans: var(--font-instrument);
 }
 
 body {
@@ -45,12 +47,49 @@ html {
 }
 
 ::selection {
-  background: var(--accent);
+  background: var(--biro);
   color: var(--paper);
 }
 
-/* WCAG 2.2 AA: focus must always be visible, including on dark imagery. */
+/* WCAG 2.2 AA: focus must stay visible, including over dark imagery. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--biro);
   outline-offset: 3px;
+}
+
+/*
+  The figure strides in on first load — one orchestrated moment rather than
+  scattered effects.
+*/
+@keyframes stride-in {
+  from {
+    opacity: 0;
+    transform: translateX(-0.75rem) rotate(-4deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-stride-in {
+  animation: stride-in 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stride-in {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The native lightbox backdrop, tinted paper rather than plain black. */
+dialog::backdrop {
+  background: rgb(16 16 16 / 0.92);
 }

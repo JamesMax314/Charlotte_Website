@@ -1,32 +1,75 @@
-export default function HomePage() {
+import Link from "next/link";
+import Image from "next/image";
+import { Container } from "@/components/container";
+import { DrawnRule } from "@/components/drawn-rule";
+import { Mark } from "@/components/mark";
+import { ArtworkGrid } from "@/components/artwork-grid";
+import { getFeaturedArtworks } from "@/lib/artworks";
+
+export default async function HomePage() {
+  const featured = await getFeaturedArtworks();
+  const [hero, ...rest] = featured;
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center px-6 py-24">
-      <p className="text-muted text-xs tracking-[0.2em] uppercase">Coming soon</p>
+    <>
+      <Container className="pt-16 pb-14 sm:pt-24">
+        <div className="grid items-end gap-10 lg:grid-cols-[1.1fr_1fr]">
+          <div>
+            <Mark className="text-ink animate-stride-in h-20 w-20" />
+            <h1 className="font-display mt-6 text-5xl leading-[0.95] tracking-tight sm:text-7xl">
+              Drawings,
+              <br />
+              printed small.
+            </h1>
+          </div>
 
-      <h1 className="font-display text-ink mt-6 text-5xl leading-[1.05] tracking-tight sm:text-6xl">
-        Charlotte
-      </h1>
+          <p className="text-graphite max-w-md text-lg leading-relaxed text-pretty">
+            I draw people going about things — walking, swimming, standing at windows. Editions are
+            short, usually under forty, and every print is sold through my Etsy shop.
+          </p>
+        </div>
+      </Container>
 
-      <p className="text-muted mt-6 max-w-md text-lg leading-relaxed text-balance">
-        Original paintings and limited-edition prints. The new site is being built — work will be
-        here shortly.
-      </p>
+      {hero && (
+        <Container className="pb-16">
+          <Link href={`/work/${hero.slug}`} className="group block">
+            <div className="bg-paper-sunk border-line flex justify-center overflow-hidden border">
+              <Image
+                src={hero.images[0].src}
+                alt={hero.images[0].alt}
+                width={hero.images[0].width}
+                height={hero.images[0].height}
+                priority
+                sizes="(min-width: 1280px) 1152px, 100vw"
+                className="max-h-[68vh] w-auto object-contain"
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <h2 className="font-display group-hover:text-biro text-xl tracking-tight transition-colors">
+                {hero.title}
+              </h2>
+              <p className="text-graphite text-sm">
+                {hero.medium} · {hero.year}
+              </p>
+            </div>
+          </Link>
+        </Container>
+      )}
 
-      <hr className="border-line mt-12 border-t" />
+      <Container>
+        <DrawnRule />
+      </Container>
 
-      <p className="text-muted mt-6 text-sm">
-        In the meantime, prints are available on{" "}
-        <a
-          className="text-accent underline decoration-1 underline-offset-4 hover:decoration-2"
-          href="https://www.etsy.com/"
-          target="_blank"
-          rel="noopener noreferrer"
+      <Container className="pt-14">
+        <h2 className="text-graphite mb-10 text-xs tracking-[0.18em] uppercase">Selected work</h2>
+        <ArtworkGrid artworks={rest} />
+        <Link
+          href="/work"
+          className="hover:text-biro font-display inline-block text-lg tracking-tight underline decoration-1 underline-offset-[6px] transition-colors"
         >
-          Etsy
-          <span className="sr-only"> (opens in a new tab)</span>
-        </a>
-        .
-      </p>
-    </main>
+          See everything
+        </Link>
+      </Container>
+    </>
   );
 }
