@@ -106,6 +106,7 @@ const text = (over: Partial<WallText>): WallText => ({
   italic: false,
   underline: false,
   colour: "#101010",
+  font: "sans",
   ...over,
 });
 

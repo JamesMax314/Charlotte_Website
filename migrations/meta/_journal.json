@@ -29,6 +29,13 @@
       "when": 1788199347713,
       "tag": "0003_wall-texts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788202389332,
+      "tag": "0004_text-font",
+      "breakpoints": true
     }
   ]
 }

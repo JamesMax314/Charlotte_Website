@@ -1,0 +1,1 @@
+ALTER TABLE `wall_texts` ADD `font` text DEFAULT 'sans' NOT NULL;

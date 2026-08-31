@@ -88,6 +88,17 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **A text box's font is an open string key, not a database enum.** The artist will be
+  able to upload her own fonts, and an enum would force a schema migration for each one.
+  `resolveFontFamily` in `src/lib/fonts.ts` maps the key to a complete CSS font stack and
+  falls back to Inter when the key is unknown — the path a deleted uploaded font will
+  take. The registry returns a family string rather than a variable name precisely so
+  uploaded fonts can join without any consumer changing.
+
+- **Two extension points widen when uploaded fonts arrive:** the `fonts` prop on
+  `TextToolbar` (injected, not imported, for this reason) and the `isKnownFontId` guard
+  in `updateWallText`.
+
 - **Floating surfaces go through `FloatingLayer`.** It portals to `document.body`,
   keeps itself inside the window and closes on Escape or an outside click. Both the
   context menu and the text formatting panel use it, so the stacking and dismissal

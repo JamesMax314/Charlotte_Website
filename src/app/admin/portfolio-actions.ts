@@ -6,6 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/catalogue";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
+import { isKnownFontId } from "@/lib/fonts";
 import { requireSession } from "@/lib/auth";
 
 /**
@@ -226,6 +227,7 @@ export async function updateWallText(
     italic?: boolean;
     underline?: boolean;
     colour?: string;
+    font?: string;
   },
 ): Promise<void> {
   await requireSession();
@@ -245,6 +247,8 @@ export async function updateWallText(
     ...(patch.colour === undefined || !/^#[0-9a-f]{6}$/i.test(patch.colour)
       ? {}
       : { colour: patch.colour }),
+    // Only a key the registry knows. Widen this when uploaded fonts arrive.
+    ...(patch.font === undefined || !isKnownFontId(patch.font) ? {} : { font: patch.font }),
     updatedAt: new Date(),
   };
 

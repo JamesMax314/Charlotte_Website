@@ -99,6 +99,7 @@ const toText = (row: schema.WallTextRow): WallText => ({
   italic: row.italic,
   underline: row.underline,
   colour: row.colour,
+  font: row.font,
 });
 
 export const getWallTexts = async (): Promise<WallText[]> => {

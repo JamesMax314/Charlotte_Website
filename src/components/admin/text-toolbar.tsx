@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import type { TextAlign, WallText } from "@/lib/portfolio";
+import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 
 type Patch = Partial<
-  Pick<WallText, "fontSize" | "align" | "bold" | "italic" | "underline" | "colour">
+  Pick<WallText, "fontSize" | "align" | "bold" | "italic" | "underline" | "colour" | "font">
 >;
 
 const BUTTON =
@@ -98,13 +99,38 @@ export function TextToolbar({
   text,
   onChange,
   onDelete,
+  fonts = BUILT_IN_FONTS,
 }: {
   text: WallText;
   onChange: (patch: Patch) => void;
   onDelete: () => void;
+  /**
+   * Injected rather than imported, so the admin can pass built-in plus
+   * uploaded fonts later without this component changing.
+   */
+  fonts?: FontOption[];
 }) {
   return (
     <div className="flex w-72 flex-wrap items-center gap-2 p-2">
+      <label className="text-graphite flex w-full items-center gap-1.5 text-xs">
+        Font
+        <select
+          value={text.font}
+          onChange={(e) => onChange({ font: e.target.value })}
+          // Native rather than a custom dropdown: reliable on a tablet, and it
+          // needs no dismissal handling inside an already-floating panel.
+          className="border-line focus:border-ink min-w-0 flex-1 border bg-transparent px-2 py-1 text-xs outline-none"
+          style={{ fontFamily: fonts.find((f) => f.id === text.font)?.family }}
+        >
+          {fonts.map((font) => (
+            // Previewed in its own face, so the artist sees what she is picking.
+            <option key={font.id} value={font.id} style={{ fontFamily: font.family }}>
+              {font.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="text-graphite flex items-center gap-1.5 text-xs">
         Size
         <input

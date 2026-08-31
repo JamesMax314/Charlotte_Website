@@ -32,6 +32,8 @@ export interface PortfolioItem {
 /** The cover shown on the wall, if the piece has any images yet. */
 export const coverImage = (item: PortfolioItem): PortfolioImage | undefined => item.images[0];
 
+import { resolveFontFamily, type FontOption } from "./fonts";
+
 export type TextAlign = "left" | "center" | "right";
 
 /**
@@ -56,6 +58,8 @@ export interface WallText {
   italic: boolean;
   underline: boolean;
   colour: string;
+  /** A key into the font registry; see src/lib/fonts.ts. */
+  font: string;
 }
 
 /**
@@ -92,8 +96,11 @@ export const headingTextId = (texts: WallText[]): string | null => {
  */
 export const textStyle = (
   text: WallText,
-  { clamped = false }: { clamped?: boolean } = {},
+  { clamped = false, fonts }: { clamped?: boolean; fonts?: FontOption[] } = {},
 ): React.CSSProperties => ({
+  // Shared by the editor canvas and the public wall, so the two cannot render
+  // the same text box differently.
+  fontFamily: resolveFontFamily(text.font, fonts),
   fontSize: clamped ? `clamp(0.95rem, ${text.fontSize}cqw, 2.5rem)` : `${text.fontSize}cqw`,
   textAlign: text.align,
   fontWeight: text.bold ? 700 : 400,

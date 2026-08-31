@@ -168,6 +168,12 @@ export const wallTexts = sqliteTable("wall_texts", {
   italic: integer("italic", { mode: "boolean" }).notNull().default(false),
   underline: integer("underline", { mode: "boolean" }).notNull().default(false),
   colour: text("colour").notNull().default("#101010"),
+  /**
+   * A key into the font registry (src/lib/fonts.ts), not an enum: the artist
+   * will be able to upload her own fonts, and an enum would need a schema
+   * migration for each one.
+   */
+  font: text("font").notNull().default("sans"),
 
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
