@@ -149,6 +149,18 @@ export function PortfolioCanvas({
     aspect: number,
     height: number,
   ) => {
+    /*
+      Only the primary button starts a gesture. A right-click still fires
+      pointerdown, and without this it began a drag that moved nowhere — so
+      pointerup read it as a tap and opened the editor behind the menu.
+      stopPropagation still runs, so right-clicking a piece does not also clear
+      the current text selection.
+    */
+    if (event.button !== 0) {
+      event.stopPropagation();
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
 

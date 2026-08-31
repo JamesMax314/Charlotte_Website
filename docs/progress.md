@@ -88,6 +88,11 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **Only the primary button starts a canvas gesture.** A right-click still fires
+  `pointerdown`, so without the `event.button !== 0` guard it began a drag that never
+  moved — and pointerup then read it as a tap and opened the editor behind the context
+  menu.
+
 - **Long-press stands in for right-click, and is not optional.** iPadOS has no
   right-click and the artist works on a tablet, so without the 500ms press the context
   menu — and therefore adding anything to the wall at all — would be unreachable on her
