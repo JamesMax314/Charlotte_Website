@@ -29,12 +29,12 @@ The product specification is `docs/project-brief.md`.
 
 ## Recent Phase Reference
 
-| Phase           | Summary                                                                                                                                                                                    |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                       |
-| 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                           |
-| 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser |
-| 3 (in progress) | Layout and styling on real artwork; Fraunces/Inter with a terracotta accent; `/work` index removed; home rebuilt as an editable free-form portfolio wall, with the store moved to `/shop`  |
+| Phase           | Summary                                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                     |
+| 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                         |
+| 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                               |
+| 3 (in progress) | Layout and styling on real artwork; Fraunces/Inter with a terracotta accent; `/work` index removed; home rebuilt as an editable free-form wall of pieces and text boxes, with page settings for gutter, snapping and hover names; store moved to `/shop` |
 
 ---
 
@@ -87,6 +87,26 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **Text sizes are `cqw`, so the canvas must declare `container-type: inline-size`.**
+  Type scales with the wall exactly as pieces do. The mobile stack clamps the same value,
+  because raw `cqw` against a phone-width container renders body copy at about six pixels.
+
+- **The largest text box is rendered as the page `<h1>`.** Replacing the fixed heading
+  with free text boxes left the home page with no heading element at all, costing both
+  search ranking and screen-reader navigation. `headingTextId` picks the largest non-empty
+  text, ties going to whichever sits highest, so the artist gets correct markup without
+  having to think about it.
+
+- **Text boxes resize in both directions; pieces do not.** A piece's height follows its
+  cover image so artwork cannot be distorted, but a text box has no aspect ratio to
+  protect, which is why `snapResizeFree` exists alongside `snapResize`.
+
+- **Known debt: the wall renders its contents twice**, once for the mobile stack and once
+  for the desktop canvas, with CSS hiding one. That doubles the HTML and produces two
+  `<h1>` elements in the source. Lazy loading spares the duplicate image requests for all
+  but the priority image. Fixing it means one DOM tree switched by CSS custom properties
+  and `order`, which is a worthwhile follow-up rather than a quick change.
 
 - **The gutter shifts snap targets; it does not forbid closeness.** With the gap on,
   pieces snap to sit a gutter apart rather than flush, while alignment guides (edge to

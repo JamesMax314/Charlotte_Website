@@ -32,32 +32,6 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   return `${root}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-// ---------------------------------------------------------------- home copy
-
-export async function updateHomeCopy(formData: FormData): Promise<void> {
-  await requireSession();
-  const db = await getDb();
-
-  const values = {
-    homeTitle: String(formData.get("homeTitle") ?? "").trim(),
-    homeBlurb: String(formData.get("homeBlurb") ?? "").trim(),
-  };
-
-  // site_settings is a single row that may not exist yet.
-  const existing = await db
-    .select({ id: schema.siteSettings.id })
-    .from(schema.siteSettings)
-    .where(eq(schema.siteSettings.id, 1));
-
-  if (existing.length === 0) {
-    await db.insert(schema.siteSettings).values({ id: 1, ...values });
-  } else {
-    await db.update(schema.siteSettings).set(values).where(eq(schema.siteSettings.id, 1));
-  }
-
-  refresh();
-}
-
 /**
  * How the wall behaves. Saved one field at a time so the toggles can apply
  * immediately rather than behind a Save button.
@@ -206,6 +180,104 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   await db.delete(schema.portfolioItems).where(eq(schema.portfolioItems.id, id));
   refresh();
   redirect("/admin/portfolio");
+}
+
+// ---------------------------------------------------------------- text boxes
+
+/** Highest z across both pieces and text, so the two stack in one order. */
+async function nextZ(): Promise<number> {
+  const db = await getDb();
+  const [pieces] = await db
+    .select({ top: sql<number>`coalesce(max(${schema.portfolioItems.z}), 0)` })
+    .from(schema.portfolioItems);
+  const [texts] = await db
+    .select({ top: sql<number>`coalesce(max(${schema.wallTexts.z}), 0)` })
+    .from(schema.wallTexts);
+  return Math.max(pieces.top, texts.top) + 1;
+}
+
+export async function createWallText(): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  await db.insert(schema.wallTexts).values({
+    id: crypto.randomUUID(),
+    content: "New text",
+    x: 4,
+    y: 4,
+    width: 40,
+    height: 8,
+    z: await nextZ(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  refresh();
+}
+
+export async function updateWallText(
+  id: string,
+  patch: {
+    content?: string;
+    fontSize?: number;
+    align?: "left" | "center" | "right";
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    colour?: string;
+  },
+): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  const values = {
+    ...(patch.content === undefined ? {} : { content: patch.content }),
+    // Guard rails so a stray value cannot make text invisible or fill the wall.
+    ...(patch.fontSize === undefined
+      ? {}
+      : { fontSize: Math.min(Math.max(patch.fontSize, 0.5), 20) }),
+    ...(patch.align === undefined ? {} : { align: patch.align }),
+    ...(patch.bold === undefined ? {} : { bold: patch.bold }),
+    ...(patch.italic === undefined ? {} : { italic: patch.italic }),
+    ...(patch.underline === undefined ? {} : { underline: patch.underline }),
+    // Only accept a real hex colour; anything else would break the style attribute.
+    ...(patch.colour === undefined || !/^#[0-9a-f]{6}$/i.test(patch.colour)
+      ? {}
+      : { colour: patch.colour }),
+    updatedAt: new Date(),
+  };
+
+  await db.update(schema.wallTexts).set(values).where(eq(schema.wallTexts.id, id));
+  refresh();
+}
+
+export async function saveWallTextLayout(
+  id: string,
+  layout: { x: number; y: number; width: number; height: number; z?: number },
+): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  await db
+    .update(schema.wallTexts)
+    .set({
+      x: Math.min(Math.max(layout.x, -25), 125),
+      y: Math.max(layout.y, 0),
+      width: Math.min(Math.max(layout.width, 5), 120),
+      height: Math.min(Math.max(layout.height, 2), 200),
+      ...(layout.z === undefined ? {} : { z: Math.round(layout.z) }),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.wallTexts.id, id));
+
+  refresh();
+}
+
+export async function deleteWallText(id: string): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+  await db.delete(schema.wallTexts).where(eq(schema.wallTexts.id, id));
+  refresh();
 }
 
 // ---------------------------------------------------------------- images

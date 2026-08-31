@@ -3,9 +3,29 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { aspectOf, canvasHeightRatio, coverImage, type PortfolioItem } from "@/lib/portfolio";
-import { collectGuides, rectOf, snapMove, snapResize, type Guides } from "@/lib/snap";
-import { savePortfolioLayout } from "@/app/admin/portfolio-actions";
+import {
+  aspectOf,
+  canvasHeightRatio,
+  coverImage,
+  textStyle,
+  type PortfolioItem,
+  type WallText,
+} from "@/lib/portfolio";
+import {
+  collectGuides,
+  rectOf,
+  snapMove,
+  snapResize,
+  snapResizeFree,
+  type Guides,
+} from "@/lib/snap";
+import {
+  deleteWallText,
+  savePortfolioLayout,
+  saveWallTextLayout,
+  updateWallText,
+} from "@/app/admin/portfolio-actions";
+import { TextToolbar } from "./text-toolbar";
 
 /**
  * The home page wall, editable.
@@ -15,7 +35,10 @@ import { savePortfolioLayout } from "@/app/admin/portfolio-actions";
  * visitors see. Any divergence between the two would break that promise.
  */
 
+type Kind = "item" | "text";
+
 type Drag = {
+  kind: Kind;
   id: string;
   mode: "move" | "resize";
   pointerX: number;
@@ -23,114 +46,128 @@ type Drag = {
   originX: number;
   originY: number;
   originWidth: number;
+  originHeight: number;
   z: number;
+  /** Only meaningful for pieces, whose height follows the cover image. */
   aspect: number;
   moved: boolean;
-  /** Live values, so the save never has to read back from render state. */
-  latest: { x: number; y: number; width: number };
-  /**
-   * Snap targets, computed once when the gesture starts. The other pieces do
-   * not move during a drag, so recomputing them every frame would be waste.
-   */
+  latest: { x: number; y: number; width: number; height: number };
   guides: Guides;
 };
 
-/** Below this, a pointer gesture is a tap (open the piece), not a drag. */
+/** Below this, a pointer gesture is a tap (select or open), not a drag. */
 const DRAG_THRESHOLD_PX = 4;
 
 export function PortfolioCanvas({
-  items: initial,
+  items: initialItems,
+  texts: initialTexts,
   snapEnabled,
   gutter,
 }: {
   items: PortfolioItem[];
+  texts: WallText[];
   snapEnabled: boolean;
   /** Already resolved to 0 when the artist has the gap turned off. */
   gutter: number;
 }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [items, setItems] = useState(initial);
+  const [items, setItems] = useState(initialItems);
+  const [texts, setTexts] = useState(initialTexts);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  /** The guide lines currently being snapped to, drawn across the canvas. */
   const [shown, setShown] = useState<{ vertical: number | null; horizontal: number | null }>({
     vertical: null,
     horizontal: null,
   });
 
   /**
-   * Interaction state lives in a ref, not React state.
-   *
-   * Reading it from state made every gesture race the render: the pointerup
-   * handler saw a stale `moved` flag, decided the drag was a tap, and navigated
-   * to the edit page instead of moving the piece.
+   * Interaction state lives in a ref, not React state. Reading it from state
+   * made every gesture race the render: pointerup saw a stale `moved` flag and
+   * treated the drag as a tap.
    */
   const dragRef = useRef<Drag | null>(null);
+  const teardownRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => teardownRef.current?.(), []);
 
-  // Resync when the server sends a fresh list (a piece added or deleted).
-  const [lastServer, setLastServer] = useState(initial);
-  if (initial !== lastServer) {
-    setLastServer(initial);
-    setItems(initial);
+  const [lastItems, setLastItems] = useState(initialItems);
+  if (initialItems !== lastItems) {
+    setLastItems(initialItems);
+    setItems(initialItems);
+  }
+  const [lastTexts, setLastTexts] = useState(initialTexts);
+  if (initialTexts !== lastTexts) {
+    setLastTexts(initialTexts);
+    setTexts(initialTexts);
   }
 
-  /**
-   * Height comes from the committed server list, never the live drag. Deriving
-   * it from the drag made the canvas grow as a piece was pulled downward, which
-   * shifted every other piece and fought the gesture.
-   */
-  const ratio = canvasHeightRatio(lastServer);
+  // Height comes from the committed lists, never the live drag — otherwise the
+  // canvas grows as a piece is pulled down and shifts everything else.
+  const ratio = canvasHeightRatio(lastItems, lastTexts);
 
   const asPercent = useCallback((px: number) => {
     const width = canvasRef.current?.offsetWidth ?? 1;
     return (px / width) * 100;
   }, []);
 
-  /** Removes whatever listeners the current gesture installed. */
-  const teardownRef = useRef<(() => void) | null>(null);
+  const selectedText = texts.find((t) => t.id === selectedTextId) ?? null;
 
-  // Safety net: if the component unmounts mid-gesture, do not leak listeners.
-  useEffect(() => () => teardownRef.current?.(), []);
+  function patchText(id: string, patch: Parameters<typeof updateWallText>[1]) {
+    setTexts((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    void updateWallText(id, patch);
+  }
 
-  const begin = (event: React.PointerEvent, item: PortfolioItem, mode: Drag["mode"]) => {
+  const begin = (
+    event: React.PointerEvent,
+    kind: Kind,
+    element: { id: string; x: number; y: number; width: number; z: number },
+    mode: Drag["mode"],
+    aspect: number,
+    height: number,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
 
-    // Dragged piece comes to the front, so overlapping work can be reordered
-    // just by picking it up.
-    const topZ = Math.max(0, ...items.map((i) => i.z)) + 1;
-    setItems((current) => current.map((i) => (i.id === item.id ? { ...i, z: topZ } : i)));
+    // Whatever is picked up comes to the front, so overlapping work and text
+    // can be reordered just by grabbing it.
+    const topZ = Math.max(0, ...items.map((i) => i.z), ...texts.map((t) => t.z)) + 1;
+    if (kind === "item") {
+      setItems((c) => c.map((i) => (i.id === element.id ? { ...i, z: topZ } : i)));
+    } else {
+      setTexts((c) => c.map((t) => (t.id === element.id ? { ...t, z: topZ } : t)));
+    }
+
+    const others = [
+      ...items.filter((i) => i.id !== element.id).map((i) => rectOf(i, aspectOf(i))),
+      ...texts
+        .filter((t) => t.id !== element.id)
+        .map((t) => ({ x: t.x, y: t.y, width: t.width, height: t.height })),
+    ];
 
     const drag: Drag = {
-      id: item.id,
+      kind,
+      id: element.id,
       mode,
       pointerX: event.clientX,
       pointerY: event.clientY,
-      originX: item.x,
-      originY: item.y,
-      originWidth: item.width,
+      originX: element.x,
+      originY: element.y,
+      originWidth: element.width,
+      originHeight: height,
       z: topZ,
-      aspect: aspectOf(item),
+      aspect,
       moved: false,
-      latest: { x: item.x, y: item.y, width: item.width },
-      guides: collectGuides(
-        items
-          .filter((other) => other.id !== item.id)
-          .map((other) => rectOf(other, aspectOf(other))),
-        ratio,
-        gutter,
-      ),
+      latest: { x: element.x, y: element.y, width: element.width, height },
+      guides: collectGuides(others, ratio, gutter),
     };
     dragRef.current = drag;
-    setActiveId(item.id);
+    setActiveId(element.id);
 
     /*
       Listeners are attached here rather than in an effect. An effect runs after
       the next render, so the opening moves of a fast gesture were dropped and
-      the drag appeared dead. Attaching synchronously means no movement is ever
-      missed. They go on the window because a quick drag outruns the tile and
-      the pointer is often released outside it.
+      the drag appeared dead.
     */
     const onMove = (moveEvent: PointerEvent) => {
       const rawX = moveEvent.clientX - drag.pointerX;
@@ -140,8 +177,6 @@ export function PortfolioCanvas({
 
       const dx = asPercent(rawX);
       const dy = asPercent(rawY);
-
-      // Hold Alt to place a piece freely, ignoring the guides.
       const snapping = snapEnabled && !moveEvent.altKey;
 
       if (drag.mode === "move") {
@@ -149,31 +184,55 @@ export function PortfolioCanvas({
           x: drag.originX + dx,
           y: Math.max(0, drag.originY + dy),
           width: drag.originWidth,
+          height: drag.originHeight,
         };
         const snapped = snapping
-          ? snapMove(rectOf(loose, drag.aspect), drag.guides)
+          ? snapMove(loose, drag.guides)
           : { x: loose.x, y: loose.y, vertical: null, horizontal: null };
-
-        drag.latest = { x: snapped.x, y: Math.max(0, snapped.y), width: drag.originWidth };
+        drag.latest = { ...loose, x: snapped.x, y: Math.max(0, snapped.y) };
         setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
-      } else {
-        // Only width is adjustable; height follows the cover image's own aspect
+      } else if (drag.kind === "item") {
+        // Pieces resize by width alone; height follows the cover image's aspect
         // ratio, so artwork can never be stretched out of shape.
         const loose = {
           x: drag.originX,
           y: drag.originY,
           width: Math.min(120, Math.max(5, drag.originWidth + dx)),
+          height: 0,
         };
         const snapped = snapping
           ? snapResize(rectOf(loose, drag.aspect), drag.aspect, drag.guides)
           : { width: loose.width, vertical: null, horizontal: null };
-
-        drag.latest = { x: loose.x, y: loose.y, width: Math.min(120, Math.max(5, snapped.width)) };
+        drag.latest = {
+          ...loose,
+          width: Math.min(120, Math.max(5, snapped.width)),
+        };
+        setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
+      } else {
+        // Text has no artwork to distort, so both axes are free.
+        const loose = {
+          x: drag.originX,
+          y: drag.originY,
+          width: Math.min(120, Math.max(5, drag.originWidth + dx)),
+          height: Math.min(200, Math.max(2, drag.originHeight + dy)),
+        };
+        const snapped = snapping
+          ? snapResizeFree(loose, drag.guides)
+          : { width: loose.width, height: loose.height, vertical: null, horizontal: null };
+        drag.latest = {
+          ...loose,
+          width: Math.min(120, Math.max(5, snapped.width)),
+          height: Math.min(200, Math.max(2, snapped.height)),
+        };
         setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
       }
 
       const next = drag.latest;
-      setItems((current) => current.map((i) => (i.id === drag.id ? { ...i, ...next } : i)));
+      if (drag.kind === "item") {
+        setItems((c) => c.map((i) => (i.id === drag.id ? { ...i, ...next } : i)));
+      } else {
+        setTexts((c) => c.map((t) => (t.id === drag.id ? { ...t, ...next } : t)));
+      }
     };
 
     const onUp = () => {
@@ -183,14 +242,25 @@ export function PortfolioCanvas({
       setShown({ vertical: null, horizontal: null });
 
       if (!drag.moved) {
-        router.push(`/admin/portfolio/${drag.id}`);
+        // A tap opens a piece for editing, but only selects a text box — its
+        // editing happens in place, on the wall.
+        if (drag.kind === "item") router.push(`/admin/portfolio/${drag.id}`);
+        else setSelectedTextId(drag.id);
         return;
       }
 
       setSaving(true);
-      void savePortfolioLayout(drag.id, { ...drag.latest, z: drag.z }).finally(() =>
-        setSaving(false),
-      );
+      const done = () => setSaving(false);
+      if (drag.kind === "item") {
+        void savePortfolioLayout(drag.id, {
+          x: drag.latest.x,
+          y: drag.latest.y,
+          width: drag.latest.width,
+          z: drag.z,
+        }).finally(done);
+      } else {
+        void saveWallTextLayout(drag.id, { ...drag.latest, z: drag.z }).finally(done);
+      }
     };
 
     function teardown() {
@@ -206,24 +276,113 @@ export function PortfolioCanvas({
     teardownRef.current = teardown;
   };
 
+  const grip = (dragging: boolean) =>
+    `absolute right-0 bottom-0 h-7 w-7 cursor-nwse-resize touch-none transition-opacity ${
+      dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+    }`;
+
   return (
     <div>
+      {selectedText && (
+        <TextToolbar
+          text={selectedText}
+          onChange={(patch) => patchText(selectedText.id, patch)}
+          onDelete={() => {
+            setTexts((c) => c.filter((t) => t.id !== selectedText.id));
+            setSelectedTextId(null);
+            void deleteWallText(selectedText.id);
+          }}
+        />
+      )}
+
       <p className="text-graphite mb-3 h-5 text-xs" aria-live="polite">
         {saving
-          ? "Saving layout…"
+          ? "Saving…"
           : snapEnabled
-            ? "Drag to move, drag the bottom-right corner to resize, tap to edit. Edges snap to line up — hold Alt to place freely."
+            ? "Drag to move, drag the bottom-right corner to resize, tap to edit. Edges snap — hold Alt to place freely."
             : "Drag to move, drag the bottom-right corner to resize, tap to edit."}
       </p>
 
       <div
         ref={canvasRef}
+        onPointerDown={() => setSelectedTextId(null)}
         className="border-line bg-paper-sunk/40 relative w-full overflow-hidden border"
-        style={{ aspectRatio: `100 / ${ratio}` }}
+        // container-type lets text sizes resolve in cqw, exactly as on the site.
+        style={{ aspectRatio: `100 / ${ratio}`, containerType: "inline-size" }}
       >
+        {texts.map((text) => {
+          const dragging = activeId === text.id;
+          const selected = selectedTextId === text.id;
+
+          return (
+            <div
+              key={text.id}
+              className="group absolute touch-none"
+              style={{
+                left: `${text.x}%`,
+                top: `${(text.y / ratio) * 100}%`,
+                width: `${text.width}%`,
+                height: `${(text.height / ratio) * 100}%`,
+                zIndex: text.z,
+              }}
+            >
+              <div
+                className={`h-full w-full border ${
+                  selected
+                    ? "border-accent"
+                    : dragging
+                      ? "border-accent"
+                      : "border-line/50 hover:border-accent/60"
+                }`}
+              >
+                {selected ? (
+                  <textarea
+                    autoFocus
+                    value={text.content}
+                    onChange={(e) => patchText(text.id, { content: e.target.value })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="h-full w-full resize-none bg-transparent p-1 leading-snug outline-none"
+                    style={textStyle(text)}
+                  />
+                ) : (
+                  <p
+                    onPointerDown={(e) => begin(e, "text", text, "move", 0, text.height)}
+                    className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap"
+                    style={textStyle(text)}
+                  >
+                    {text.content}
+                  </p>
+                )}
+              </div>
+
+              {/* Move grip, so a selected box can still be dragged while typing. */}
+              <div
+                role="button"
+                tabIndex={-1}
+                aria-label="Move text"
+                onPointerDown={(e) => begin(e, "text", text, "move", 0, text.height)}
+                className={`bg-accent absolute -top-2 left-0 h-4 w-10 cursor-grab touch-none transition-opacity ${
+                  selected || dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+              />
+
+              <div
+                role="button"
+                tabIndex={-1}
+                aria-label="Resize text"
+                onPointerDown={(e) => begin(e, "text", text, "resize", 0, text.height)}
+                className={grip(dragging)}
+              >
+                <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
+              </div>
+            </div>
+          );
+        })}
+
         {items.map((item) => {
           const cover = coverImage(item);
           const dragging = activeId === item.id;
+          const aspect = aspectOf(item);
 
           return (
             <div
@@ -231,7 +390,6 @@ export function PortfolioCanvas({
               className="group absolute touch-none select-none"
               style={{
                 left: `${item.x}%`,
-                // y is a percentage of width; convert to a share of height.
                 top: `${(item.y / ratio) * 100}%`,
                 width: `${item.width}%`,
                 zIndex: item.z,
@@ -241,7 +399,7 @@ export function PortfolioCanvas({
                 role="button"
                 tabIndex={0}
                 aria-label={`Move ${item.name}. Press Enter to edit it.`}
-                onPointerDown={(e) => begin(e, item, "move")}
+                onPointerDown={(e) => begin(e, "item", item, "move", aspect, item.width * aspect)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ")
                     router.push(`/admin/portfolio/${item.id}`);
@@ -273,19 +431,12 @@ export function PortfolioCanvas({
                 )}
               </div>
 
-              {/*
-                The resize grip sits on the image's own bottom-right corner
-                rather than floating beneath it, so the gesture starts where the
-                artist expects to grab. Sized generously for a fingertip.
-              */}
               <div
                 role="button"
                 tabIndex={-1}
                 aria-label={`Resize ${item.name}`}
-                onPointerDown={(e) => begin(e, item, "resize")}
-                className={`absolute right-0 bottom-0 h-7 w-7 cursor-nwse-resize touch-none transition-opacity ${
-                  dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                }`}
+                onPointerDown={(e) => begin(e, "item", item, "resize", aspect, item.width * aspect)}
+                className={grip(dragging)}
               >
                 <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
               </div>
@@ -306,9 +457,9 @@ export function PortfolioCanvas({
           />
         )}
 
-        {items.length === 0 && (
+        {items.length === 0 && texts.length === 0 && (
           <p className="text-graphite absolute inset-0 flex items-center justify-center text-sm">
-            No pieces yet. Add one to start building the wall.
+            Nothing here yet. Add a piece or some text to start building the wall.
           </p>
         )}
       </div>

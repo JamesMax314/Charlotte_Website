@@ -139,6 +139,45 @@ export const portfolioImages = sqliteTable(
   (t) => [index("portfolio_images_item_idx").on(t.itemId, t.sortOrder)],
 );
 
+/**
+ * Free-floating text on the home wall.
+ *
+ * Positioned with the same units as portfolio pieces — percentages of canvas
+ * width — so text and artwork scale together. Unlike a piece, a text box has an
+ * explicit height: there is no aspect ratio to derive one from, and the artist
+ * resizes it in both directions.
+ *
+ * `fontSize` is also a percentage of canvas width, which is what keeps type in
+ * proportion as the wall scales.
+ */
+export const wallTexts = sqliteTable("wall_texts", {
+  id: text("id").primaryKey(),
+  content: text("content").notNull().default(""),
+
+  x: real("x").notNull().default(4),
+  y: real("y").notNull().default(4),
+  width: real("width").notNull().default(40),
+  height: real("height").notNull().default(10),
+  z: integer("z").notNull().default(0),
+
+  fontSize: real("font_size").notNull().default(2.4),
+  align: text("align", { enum: ["left", "center", "right"] })
+    .notNull()
+    .default("left"),
+  bold: integer("bold", { mode: "boolean" }).notNull().default(false),
+  italic: integer("italic", { mode: "boolean" }).notNull().default(false),
+  underline: integer("underline", { mode: "boolean" }).notNull().default(false),
+  colour: text("colour").notNull().default("#101010"),
+
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
+export type WallTextRow = typeof wallTexts.$inferSelect;
 export type PortfolioItemRow = typeof portfolioItems.$inferSelect;
 export type PortfolioImageRow = typeof portfolioImages.$inferSelect;
 

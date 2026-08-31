@@ -22,6 +22,13 @@
       "when": 1788198347319,
       "tag": "0002_page-settings",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788199347713,
+      "tag": "0003_wall-texts",
+      "breakpoints": true
     }
   ]
 }

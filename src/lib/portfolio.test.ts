@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canvasHeightRatio, coverImage, inReadingOrder, type PortfolioItem } from "./portfolio";
+import {
+  canvasHeightRatio,
+  coverImage,
+  headingTextId,
+  inReadingOrder,
+  type PortfolioItem,
+  type WallText,
+} from "./portfolio";
 
 const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
   id: "a",
@@ -82,5 +89,54 @@ describe("canvasHeightRatio", () => {
 
   it("keeps a floor so an empty or shallow wall still has height", () => {
     expect(canvasHeightRatio([])).toBeGreaterThan(0);
+  });
+});
+
+const text = (over: Partial<WallText>): WallText => ({
+  id: "t",
+  content: "words",
+  x: 0,
+  y: 0,
+  width: 30,
+  height: 10,
+  z: 0,
+  fontSize: 2,
+  align: "left",
+  bold: false,
+  italic: false,
+  underline: false,
+  colour: "#101010",
+  ...over,
+});
+
+describe("headingTextId", () => {
+  // Replacing the fixed heading with free text boxes must not leave the page
+  // with no <h1>.
+  it("picks the largest text as the page heading", () => {
+    const id = headingTextId([
+      text({ id: "small", fontSize: 1.6 }),
+      text({ id: "big", fontSize: 5.2 }),
+    ]);
+    expect(id).toBe("big");
+  });
+
+  it("breaks a tie by whichever sits highest", () => {
+    const id = headingTextId([
+      text({ id: "lower", fontSize: 3, y: 40 }),
+      text({ id: "upper", fontSize: 3, y: 4 }),
+    ]);
+    expect(id).toBe("upper");
+  });
+
+  it("ignores empty boxes so a blank one cannot become the heading", () => {
+    const id = headingTextId([
+      text({ id: "blank", fontSize: 9, content: "   " }),
+      text({ id: "real", fontSize: 2 }),
+    ]);
+    expect(id).toBe("real");
+  });
+
+  it("returns null when there is no text at all", () => {
+    expect(headingTextId([])).toBeNull();
   });
 });

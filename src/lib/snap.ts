@@ -163,3 +163,51 @@ export const snapResize = (
 
   return { width: best.width, vertical: best.vertical, horizontal: best.horizontal };
 };
+
+export interface FreeResizeSnapResult {
+  width: number;
+  height: number;
+  vertical: number | null;
+  horizontal: number | null;
+}
+
+/**
+ * Snaps a box resized freely in both directions.
+ *
+ * Text boxes have no aspect ratio to preserve — there is no artwork to
+ * distort — so the two axes are independent and each snaps on its own.
+ */
+export const snapResizeFree = (
+  rect: Rect,
+  guides: Guides,
+  threshold = SNAP_THRESHOLD,
+): FreeResizeSnapResult => {
+  const right = rect.x + rect.width;
+  const bottom = rect.y + rect.height;
+
+  let width = rect.width;
+  let vertical: number | null = null;
+  let bestV = threshold;
+  for (const guide of guides.vertical) {
+    const delta = Math.abs(guide - right);
+    if (delta <= bestV && guide - rect.x > 0) {
+      bestV = delta;
+      width = guide - rect.x;
+      vertical = guide;
+    }
+  }
+
+  let height = rect.height;
+  let horizontal: number | null = null;
+  let bestH = threshold;
+  for (const guide of guides.horizontal) {
+    const delta = Math.abs(guide - bottom);
+    if (delta <= bestH && guide - rect.y > 0) {
+      bestH = delta;
+      height = guide - rect.y;
+      horizontal = guide;
+    }
+  }
+
+  return { width, height, vertical, horizontal };
+};

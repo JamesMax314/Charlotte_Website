@@ -123,7 +123,9 @@ export const getArtworkById = async (id: string): Promise<Artwork | undefined> =
 const SETTINGS_FALLBACK = {
   heroArtworkId: null as string | null,
   announcement: null as string | null,
-  // Shown until the artist writes her own in the admin.
+  // Superseded by wall_texts: the heading and introduction are now free text
+  // boxes on the wall. Kept so existing rows still read, and because the
+  // migration copied these values into text boxes rather than discarding them.
   homeTitle: "Drawn to explain.",
   homeBlurb:
     "I make illustrated maps, editorial spreads and sequences — drawings that carry information as well as atmosphere.",

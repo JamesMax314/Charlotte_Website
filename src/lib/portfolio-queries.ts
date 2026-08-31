@@ -2,7 +2,7 @@ import "server-only";
 import { asc, eq, inArray } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./catalogue";
-import type { PortfolioImage, PortfolioItem } from "./portfolio";
+import type { PortfolioImage, PortfolioItem, WallText } from "./portfolio";
 
 /**
  * D1 reads for the portfolio. Pure types and layout maths live in
@@ -83,4 +83,26 @@ export const getPortfolioItemBySlug = async (slug: string): Promise<PortfolioIte
     .limit(1);
   if (rows.length === 0 || rows[0].status === "draft") return undefined;
   return (await hydrate(rows))[0];
+};
+
+const toText = (row: schema.WallTextRow): WallText => ({
+  id: row.id,
+  content: row.content,
+  x: row.x,
+  y: row.y,
+  width: row.width,
+  height: row.height,
+  z: row.z,
+  fontSize: row.fontSize,
+  align: row.align,
+  bold: row.bold,
+  italic: row.italic,
+  underline: row.underline,
+  colour: row.colour,
+});
+
+export const getWallTexts = async (): Promise<WallText[]> => {
+  const db = await getDb();
+  const rows = await db.select().from(schema.wallTexts).orderBy(asc(schema.wallTexts.z));
+  return rows.map(toText);
 };

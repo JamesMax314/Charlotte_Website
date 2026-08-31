@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectGuides, rectOf, snapMove, snapResize, type Rect } from "./snap";
+import { collectGuides, rectOf, snapMove, snapResize, snapResizeFree, type Rect } from "./snap";
 
 const rect = (x: number, y: number, width: number, height: number): Rect => ({
   x,
@@ -130,5 +130,32 @@ describe("snapResize", () => {
 describe("rectOf", () => {
   it("derives height from width and aspect, never storing it", () => {
     expect(rectOf({ x: 0, y: 0, width: 40 }, 0.5)).toEqual({ x: 0, y: 0, width: 40, height: 20 });
+  });
+});
+
+describe("snapResizeFree", () => {
+  const guides = collectGuides([rect(40, 30, 20, 10)], 100);
+
+  it("snaps each axis independently", () => {
+    // Right edge near 40, bottom edge near 30 — both should latch.
+    const result = snapResizeFree(rect(10, 10, 29.6, 19.7), guides);
+    expect(result.width).toBeCloseTo(30);
+    expect(result.height).toBeCloseTo(20);
+    expect(result.vertical).toBe(40);
+    expect(result.horizontal).toBe(30);
+  });
+
+  it("can snap one axis while leaving the other alone", () => {
+    const result = snapResizeFree(rect(10, 60, 29.6, 15), guides);
+    expect(result.width).toBeCloseTo(30);
+    expect(result.height).toBe(15);
+    expect(result.horizontal).toBeNull();
+  });
+
+  it("never produces a zero or negative dimension", () => {
+    // Guides at 0 sit behind the box; snapping to them would invert it.
+    const result = snapResizeFree(rect(50, 50, 6, 6), guides);
+    expect(result.width).toBeGreaterThan(0);
+    expect(result.height).toBeGreaterThan(0);
   });
 });

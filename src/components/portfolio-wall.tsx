@@ -1,6 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
-import { canvasHeightRatio, coverImage, inReadingOrder, type PortfolioItem } from "@/lib/portfolio";
+import {
+  canvasHeightRatio,
+  coverImage,
+  headingTextId,
+  inReadingOrder,
+  textStyle,
+  type PortfolioItem,
+  type WallText,
+} from "@/lib/portfolio";
 
 /**
  * The home page wall.
@@ -52,24 +60,70 @@ function Tile({
   );
 }
 
+function TextBlock({
+  text,
+  clamped,
+  heading,
+}: {
+  text: WallText;
+  clamped?: boolean;
+  heading?: boolean;
+}) {
+  const Tag = heading ? "h1" : "p";
+  return (
+    <Tag className="leading-snug whitespace-pre-wrap" style={textStyle(text, { clamped })}>
+      {text.content}
+    </Tag>
+  );
+}
+
 export function PortfolioWall({
   items,
+  texts,
   showNamesOnHover,
 }: {
   items: PortfolioItem[];
+  texts: WallText[];
   showNamesOnHover: boolean;
 }) {
   const shown = items.filter((item) => coverImage(item));
-  if (shown.length === 0) return null;
+  if (shown.length === 0 && texts.length === 0) return null;
 
-  const ratio = canvasHeightRatio(shown);
+  const ratio = canvasHeightRatio(shown, texts);
+  const headingId = headingTextId(texts);
+
+  // The mobile stack interleaves text and pieces in reading order, so a
+  // heading written above a piece still reads above it on a phone.
+  const stacked = [
+    ...texts.map((t) => ({ kind: "text" as const, y: t.y, x: t.x, text: t })),
+    ...inReadingOrder(shown).map((item) => ({
+      kind: "item" as const,
+      y: item.y,
+      x: item.x,
+      item,
+    })),
+  ].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 
   return (
     <>
-      <div className="flex flex-col gap-10 md:hidden">
-        {inReadingOrder(shown).map((item, i) => (
-          <Tile key={item.id} item={item} priority={i === 0} showName={showNamesOnHover} />
-        ))}
+      <div className="flex flex-col gap-10 md:hidden" style={{ containerType: "inline-size" }}>
+        {stacked.map((entry, i) =>
+          entry.kind === "text" ? (
+            <TextBlock
+              key={entry.text.id}
+              text={entry.text}
+              clamped
+              heading={entry.text.id === headingId}
+            />
+          ) : (
+            <Tile
+              key={entry.item.id}
+              item={entry.item}
+              priority={i === 0}
+              showName={showNamesOnHover}
+            />
+          ),
+        )}
       </div>
 
       {/*
@@ -79,8 +133,25 @@ export function PortfolioWall({
       */}
       <div
         className="relative hidden overflow-hidden md:block"
-        style={{ aspectRatio: `100 / ${ratio}` }}
+        // container-type lets text sizes resolve in cqw, so type scales with
+        // the wall rather than jumping between breakpoints.
+        style={{ aspectRatio: `100 / ${ratio}`, containerType: "inline-size" }}
       >
+        {texts.map((text) => (
+          <div
+            key={text.id}
+            className="absolute"
+            style={{
+              left: `${text.x}%`,
+              top: `${(text.y / ratio) * 100}%`,
+              width: `${text.width}%`,
+              zIndex: text.z,
+            }}
+          >
+            <TextBlock text={text} heading={text.id === headingId} />
+          </div>
+        ))}
+
         {shown.map((item, i) => (
           <div
             key={item.id}
