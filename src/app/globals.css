@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/*
+  Design tokens.
+
+  Per CLAUDE.md this file is the first place to edit for any UI tweak — colour
+  and type both resolve from here. Tailwind v4 is CSS-first, so there is no
+  tailwind.config.ts; the @theme block below is the equivalent.
+
+  The site is deliberately light-only. Artwork is judged against a gallery wall,
+  and a dark theme changes how every image reads. Recorded as an invariant in
+  docs/progress.md.
+*/
+:root {
+  --paper: #fbfaf7;
+  --paper-sunk: #f3f1eb;
+  --ink: #17150f;
+  --muted: #6e6759;
+  --line: #e3ded3;
+  --accent: #9a5b33;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Stops artwork reflowing when a scrollbar appears. */
+html {
+  scrollbar-gutter: stable;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+/* WCAG 2.2 AA: focus must always be visible, including on dark imagery. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}

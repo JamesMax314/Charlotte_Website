@@ -1,0 +1,8 @@
+.next/
+.open-next/
+.wrangler/
+node_modules/
+package-lock.json
+public/
+cloudflare-env.d.ts
+next-env.d.ts
