@@ -7,21 +7,37 @@ The product specification is `docs/project-brief.md`.
 
 ## Current State
 
-- **Phases 0, 1 and 2 complete.** Next.js 16 (App Router, Turbopack) + TypeScript +
-  Tailwind v4, deployed as a Cloudflare Worker via the OpenNext adapter.
-- **The public site is built:** home, work index, artwork detail with a lightbox, about,
-  contact, privacy, 404, sitemap and robots.
-- **The catalogue lives in D1.** Artworks, images, listings and site settings are real
-  tables, read at request time. Artwork images live in a private R2 bucket, served only
-  through `/media` on content-addressed keys, with a responsive width ladder written at
-  upload.
-- **The admin works.** Passphrase sign-in, artwork CRUD, multi-file upload with
-  client-side downscaling, drag-to-arrange for the gallery and for an artwork's images,
-  draft/publish/archive, and the Etsy listing editor.
-- **Content is seeded, not final.** `pnpm seed` prefers real artwork in `tmp_art/`
-  (gitignored) and falls back to generated placeholders in `public/seed/`. All copy is
-  placeholder and asserts no client relationships.
-- **Not yet built:** link-health cron, outbound click tracking, contact form delivery.
+- **Phases 0 to 3 complete.** Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind
+  v4, running as a Cloudflare Worker via the OpenNext adapter.
+
+- **The home page is a wall the artist composes herself.** Images and text boxes are
+  placed, resized and layered freely; positions are percentages of canvas width so the
+  arrangement scales with the viewport, and below `md` it gives way to a stack in reading
+  order. Edges snap to one another with an optional gutter.
+
+- **Pieces can have pages of their own**, built with the same wall editor. Elements placed
+  on them are inert by construction and never link onward.
+
+- **Two separate collections.** The portfolio drives the home page and carries no prices;
+  the store is `artworks` + `listings` at `/shop/<slug>`. They share the upload endpoint
+  and image pipeline and nothing else.
+
+- **Everything lives in D1 and R2.** Artwork is in a private bucket, served only through
+  `/media` on content-addressed keys, with a responsive width ladder written in the
+  browser at upload — there is no image optimiser on Workers.
+
+- **The admin.** Passphrase sign-in; a Home page editor with page settings, right-click
+  menus, an image details dialog and text formatting at the pointer; a per-piece page
+  editor; and the older store editor for artworks and Etsy listings.
+
+- **Content is real, copy is not.** `pnpm seed` prefers the artist's work in `tmp_art/`
+  (gitignored) and falls back to generated placeholders. All wording is placeholder and
+  asserts no client relationships.
+
+- **Not yet built:** a store index page, About and Contact editing in the admin, uploaded
+  fonts, link-health cron, outbound click tracking, contact form delivery. The custom 404
+  does not render — see the invariants below.
+
 - **Not yet deployed.** Needs a Cloudflare account, two R2 buckets, a D1 database and two
   secrets. See _Deploying for the first time_ below.
 
@@ -29,12 +45,12 @@ The product specification is `docs/project-brief.md`.
 
 ## Recent Phase Reference
 
-| Phase           | Summary                                                                                                                                                                                                                                                              |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                 |
-| 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                     |
-| 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                           |
-| 3 (in progress) | Layout and styling on real artwork; home rebuilt as an editable free-form wall of pieces and text; page settings, snapping, fonts, right-click menus; streamlined image upload with a details dialog; per-piece pages built on the same wall; store moved to `/shop` |
+| Phase | Summary                                                                                                                                                                                                                                                        |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                           |
+| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                               |
+| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                     |
+| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop` |
 
 ---
 
