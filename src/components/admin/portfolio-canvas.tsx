@@ -655,7 +655,7 @@ export function PortfolioCanvas({
                     alt=""
                     width={cover.width}
                     height={cover.height}
-                    sizes="(min-width: 1152px) 576px, 50vw"
+                    sizes="(min-width: 768px) 50vw, 90vw"
                     draggable={false}
                     className="pointer-events-none h-auto w-full"
                   />

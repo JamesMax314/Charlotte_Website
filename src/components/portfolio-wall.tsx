@@ -44,7 +44,7 @@ function Tile({
         width={cover.width}
         height={cover.height}
         priority={priority}
-        sizes="(min-width: 1152px) 576px, (min-width: 768px) 50vw, 100vw"
+        sizes="(min-width: 768px) 50vw, 90vw"
         className="h-auto w-full"
       />
 

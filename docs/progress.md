@@ -170,6 +170,13 @@ Non-obvious decisions that the code alone does not explain.
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
 
+- **Known debt: the custom 404 never renders.** `src/app/(site)/not-found.tsx` — the
+  "Walked off somewhere" page with the mirrored mark — is not picked up, so both unmatched
+  URLs and `notFound()` from a site route fall through to Next's default "This page could
+  not be found". It has been this way since the pages moved into the `(site)` route group.
+  Fixing it means deciding whether the 404 should carry the site header and footer, which
+  a root-level `app/not-found.tsx` would not get for free.
+
 - **Known debt: the wall renders its contents twice**, once for the mobile stack and once
   for the desktop canvas, with CSS hiding one. That doubles the HTML and produces two
   `<h1>` elements in the source. Lazy loading spares the duplicate image requests for all

@@ -1,5 +1,4 @@
 import { Container } from "@/components/container";
-import { Mark } from "@/components/mark";
 import { PortfolioWall } from "@/components/portfolio-wall";
 import { getPublishedPortfolio, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
@@ -16,14 +15,8 @@ export default async function HomePage() {
   ]);
 
   return (
-    <>
-      <Container className="pt-16 pb-14 sm:pt-24">
-        <Mark className="text-ink animate-stride-in h-20 w-20" />
-      </Container>
-
-      <Container className="pb-16">
-        <PortfolioWall items={items} texts={texts} showNamesOnHover={settings.showNamesOnHover} />
-      </Container>
-    </>
+    <Container className="pt-16 pb-16 sm:pt-24">
+      <PortfolioWall items={items} texts={texts} showNamesOnHover={settings.showNamesOnHover} />
+    </Container>
   );
 }
