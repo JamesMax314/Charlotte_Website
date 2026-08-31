@@ -58,10 +58,14 @@ html {
 }
 
 /*
-  Applied by src/components/fade-in.tsx after it mounts, never by the server —
-  markup that starts hidden would stay hidden if the script failed.
+  The fade is opt-in from the browser, not from the server.
+
+  Markup arrives visible. A tiny inline script at the top of the site layout
+  adds `js-fade` during parsing — before the wall is painted — which is what
+  hides it without the content flashing up first. If scripting is off the class
+  is never added and the page simply renders, so nothing can be stranded.
 */
-.fade-target {
+.js-fade .fade-target {
   opacity: 0;
   transform: translateY(0.75rem);
   transition:
@@ -69,15 +73,15 @@ html {
     transform 0.7s ease;
 }
 
-.fade-target.is-visible {
+.js-fade .fade-target.is-visible {
   opacity: 1;
   transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   /* Motion off means the content is simply there. */
-  .fade-target,
-  .fade-target.is-visible {
+  .js-fade .fade-target,
+  .js-fade .fade-target.is-visible {
     opacity: 1;
     transform: none;
     transition: none;

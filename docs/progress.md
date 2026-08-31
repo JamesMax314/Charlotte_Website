@@ -194,7 +194,20 @@ Non-obvious decisions that the code alone does not explain.
   observer. The timing lives in `src/lib/reveal.ts`, pure and unit-tested, because
   measuring this in a browser proved unreliable.
 
-- **The fade-in never hides content in server markup.** `.fade-target` is applied by
+- **The fade hides before first paint, via an inline script, not from React.** Hiding
+  from the component meant the wall painted once, vanished, then faded — a visible
+  flicker. The `fade-target` class now ships in the markup but the CSS only acts on it
+  under `.js-fade`, which a small inline script at the top of the site layout adds while
+  the document is still parsing, ahead of the wall. With scripting off the class is never
+  added and the page simply renders.
+
+- **That inline script carries a five-second failsafe**, which removes `.js-fade` if no
+  piece has been revealed by then — the signal that hydration never happened. Without it,
+  a bundle that failed to load would leave the gallery permanently blank. Note it also
+  makes Chrome's `--virtual-time-budget` hang, so screenshots of the site must use real
+  time.
+
+- **Superseded: the fade-in never hides content in server markup.** `.fade-target` is applied by
   `src/components/fade-in.tsx` after it mounts, never rendered by the server. Markup that
   started hidden would stay hidden for good if the script failed to load. A `<noscript>`
   override and a `prefers-reduced-motion` rule cover the other two ways it could strand

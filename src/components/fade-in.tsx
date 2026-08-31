@@ -10,10 +10,10 @@ import { isOnScreenAtLoad, revealDelay } from "@/lib/reveal";
  * Only used on the public site — the editor never fades, or the artist would
  * be arranging work she cannot see.
  *
- * The hidden state is applied here rather than baked into the markup. If the
- * class were in the server HTML and the script then failed, the page would be
- * permanently blank; the CSS also carries a `prefers-reduced-motion` and a
- * `<noscript>` escape for the same reason.
+ * The `fade-target` class ships in the server markup, but the CSS only hides it
+ * under `.js-fade`, which an inline script in the site layout adds during
+ * parsing. Hiding from this component instead meant the content painted once,
+ * vanished, then faded — a visible flicker.
  */
 export function FadeIn({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -27,8 +27,6 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
       el.classList.add("is-visible");
       return;
     }
-
-    el.classList.add("fade-target");
 
     const rect = el.getBoundingClientRect();
 
@@ -66,5 +64,9 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, []);
 
-  return <div ref={ref}>{children}</div>;
+  return (
+    <div ref={ref} className="fade-target">
+      {children}
+    </div>
+  );
 }
