@@ -7,24 +7,34 @@ The product specification is `docs/project-brief.md`.
 
 ## Current State
 
-- **Phase 0 complete.** Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind v4,
-  deploying to Cloudflare Workers via the OpenNext adapter. Verified building and serving
-  locally under `wrangler dev`.
-- Design tokens and a styled placeholder home page are in place. No real content yet.
-- Quality gate wired: ESLint (zero warnings), Prettier, `tsc --noEmit`, Vitest, and
-  `next build`, all run in CI on push and pull request.
-- **Not yet built:** public catalogue, admin, uploads, Etsy listing links. No database or
-  media bucket exists yet — those arrive in Phase 2.
-- **Not yet deployed.** Requires a Cloudflare account, `wrangler login`, and the cache
-  bucket. See _Deploying for the first time_ below.
+- **Phases 0, 1 and 2 complete.** Next.js 16 (App Router, Turbopack) + TypeScript +
+  Tailwind v4, deployed as a Cloudflare Worker via the OpenNext adapter.
+- **The public site is built:** home, work index, artwork detail with a lightbox, about,
+  contact, privacy, 404, sitemap and robots.
+- **The catalogue lives in D1.** Artworks, images, listings and site settings are real
+  tables, read at request time. Artwork images live in a private R2 bucket, served only
+  through `/media` on content-addressed keys, with a responsive width ladder written at
+  upload.
+- **The admin works.** Passphrase sign-in, artwork CRUD, multi-file upload with
+  client-side downscaling, drag-to-arrange for the gallery and for an artwork's images,
+  draft/publish/archive, and the Etsy listing editor.
+- **Content is seeded, not final.** `pnpm seed` prefers real artwork in `tmp_art/`
+  (gitignored) and falls back to generated placeholders in `public/seed/`. All copy is
+  placeholder and asserts no client relationships.
+- **Not yet built:** link-health cron, outbound click tracking, contact form delivery.
+- **Not yet deployed.** Needs a Cloudflare account, two R2 buckets, a D1 database and two
+  secrets. See _Deploying for the first time_ below.
 
 ---
 
 ## Recent Phase Reference
 
-| Phase | Summary                                                                                                                                               |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); design tokens, Prettier/ESLint/Vitest, GitHub Actions CI, placeholder home page |
+| Phase           | Summary                                                                                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                       |
+| 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                           |
+| 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser |
+| 3 (in progress) | Layout and styling pass on real artwork; reverted to Fraunces/Inter with a terracotta accent                                                                                               |
 
 ---
 
