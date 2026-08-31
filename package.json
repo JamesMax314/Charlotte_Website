@@ -41,5 +41,20 @@
     "typescript": "^5",
     "vitest": "^4.1.11",
     "wrangler": "^4.127.1"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "pnpm": {
+    "packageExtensions": {
+      "@opennextjs/cloudflare": {
+        "dependencies": {
+          "esbuild": "^0.28.0"
+        }
+      }
+    },
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "unrs-resolver",
+      "workerd"
+    ]
   }
 }

@@ -25,7 +25,7 @@ This file is the authoritative guide for Claude (and any AI coding assistant) wo
   `feat: add location selector to nav bar`
   `fix: correct refrigerant GWP calculation for R404A`
   `test: add unit tests for commuting tCO2e formula`
-- Always run `npm run lint` and `npm run test` before committing
+- Always run `pnpm lint` and `pnpm test` before committing
 - Never commit with failing tests or lint errors
 - Write a meaningful commit message — not "wip" or "update"
 

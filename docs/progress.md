@@ -32,13 +32,16 @@ The product specification is `docs/project-brief.md`.
 
 Non-obvious decisions that the code alone does not explain.
 
-- **`esbuild` is a direct devDependency on purpose.** `@opennextjs/cloudflare` imports it
-  but does not declare it, and Vite 8 lists `esbuild ^0.27 || ^0.28` as an optional peer
-  while OpenNext's core pins exactly `0.25.4`. With no overlapping range, npm nests
-  esbuild where the OpenNext CLI cannot resolve it, and `opennextjs-cloudflare build`
-  fails with `ERR_MODULE_NOT_FOUND`. The root dependency satisfies Vite's range and gives
-  OpenNext something to resolve; its core keeps its own nested copy. Do not remove it as
-  an unused dependency.
+- **`pnpm.packageExtensions` declares `esbuild` for `@opennextjs/cloudflare`.** The
+  adapter imports esbuild without declaring it as a dependency. Under pnpm's isolated
+  `node_modules` an undeclared import cannot resolve, so `opennextjs-cloudflare build`
+  fails with `ERR_MODULE_NOT_FOUND`. The extension in `package.json` declares the missing
+  dependency on the adapter's behalf. Remove it and the Cloudflare build breaks — the
+  Next.js build will still pass, so CI catches this only at the `build` step.
+
+- **`pnpm.onlyBuiltDependencies` is required, not optional.** pnpm 10 blocks dependency
+  postinstall scripts by default. `esbuild`, `workerd` and `unrs-resolver` fetch native
+  binaries in theirs, and silently produce a broken toolchain if the scripts are skipped.
 
 - **The site is light-only, with no dark theme.** Artwork is judged against a gallery
   wall, and a dark background changes how every image reads. This is a deliberate design
@@ -56,11 +59,14 @@ Non-obvious decisions that the code alone does not explain.
 Not yet done. Requires a Cloudflare account and these one-off steps:
 
 ```bash
-npx wrangler login
-npx wrangler r2 bucket create charlotte-website-opennext-cache
-npm run deploy
+pnpm exec wrangler login
+pnpm exec wrangler r2 bucket create charlotte-website-opennext-cache
+pnpm run deploy
 ```
 
+Note `pnpm run deploy`, not `pnpm deploy` — the latter is a built-in pnpm command for
+workspace deployment and will not run the script.
+
 The bucket backs Next's incremental cache and must exist before the first deploy, or the
-worker will fail to start. `npm run preview` builds and serves the worker locally without
+worker will fail to start. `pnpm preview` builds and serves the worker locally without
 needing an account.

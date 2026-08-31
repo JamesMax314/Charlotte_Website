@@ -11,16 +11,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Reads the pnpm version from package.json "packageManager".
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       # CLAUDE.md: ESLint must pass with zero warnings before commit.
-      - run: npm run lint -- --max-warnings=0
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: pnpm lint --max-warnings=0
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      # Guards the packageExtensions workaround documented in docs/progress.md:
+      # the Next build can pass while the Cloudflare adapter build is broken.
+      - run: pnpm exec opennextjs-cloudflare build

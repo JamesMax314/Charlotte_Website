@@ -2,7 +2,7 @@
 .open-next/
 .wrangler/
 node_modules/
-package-lock.json
+pnpm-lock.yaml
 public/
 cloudflare-env.d.ts
 next-env.d.ts
