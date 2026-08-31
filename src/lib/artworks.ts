@@ -55,6 +55,15 @@ export interface Artwork {
 export const isInGallery = (status: ArtworkStatus) => status === "published";
 export const isPubliclyRoutable = (status: ArtworkStatus) => status !== "draft";
 
+/**
+ * The image to lead with, if there is one.
+ *
+ * An artwork can legitimately have no images: the artist creates the piece,
+ * publishes it, and uploads photographs afterwards. Every surface that renders
+ * artwork must cope with that rather than assuming images[0] exists.
+ */
+export const primaryImage = (artwork: Artwork): ArtworkImage | undefined => artwork.images[0];
+
 /** A listing is buyable only while Etsy still has stock. */
 export const isBuyable = (listing: Listing) => listing.availability === "available";
 
@@ -87,6 +96,16 @@ export const isValidEtsyUrl = (value: string): boolean => {
     return false;
   }
 };
+
+/**
+ * True for a slug still carrying its auto-generated placeholder.
+ *
+ * New pieces are created as "Untitled" so the artist can start uploading
+ * immediately, which seeds slugs like `untitled-3`. Those should follow the
+ * title once she names the piece — otherwise every artwork ends up at a
+ * meaningless URL. A slug she has deliberately edited is hers and is left alone.
+ */
+export const isPlaceholderSlug = (slug: string): boolean => /^untitled(-\d+)?$/.test(slug.trim());
 
 /** Slugs are lowercase, hyphenated, and safe in a URL path. */
 export const toSlug = (value: string): string =>

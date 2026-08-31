@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   headlinePricePence,
+  isPlaceholderSlug,
+  primaryImage,
   isInGallery,
   isPubliclyRoutable,
   isSoldOut,
@@ -76,6 +78,23 @@ describe("isSoldOut", () => {
   });
 });
 
+describe("primaryImage", () => {
+  // The artist creates a piece, publishes it, and uploads photographs later.
+  // Every rendering surface has to survive that gap.
+  it("returns undefined when the piece has no photograph yet", () => {
+    expect(primaryImage(artwork([]))).toBeUndefined();
+  });
+
+  it("returns the first image when there are several", () => {
+    const a = artwork([]);
+    a.images = [
+      { id: "1", src: "/media/a.jpg", alt: "a", width: 10, height: 10 },
+      { id: "2", src: "/media/b.jpg", alt: "b", width: 10, height: 10 },
+    ];
+    expect(primaryImage(a)?.id).toBe("1");
+  });
+});
+
 describe("visibility", () => {
   it("keeps archived work out of the gallery but alive at its URL", () => {
     expect(isInGallery("archived")).toBe(false);
@@ -108,6 +127,19 @@ describe("isValidEtsyUrl", () => {
     expect(isValidEtsyUrl("http://www.etsy.com/listing/1")).toBe(false);
     expect(isValidEtsyUrl("not a url")).toBe(false);
     expect(isValidEtsyUrl("")).toBe(false);
+  });
+});
+
+describe("isPlaceholderSlug", () => {
+  it("recognises the auto-generated slugs so they follow the title", () => {
+    expect(isPlaceholderSlug("untitled")).toBe(true);
+    expect(isPlaceholderSlug("untitled-3")).toBe(true);
+  });
+
+  it("leaves a slug the artist chose alone", () => {
+    expect(isPlaceholderSlug("ltw-mag")).toBe(false);
+    expect(isPlaceholderSlug("untitled-sketches")).toBe(false);
+    expect(isPlaceholderSlug("the-untitled-one")).toBe(false);
   });
 });
 

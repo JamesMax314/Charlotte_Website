@@ -73,6 +73,16 @@ Non-obvious decisions that the code alone does not explain.
   `requireSession()` / `hasValidSession()` itself. Removing one of those calls exposes it
   with no visible symptom.
 
+- **An artwork can have no images, and every surface must cope.** The artist creates a
+  piece, publishes it, and uploads photographs afterwards — so `images[0]` is routinely
+  undefined on a live page. Use `primaryImage()` rather than indexing. This crashed
+  `/work` in Phase 2 because `ArtworkCard` assumed an image existed.
+
+- **Placeholder slugs follow the title; edited slugs do not.** New pieces are created as
+  "Untitled", seeding slugs like `untitled-3`. `updateArtwork` regenerates the slug from
+  the title while it still matches that pattern, so renaming a piece fixes its URL, but a
+  slug the artist has deliberately typed is never overwritten.
+
 - **Every `DndContext` needs an explicit `id`.** dnd-kit derives its
   `aria-describedby` target from a module-level counter that starts at zero on the server
   but has already advanced on the client, so omitting the id causes a hydration mismatch

@@ -6,7 +6,7 @@ import { cookies } from "next/headers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/catalogue";
-import { isValidEtsyUrl, toSlug } from "@/lib/artworks";
+import { isPlaceholderSlug, isValidEtsyUrl, toSlug } from "@/lib/artworks";
 import { SESSION_COOKIE, checkPassphrase, createSessionValue, requireSession } from "@/lib/auth";
 
 /**
@@ -97,11 +97,16 @@ export async function updateArtwork(id: string, formData: FormData): Promise<voi
   const title = String(formData.get("title") ?? "").trim() || "Untitled";
   const status = String(formData.get("status") ?? "draft") as schema.ArtworkRow["status"];
 
+  // A slug still on its placeholder follows the title; one the artist has
+  // edited deliberately is left alone.
+  const submittedSlug = String(formData.get("slug") ?? "").trim();
+  const slugSource = !submittedSlug || isPlaceholderSlug(submittedSlug) ? title : submittedSlug;
+
   await db
     .update(schema.artworks)
     .set({
       title,
-      slug: await uniqueSlug(String(formData.get("slug") || title), id),
+      slug: await uniqueSlug(slugSource, id),
       year: Number(formData.get("year")) || new Date().getFullYear(),
       medium: String(formData.get("medium") ?? "").trim(),
       dimensionsNote: String(formData.get("dimensionsNote") ?? "").trim() || null,

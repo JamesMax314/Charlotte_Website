@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Artwork } from "@/lib/artworks";
-import { headlinePricePence, isSoldOut } from "@/lib/artworks";
+import { headlinePricePence, isSoldOut, primaryImage } from "@/lib/artworks";
 import { formatPrice } from "@/lib/format";
 
 export function ArtworkCard({
@@ -11,7 +11,7 @@ export function ArtworkCard({
   artwork: Artwork;
   priority?: boolean;
 }) {
-  const image = artwork.images[0];
+  const image = primaryImage(artwork);
   const from = headlinePricePence(artwork);
   const soldOut = isSoldOut(artwork);
 
@@ -19,15 +19,21 @@ export function ArtworkCard({
     <article className="mb-14 break-inside-avoid">
       <Link href={`/work/${artwork.slug}`} className="group block">
         <div className="bg-paper-sunk border-line overflow-hidden border">
-          <Image
-            src={image.src}
-            alt={image.alt}
-            width={image.width}
-            height={image.height}
-            priority={priority}
-            sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
-            className="h-auto w-full transition-transform duration-500 ease-out group-hover:scale-[1.015]"
-          />
+          {image ? (
+            <Image
+              src={image.src}
+              alt={image.alt}
+              width={image.width}
+              height={image.height}
+              priority={priority}
+              sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
+              className="h-auto w-full transition-transform duration-500 ease-out group-hover:scale-[1.015]"
+            />
+          ) : (
+            <div className="text-graphite flex aspect-[4/5] items-center justify-center text-xs">
+              Photograph coming soon
+            </div>
+          )}
         </div>
 
         {/* The print margin: title left, what it costs right. */}

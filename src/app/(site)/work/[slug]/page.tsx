@@ -5,6 +5,7 @@ import { Container } from "@/components/container";
 import { ArtworkViewer } from "@/components/artwork-viewer";
 import { BuyPanel } from "@/components/buy-panel";
 import { getArtworkBySlug } from "@/lib/catalogue";
+import { primaryImage } from "@/lib/artworks";
 import { SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -19,6 +20,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const artwork = await getArtworkBySlug(slug);
   if (!artwork) return {};
 
+  const image = primaryImage(artwork);
+
   return {
     title: artwork.title,
     description: artwork.description,
@@ -26,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: artwork.title,
       description: artwork.description,
-      images: [{ url: artwork.images[0].src }],
+      ...(image ? { images: [{ url: image.src }] } : {}),
     },
   };
 }
@@ -47,7 +50,7 @@ export default async function ArtworkPage({ params }: Props) {
     artform: artwork.medium,
     dateCreated: String(artwork.year),
     creator: { "@type": "Person", name: "Charlotte" },
-    image: `${SITE_URL}${artwork.images[0].src}`,
+    ...(primaryImage(artwork) ? { image: `${SITE_URL}${primaryImage(artwork)!.src}` } : {}),
     url: `${SITE_URL}/work/${artwork.slug}`,
   };
 
