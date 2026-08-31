@@ -70,7 +70,7 @@ export async function updatePageSettings(patch: {
 
 // ---------------------------------------------------------------- pieces
 
-export async function createPortfolioItem(): Promise<void> {
+export async function createPortfolioItem(at?: { x: number; y: number }): Promise<void> {
   await requireSession();
   const db = await getDb();
 
@@ -83,9 +83,9 @@ export async function createPortfolioItem(): Promise<void> {
     id,
     slug: await uniqueSlug("Untitled"),
     name: "Untitled",
-    // Dropped near the top-left at a modest size; the artist moves it from there.
-    x: 4,
-    y: 4,
+    // Dropped where the menu was opened, at a modest size.
+    x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
+    y: at ? Math.max(at.y, 0) : 4,
     width: 28,
     z: nextZ,
     createdAt: new Date(),
@@ -196,15 +196,16 @@ async function nextZ(): Promise<number> {
   return Math.max(pieces.top, texts.top) + 1;
 }
 
-export async function createWallText(): Promise<void> {
+/** Placed where the artist opened the menu, not in a fixed corner. */
+export async function createWallText(at?: { x: number; y: number }): Promise<void> {
   await requireSession();
   const db = await getDb();
 
   await db.insert(schema.wallTexts).values({
     id: crypto.randomUUID(),
     content: "New text",
-    x: 4,
-    y: 4,
+    x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
+    y: at ? Math.max(at.y, 0) : 4,
     width: 40,
     height: 8,
     z: await nextZ(),

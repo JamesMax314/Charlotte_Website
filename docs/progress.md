@@ -88,6 +88,16 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **Long-press stands in for right-click, and is not optional.** iPadOS has no
+  right-click and the artist works on a tablet, so without the 500ms press the context
+  menu — and therefore adding anything to the wall at all — would be unreachable on her
+  main device. It cancels the moment a gesture becomes a drag, so pressing and moving
+  still repositions a piece.
+
+- **Destructive confirmation uses `<dialog>`, never `window.confirm`.** The platform
+  supplies focus trapping, page inertness and Escape-to-close; a native confirm blocks
+  the whole page and cannot carry the piece's name.
+
 - **Text sizes are `cqw`, so the canvas must declare `container-type: inline-size`.**
   Type scales with the wall exactly as pieces do. The mobile stack clamps the same value,
   because raw `cqw` against a phone-width container renders body copy at about six pixels.

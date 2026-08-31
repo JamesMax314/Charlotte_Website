@@ -4,7 +4,6 @@ import { PageSettingsPanel } from "@/components/admin/page-settings";
 import { getAllPortfolioItems, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { requireSession } from "@/lib/auth";
-import { createPortfolioItem, createWallText } from "../portfolio-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,26 +20,10 @@ export default async function PortfolioAdminPage() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl tracking-tight">Home page</h1>
-          <p className="text-graphite mt-1 text-sm">Text and work, arranged however you like.</p>
-        </div>
-
-        <div className="flex gap-3">
-          <form action={createWallText}>
-            <button
-              type="submit"
-              className="border-line hover:border-ink border px-5 py-3 text-sm transition-colors"
-            >
-              Add text
-            </button>
-          </form>
-          <form action={createPortfolioItem}>
-            <button
-              type="submit"
-              className="bg-accent text-paper hover:bg-ink px-5 py-3 text-sm transition-colors"
-            >
-              Add a piece
-            </button>
-          </form>
+          <p className="text-graphite mt-1 text-sm">
+            Text and work, arranged however you like. Right-click the wall to add something — or
+            press and hold on a tablet.
+          </p>
         </div>
       </div>
 

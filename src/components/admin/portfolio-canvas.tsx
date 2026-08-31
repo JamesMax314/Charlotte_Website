@@ -20,12 +20,17 @@ import {
   type Guides,
 } from "@/lib/snap";
 import {
+  createPortfolioItem,
+  createWallText,
+  deletePortfolioItem,
   deleteWallText,
   savePortfolioLayout,
   saveWallTextLayout,
   updateWallText,
 } from "@/app/admin/portfolio-actions";
 import { TextToolbar } from "./text-toolbar";
+import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
+import { ConfirmDialog } from "./confirm-dialog";
 
 /**
  * The home page wall, editable.
@@ -58,6 +63,21 @@ type Drag = {
 /** Below this, a pointer gesture is a tap (select or open), not a drag. */
 const DRAG_THRESHOLD_PX = 4;
 
+/**
+ * How long a touch must be held to stand in for a right-click.
+ *
+ * iPadOS has no right-click, and the artist works on a tablet, so without this
+ * the context menu — and therefore adding anything at all — would be
+ * unreachable on her main device.
+ */
+const LONG_PRESS_MS = 500;
+
+type Menu = {
+  x: number;
+  y: number;
+  entries: MenuEntry[];
+};
+
 export function PortfolioCanvas({
   items: initialItems,
   texts: initialTexts,
@@ -81,6 +101,9 @@ export function PortfolioCanvas({
     vertical: null,
     horizontal: null,
   });
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Interaction state lives in a ref, not React state. Reading it from state
@@ -174,6 +197,7 @@ export function PortfolioCanvas({
       const rawY = moveEvent.clientY - drag.pointerY;
       if (!drag.moved && Math.hypot(rawX, rawY) < DRAG_THRESHOLD_PX) return;
       drag.moved = true;
+      cancelLongPress();
 
       const dx = asPercent(rawX);
       const dy = asPercent(rawY);
@@ -236,6 +260,7 @@ export function PortfolioCanvas({
     };
 
     const onUp = () => {
+      cancelLongPress();
       teardown();
       dragRef.current = null;
       setActiveId(null);
@@ -276,6 +301,104 @@ export function PortfolioCanvas({
     teardownRef.current = teardown;
   };
 
+  /** Canvas percentage coordinates for a viewport point. */
+  const pointAt = (clientX: number, clientY: number) => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (!box || box.width === 0) return { x: 4, y: 4 };
+    return {
+      // Both axes are percentages of width; see the schema.
+      x: ((clientX - box.left) / box.width) * 100,
+      y: ((clientY - box.top) / box.width) * 100,
+    };
+  };
+
+  const openCanvasMenu = (clientX: number, clientY: number) => {
+    const at = pointAt(clientX, clientY);
+    setMenu({
+      x: clientX,
+      y: clientY,
+      entries: [
+        {
+          label: "Add image",
+          icon: Icons.image,
+          onSelect: () => void createPortfolioItem(at),
+        },
+        {
+          label: "Add text",
+          icon: Icons.text,
+          onSelect: () => void createWallText(at),
+        },
+      ],
+    });
+  };
+
+  const openItemMenu = (clientX: number, clientY: number, item: PortfolioItem) => {
+    setMenu({
+      x: clientX,
+      y: clientY,
+      entries: [
+        {
+          label: "Edit details",
+          icon: Icons.pencil,
+          onSelect: () => router.push(`/admin/portfolio/${item.id}`),
+        },
+        {
+          label: "Delete image",
+          icon: Icons.trash,
+          danger: true,
+          onSelect: () => setPendingDelete({ id: item.id, name: item.name }),
+        },
+      ],
+    });
+  };
+
+  const openTextMenu = (clientX: number, clientY: number, text: WallText) => {
+    setMenu({
+      x: clientX,
+      y: clientY,
+      entries: [
+        {
+          label: "Edit text",
+          icon: Icons.pencil,
+          onSelect: () => setSelectedTextId(text.id),
+        },
+        {
+          label: "Delete text",
+          icon: Icons.trash,
+          danger: true,
+          onSelect: () => {
+            setTexts((c) => c.filter((t) => t.id !== text.id));
+            if (selectedTextId === text.id) setSelectedTextId(null);
+            void deleteWallText(text.id);
+          },
+        },
+      ],
+    });
+  };
+
+  const cancelLongPress = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = null;
+  };
+
+  /**
+   * Starts the touch stand-in for a right-click.
+   *
+   * Cancelled as soon as the gesture turns into a drag, so pressing and moving
+   * still repositions a piece rather than opening a menu.
+   */
+  const armLongPress = (event: React.PointerEvent, open: (x: number, y: number) => void) => {
+    if (event.pointerType !== "touch") return;
+    const { clientX, clientY } = event;
+    cancelLongPress();
+    longPressRef.current = setTimeout(() => {
+      teardownRef.current?.();
+      dragRef.current = null;
+      setActiveId(null);
+      open(clientX, clientY);
+    }, LONG_PRESS_MS);
+  };
+
   const grip = (dragging: boolean) =>
     `absolute right-0 bottom-0 h-7 w-7 cursor-nwse-resize touch-none transition-opacity ${
       dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
@@ -305,7 +428,16 @@ export function PortfolioCanvas({
 
       <div
         ref={canvasRef}
-        onPointerDown={() => setSelectedTextId(null)}
+        onPointerDown={(e) => {
+          setSelectedTextId(null);
+          armLongPress(e, openCanvasMenu);
+        }}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          openCanvasMenu(e.clientX, e.clientY);
+        }}
         className="border-line bg-paper-sunk/40 relative w-full overflow-hidden border"
         // container-type lets text sizes resolve in cqw, exactly as on the site.
         style={{ aspectRatio: `100 / ${ratio}`, containerType: "inline-size" }}
@@ -346,7 +478,15 @@ export function PortfolioCanvas({
                   />
                 ) : (
                   <p
-                    onPointerDown={(e) => begin(e, "text", text, "move", 0, text.height)}
+                    onPointerDown={(e) => {
+                      begin(e, "text", text, "move", 0, text.height);
+                      armLongPress(e, (mx, my) => openTextMenu(mx, my, text));
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openTextMenu(e.clientX, e.clientY, text);
+                    }}
                     className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap"
                     style={textStyle(text)}
                   >
@@ -361,6 +501,11 @@ export function PortfolioCanvas({
                 tabIndex={-1}
                 aria-label="Move text"
                 onPointerDown={(e) => begin(e, "text", text, "move", 0, text.height)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openTextMenu(e.clientX, e.clientY, text);
+                }}
                 className={`bg-accent absolute -top-2 left-0 h-4 w-10 cursor-grab touch-none transition-opacity ${
                   selected || dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                 }`}
@@ -399,7 +544,15 @@ export function PortfolioCanvas({
                 role="button"
                 tabIndex={0}
                 aria-label={`Move ${item.name}. Press Enter to edit it.`}
-                onPointerDown={(e) => begin(e, "item", item, "move", aspect, item.width * aspect)}
+                onPointerDown={(e) => {
+                  begin(e, "item", item, "move", aspect, item.width * aspect);
+                  armLongPress(e, (x, y) => openItemMenu(x, y, item));
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openItemMenu(e.clientX, e.clientY, item);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ")
                     router.push(`/admin/portfolio/${item.id}`);
@@ -463,6 +616,25 @@ export function PortfolioCanvas({
           </p>
         )}
       </div>
+
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />
+      )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this image?"
+        body={`“${pendingDelete?.name ?? ""}” and its photographs will be removed for good. This cannot be undone.`}
+        confirmLabel="Delete"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const id = pendingDelete?.id;
+          setPendingDelete(null);
+          if (!id) return;
+          setItems((c) => c.filter((i) => i.id !== id));
+          void deletePortfolioItem(id);
+        }}
+      />
     </div>
   );
 }
