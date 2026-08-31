@@ -509,22 +509,6 @@ export function PortfolioCanvas({
                 )}
               </div>
 
-              {/* Move grip, so a selected box can still be dragged while typing. */}
-              <div
-                role="button"
-                tabIndex={-1}
-                aria-label="Move text"
-                onPointerDown={(e) => begin(e, "text", text, "move", 0, text.height)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openTextMenu(e.clientX, e.clientY, text);
-                }}
-                className={`bg-accent absolute -top-2 left-0 h-4 w-10 cursor-grab touch-none transition-opacity ${
-                  selected || dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                }`}
-              />
-
               <div
                 role="button"
                 tabIndex={-1}
