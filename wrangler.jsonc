@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "charlotte-website",
+  "compatibility_date": "2026-08-28",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "services": [
+    {
+      // Self-reference, required by the incremental cache. Must match "name" above.
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "charlotte-website",
+    },
+  ],
+  "r2_buckets": [
+    {
+      // Next's incremental cache. Create before first deploy:
+      //   npx wrangler r2 bucket create charlotte-website-opennext-cache
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "charlotte-website-opennext-cache",
+    },
+  ],
+  "images": {
+    "binding": "IMAGES",
+  },
+
+  // Added in Phase 2, once the artist-facing admin needs them:
+  //   "d1_databases": [{ "binding": "DB", "database_name": "charlotte-website", "database_id": "..." }]
+  //   "r2_buckets": + { "binding": "MEDIA", "bucket_name": "charlotte-website-media" }
+}

@@ -25,7 +25,7 @@ This file is the authoritative guide for Claude (and any AI coding assistant) wo
   `feat: add location selector to nav bar`
   `fix: correct refrigerant GWP calculation for R404A`
   `test: add unit tests for commuting tCO2e formula`
-- Always run `npm run lint` and `npm run test` before committing
+- Always run `pnpm lint` and `pnpm test` before committing
 - Never commit with failing tests or lint errors
 - Write a meaningful commit message — not "wip" or "update"
 
@@ -51,7 +51,7 @@ The long-form historical changelog (Phases 0 through 1.10) lives in `docs/progre
 
 For UI tweaks (colors, spacing, typography):
 
-- Edit design tokens in src/app/globals.css or tailwind.config.ts first
+- Edit design tokens in src/app/globals.css first (Tailwind v4 is CSS-first; there is no tailwind.config.ts)
 - Never read or modify files in /.next, /dist, /build, /node_modules
 - Do not search the codebase if I've named the file
 - Skip PRD/progress doc checks for tweaks tagged [ui-tweak]
