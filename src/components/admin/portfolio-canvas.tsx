@@ -20,10 +20,11 @@ import {
   type Guides,
 } from "@/lib/snap";
 import {
-  createPortfolioItem,
+  createPortfolioItemDraft,
   createWallText,
   deletePortfolioItem,
   deleteWallText,
+  savePortfolioItemDetails,
   savePortfolioLayout,
   saveWallTextLayout,
   updateWallText,
@@ -32,6 +33,8 @@ import { TextToolbar } from "./text-toolbar";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { FloatingLayer } from "./floating-layer";
 import { ConfirmDialog } from "./confirm-dialog";
+import { ImageDialog, type ImageDetails } from "./image-dialog";
+import { uploadImage } from "@/lib/client-upload";
 
 /**
  * The home page wall, editable.
@@ -84,12 +87,18 @@ export function PortfolioCanvas({
   texts: initialTexts,
   snapEnabled,
   gutter,
+  parentId = null,
 }: {
   items: PortfolioItem[];
   texts: WallText[];
   snapEnabled: boolean;
   /** Already resolved to 0 when the artist has the gap turned off. */
   gutter: number;
+  /**
+   * Which wall this is. Null is the home page; an id is that piece's own page,
+   * where elements are inert and never link anywhere.
+   */
+  parentId?: string | null;
 }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -112,6 +121,32 @@ export function PortfolioCanvas({
    * bottom of a tall wall, so the artist could not see what her changes did.
    */
   const [formatting, setFormatting] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  /** The details dialog, and the file input that feeds it. */
+  const [dialog, setDialog] = useState<{
+    id: string;
+    initial: ImageDetails;
+    imageSrc: string | null;
+    isNew: boolean;
+  } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const dropPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  /**
+   * Server actions were fired with `void`, which throws away rejections: a
+   * failed delete or save looked exactly like a successful one. Route them
+   * through here so failures reach the artist instead of vanishing.
+   */
+  const run = (work: Promise<unknown>, what: string) => {
+    setActionError(null);
+    void work.catch((cause) => {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setActionError(`${what} failed: ${detail}`);
+      console.error(`[wall] ${what} failed`, cause);
+    });
+  };
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
@@ -290,8 +325,16 @@ export function PortfolioCanvas({
       if (!drag.moved) {
         // A tap opens a piece for editing, but only selects a text box — its
         // editing happens in place, on the wall.
-        if (drag.kind === "item") router.push(`/admin/portfolio/${drag.id}`);
-        else setSelectedTextId(drag.id);
+        if (drag.kind === "item") {
+          const piece = items.find((i) => i.id === drag.id);
+          // A clickable piece has a page of its own; anything else has only
+          // its details.
+          if (piece && piece.clickable && parentId === null) {
+            router.push(`/admin/portfolio/${drag.id}`);
+          } else if (piece) {
+            openDetails(piece);
+          }
+        } else setSelectedTextId(drag.id);
         return;
       }
 
@@ -322,6 +365,38 @@ export function PortfolioCanvas({
     teardownRef.current = teardown;
   };
 
+  const openDetails = (item: PortfolioItem) =>
+    setDialog({
+      id: item.id,
+      initial: { name: item.name, information: item.information, clickable: item.clickable },
+      imageSrc: coverImage(item)?.src ?? null,
+      isNew: false,
+    });
+
+  /**
+   * The add-image flow: file first, then details.
+   *
+   * The row has to exist before the image can be attached to it, so a draft is
+   * created here and deleted again if the artist cancels.
+   */
+  async function addImageFromFile(file: File) {
+    const at = dropPointRef.current ?? { x: 4, y: 4 };
+    setAdding(true);
+    try {
+      const id = await createPortfolioItemDraft(at, parentId);
+      const uploaded = await uploadImage(file, { field: "portfolioItemId", parentId: id });
+      setDialog({
+        id,
+        initial: { name: "", information: "", clickable: parentId === null },
+        imageSrc: uploaded.src,
+        isNew: true,
+      });
+    } finally {
+      setAdding(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
   /** Canvas percentage coordinates for a viewport point. */
   const pointAt = (clientX: number, clientY: number) => {
     const box = canvasRef.current?.getBoundingClientRect();
@@ -342,12 +417,18 @@ export function PortfolioCanvas({
         {
           label: "Add image",
           icon: Icons.image,
-          onSelect: () => void createPortfolioItem(at),
+          // Straight to the file browser: choosing a picture is the first
+          // thing the artist wants to do, and everything else follows in a
+          // dialog over the wall.
+          onSelect: () => {
+            dropPointRef.current = at;
+            fileRef.current?.click();
+          },
         },
         {
           label: "Add text",
           icon: Icons.text,
-          onSelect: () => void createWallText(at),
+          onSelect: () => void createWallText(at, parentId),
         },
       ],
     });
@@ -361,8 +442,17 @@ export function PortfolioCanvas({
         {
           label: "Edit details",
           icon: Icons.pencil,
-          onSelect: () => router.push(`/admin/portfolio/${item.id}`),
+          onSelect: () => openDetails(item),
         },
+        ...(item.clickable && parentId === null
+          ? [
+              {
+                label: "Open its page",
+                icon: Icons.image,
+                onSelect: () => router.push(`/admin/portfolio/${item.id}`),
+              },
+            ]
+          : []),
         {
           label: "Delete image",
           icon: Icons.trash,
@@ -615,6 +705,50 @@ export function PortfolioCanvas({
         )}
       </div>
 
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void addImageFromFile(file);
+        }}
+      />
+
+      {adding && (
+        <p className="text-graphite mt-2 text-xs" aria-live="polite">
+          Adding image…
+        </p>
+      )}
+
+      {actionError && (
+        <p role="alert" className="mt-2 text-xs text-red-700">
+          {actionError}
+        </p>
+      )}
+
+      {dialog && (
+        <ImageDialog
+          open
+          itemId={dialog.id}
+          initial={dialog.initial}
+          imageSrc={dialog.imageSrc}
+          // Elements on a piece's own page never link anywhere.
+          allowClickable={parentId === null}
+          onCancel={() => {
+            // Cancelling a brand new image removes the draft and its objects;
+            // cancelling an edit simply closes.
+            if (dialog.isNew) run(deletePortfolioItem(dialog.id), "Discarding the image");
+            setDialog(null);
+          }}
+          onSave={(details) => {
+            run(savePortfolioItemDetails(dialog.id, details), "Saving the image");
+            setDialog(null);
+          }}
+        />
+      )}
+
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />
       )}
@@ -650,7 +784,7 @@ export function PortfolioCanvas({
           setPendingDelete(null);
           if (!id) return;
           setItems((c) => c.filter((i) => i.id !== id));
-          void deletePortfolioItem(id);
+          run(deletePortfolioItem(id), "Deleting the image");
         }}
       />
     </div>

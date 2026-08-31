@@ -16,7 +16,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/about`, priority: 0.5 },
     { url: `${SITE_URL}/contact`, priority: 0.5 },
     { url: `${SITE_URL}/privacy`, priority: 0.1 },
-    ...portfolio.map((item) => ({ url: `${SITE_URL}/work/${item.slug}`, priority: 0.8 })),
+    // Only pieces with a page of their own: children compose a page and a
+    // piece whose page is switched off would 404.
+    ...portfolio
+      .filter((item) => item.clickable)
+      .map((item) => ({ url: `${SITE_URL}/work/${item.slug}`, priority: 0.8 })),
     ...slugs.map((slug) => ({ url: `${SITE_URL}/shop/${slug}`, priority: 0.6 })),
   ];
 }

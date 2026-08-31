@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
-import { getPortfolioItemBySlug } from "@/lib/portfolio-queries";
+import { PortfolioWall } from "@/components/portfolio-wall";
+import {
+  getPortfolioItemBySlug,
+  getPublishedChildren,
+  getWallTexts,
+} from "@/lib/portfolio-queries";
+import { getSiteSettings } from "@/lib/catalogue";
 import { SITE_URL } from "@/lib/site";
 
 // Reads D1 at request time; see docs/progress.md.
@@ -18,11 +23,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const cover = item.images[0];
   return {
-    title: item.name,
+    title: item.name || "Work",
     description: item.information.slice(0, 200),
     alternates: { canonical: `${SITE_URL}/work/${item.slug}` },
     openGraph: {
-      title: item.name,
+      title: item.name || "Work",
       description: item.information.slice(0, 200),
       ...(cover ? { images: [{ url: cover.src }] } : {}),
     },
@@ -31,15 +36,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PortfolioItemPage({ params }: Props) {
   const { slug } = await params;
+
+  // Returns nothing for a draft, a child element, or a piece whose page the
+  // artist has switched off — all of which must 404 rather than resolve.
   const item = await getPortfolioItemBySlug(slug);
   if (!item) notFound();
+
+  const [children, texts, settings] = await Promise.all([
+    getPublishedChildren(item.id),
+    getWallTexts(item.id),
+    getSiteSettings(),
+  ]);
 
   // VisualArtwork only. No Product/Offer markup: nothing here is for sale.
   const cover = item.images[0];
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "VisualArtwork",
-    name: item.name,
+    name: item.name || slug,
     creator: { "@type": "Person", name: "Charlotte Wilkinson" },
     ...(cover ? { image: `${SITE_URL}${cover.src}` } : {}),
     url: `${SITE_URL}/work/${item.slug}`,
@@ -58,7 +72,7 @@ export default async function PortfolioItemPage({ params }: Props) {
 
       <div className="max-w-3xl">
         <h1 className="font-display text-3xl leading-tight tracking-tight text-balance sm:text-4xl">
-          {item.name}
+          {item.name || "Untitled"}
         </h1>
         {item.information && (
           <p className="mt-5 leading-relaxed text-pretty whitespace-pre-line">{item.information}</p>
@@ -66,30 +80,16 @@ export default async function PortfolioItemPage({ params }: Props) {
       </div>
 
       {/*
-        A piece can be a whole project, so every image is shown at full width in
-        the artist's order rather than hidden behind a gallery control.
+        The piece's own page, composed on the same wall as the home page. Its
+        elements are inert: they are part of this page, not links onward.
       */}
-      <div className="mt-10 flex flex-col gap-10">
-        {item.images.map((image, i) => (
-          <figure key={image.id} className="bg-paper-sunk border-line border">
-            <Image
-              src={image.src}
-              alt={image.alt}
-              width={image.width}
-              height={image.height}
-              priority={i === 0}
-              sizes="(min-width: 1280px) 1152px, 100vw"
-              className="h-auto w-full"
-            />
-          </figure>
-        ))}
+      <div className="mt-10">
+        <PortfolioWall
+          items={children}
+          texts={texts}
+          showNamesOnHover={settings.showNamesOnHover}
+        />
       </div>
-
-      {item.images.length === 0 && (
-        <p className="border-line text-graphite mt-10 border border-dashed px-6 py-16 text-center text-sm">
-          Photographs coming soon.
-        </p>
-      )}
     </Container>
   );
 }

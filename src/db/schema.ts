@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core";
 
 /**
  * The catalogue, in D1. Shapes follow docs/project-brief.md §6.
@@ -89,11 +97,26 @@ export const portfolioItems = sqliteTable(
   {
     id: text("id").primaryKey(),
     slug: text("slug").notNull(),
+    /** May be blank: an untitled piece shows nothing on hover (see brief). */
     name: text("name").notNull(),
     information: text("information").notNull().default(""),
     status: text("status", { enum: ["draft", "published"] })
       .notNull()
       .default("published"),
+
+    /**
+     * NULL means the home wall. Set means this is an element on that piece's
+     * own page — inert, never linked, never in the sitemap.
+     */
+    parentId: text("parent_id").references((): AnySQLiteColumn => portfolioItems.id, {
+      onDelete: "cascade",
+    }),
+
+    /**
+     * Interactive on the site, and has a page of its own. Defaults true so
+     * every piece that existed before this column keeps behaving as it did.
+     */
+    clickable: integer("clickable", { mode: "boolean" }).notNull().default(true),
 
     /**
      * Free-form placement on the home wall.
@@ -118,6 +141,7 @@ export const portfolioItems = sqliteTable(
   (t) => [
     uniqueIndex("portfolio_items_slug_idx").on(t.slug),
     index("portfolio_items_status_idx").on(t.status),
+    index("portfolio_items_parent_idx").on(t.parentId, t.z),
   ],
 );
 
@@ -153,6 +177,9 @@ export const portfolioImages = sqliteTable(
 export const wallTexts = sqliteTable("wall_texts", {
   id: text("id").primaryKey(),
   content: text("content").notNull().default(""),
+
+  /** NULL means the home wall; set means that piece's own page. */
+  parentId: text("parent_id").references(() => portfolioItems.id, { onDelete: "cascade" }),
 
   x: real("x").notNull().default(4),
   y: real("y").notNull().default(4),

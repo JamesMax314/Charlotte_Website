@@ -29,12 +29,12 @@ The product specification is `docs/project-brief.md`.
 
 ## Recent Phase Reference
 
-| Phase           | Summary                                                                                                                                                                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                     |
-| 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                         |
-| 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                               |
-| 3 (in progress) | Layout and styling on real artwork; Fraunces/Inter with a terracotta accent; `/work` index removed; home rebuilt as an editable free-form wall of pieces and text boxes, with page settings for gutter, snapping and hover names; store moved to `/shop` |
+| Phase           | Summary                                                                                                                                                                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                 |
+| 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                     |
+| 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                           |
+| 3 (in progress) | Layout and styling on real artwork; home rebuilt as an editable free-form wall of pieces and text; page settings, snapping, fonts, right-click menus; streamlined image upload with a details dialog; per-piece pages built on the same wall; store moved to `/shop` |
 
 ---
 
@@ -87,6 +87,32 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **`parent_id` is what scopes a wall.** NULL is the home page; an id is that piece's own
+  page. Every read of `portfolio_items` or `wall_texts` must filter on it, or elements
+  belonging to a piece's page leak onto the home wall. The same `PortfolioCanvas` and
+  `PortfolioWall` render both, which is why a sub-page needed no new components.
+
+- **Elements on a piece's page are inert, enforced in the domain not the UI.**
+  `isInteractive` requires `clickable && parentId === null`, so a child can never link
+  even if its row says clickable. Hiding the toggle in the dialog is convenience; this is
+  the guarantee.
+
+- **A blank title means no hover overlay.** `showsHoverName` also requires the page-wide
+  setting and clickability. This is what lets decorative marks and icons sit on the wall
+  without advertising themselves; a piece is made fully inert by turning clickable off.
+
+- **Turning clickable off hides a piece's page, it does not delete it.** The page's
+  elements stay in the database and `/work/<slug>` 404s, so switching it back on restores
+  everything.
+
+- **The add-image flow creates a draft row before the dialog opens**, because the image
+  needs somewhere to attach. Cancelling deletes it again, which is the only thing standing
+  between this flow and a database full of empty pieces — verified rather than assumed.
+
+- **Never fire a server action with bare `void`.** It discards rejections, so a failed
+  delete or save is indistinguishable from a successful one. The wall routes them through
+  a helper that surfaces the error to the artist and the console.
 
 - **A text box's font is an open string key, not a database enum.** The artist will be
   able to upload her own fonts, and an enum would force a schema migration for each one.

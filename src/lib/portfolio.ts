@@ -18,6 +18,7 @@ export interface PortfolioImage {
 export interface PortfolioItem {
   id: string;
   slug: string;
+  /** May be blank. A blank title means no hover overlay on the site. */
   name: string;
   information: string;
   status: "draft" | "published";
@@ -26,8 +27,31 @@ export interface PortfolioItem {
   y: number;
   width: number;
   z: number;
+  /** NULL for the home wall; set for an element on that piece's own page. */
+  parentId: string | null;
+  clickable: boolean;
   images: PortfolioImage[];
 }
+
+/**
+ * Whether a visitor can click through to a piece's own page.
+ *
+ * Elements placed on a piece's page are always inert: they are part of that
+ * page's composition, not links to further pages.
+ */
+export const isInteractive = (item: PortfolioItem): boolean =>
+  item.clickable && item.parentId === null;
+
+/**
+ * Whether the dark hover overlay with the piece's name should appear.
+ *
+ * A blank title means nothing happens on hover, which is what lets the artist
+ * place decorative marks and icons that do not advertise themselves as
+ * clickable. Kept here rather than in a component so the editor and the site
+ * cannot disagree about it.
+ */
+export const showsHoverName = (item: PortfolioItem, showNames: boolean): boolean =>
+  showNames && isInteractive(item) && item.name.trim() !== "";
 
 /** The cover shown on the wall, if the piece has any images yet. */
 export const coverImage = (item: PortfolioItem): PortfolioImage | undefined => item.images[0];
@@ -60,6 +84,8 @@ export interface WallText {
   colour: string;
   /** A key into the font registry; see src/lib/fonts.ts. */
   font: string;
+  /** NULL for the home wall; set for an element on that piece's own page. */
+  parentId: string | null;
 }
 
 /**

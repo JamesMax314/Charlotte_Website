@@ -5,6 +5,8 @@ import {
   coverImage,
   headingTextId,
   inReadingOrder,
+  isInteractive,
+  showsHoverName,
   textStyle,
   type PortfolioItem,
   type WallText,
@@ -31,8 +33,11 @@ function Tile({
   const cover = coverImage(item);
   if (!cover) return null;
 
-  return (
-    <Link href={`/work/${item.slug}`} className="group relative block overflow-hidden">
+  const interactive = isInteractive(item);
+  const named = showsHoverName(item, showName);
+
+  const picture = (
+    <>
       <Image
         src={cover.src}
         alt={cover.alt}
@@ -48,7 +53,7 @@ function Tile({
         and the overlay is also focus-visible so keyboard users are not left
         without it.
       */}
-      {showName && (
+      {named && (
         <span
           className="bg-ink/70 text-paper absolute inset-0 flex items-center justify-center p-4 text-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
           aria-hidden="true"
@@ -56,7 +61,21 @@ function Tile({
           <span className="font-display text-lg tracking-tight text-balance">{item.name}</span>
         </span>
       )}
+    </>
+  );
+
+  /*
+    A piece that is not clickable renders as a plain image: no link, no hover
+    state, no pointer cursor. That is what lets decorative marks and icons sit
+    on the wall without pretending to be interactive, and it is why elements on
+    a piece's own page are inert.
+  */
+  return interactive ? (
+    <Link href={`/work/${item.slug}`} className="group relative block overflow-hidden">
+      {picture}
     </Link>
+  ) : (
+    <div className="relative block overflow-hidden">{picture}</div>
   );
 }
 

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/catalogue";
@@ -18,9 +17,12 @@ import { requireSession } from "@/lib/auth";
 
 const refresh = () => revalidatePath("/", "layout");
 
-async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
+async function uniqueSlug(base: string, excludeId?: string, id?: string): Promise<string> {
   const db = await getDb();
-  const root = toSlug(base) || "untitled";
+  // A piece may legitimately have no title — an icon or a decorative mark — so
+  // fall back to something derived from its id rather than a wall of
+  // "untitled-7" slugs.
+  const root = toSlug(base) || (id ? `piece-${id.slice(0, 8)}` : "untitled");
   for (let n = 0; n < 50; n++) {
     const candidate = n === 0 ? root : `${root}-${n + 1}`;
     const clash = await db
@@ -71,7 +73,17 @@ export async function updatePageSettings(patch: {
 
 // ---------------------------------------------------------------- pieces
 
-export async function createPortfolioItem(at?: { x: number; y: number }): Promise<void> {
+/**
+ * Creates an empty piece and returns its id, without navigating.
+ *
+ * The artist picks a file first and the details dialog opens over the wall, so
+ * the row has to exist before the image can be attached to it. Cancelling the
+ * dialog deletes it again.
+ */
+export async function createPortfolioItemDraft(
+  at?: { x: number; y: number },
+  parentId: string | null = null,
+): Promise<string> {
   await requireSession();
   const db = await getDb();
 
@@ -82,9 +94,12 @@ export async function createPortfolioItem(at?: { x: number; y: number }): Promis
 
   await db.insert(schema.portfolioItems).values({
     id,
-    slug: await uniqueSlug("Untitled"),
-    name: "Untitled",
-    // Dropped where the menu was opened, at a modest size.
+    slug: await uniqueSlug("", undefined, id),
+    name: "",
+    parentId,
+    // Elements on a piece's own page never link anywhere.
+    clickable: parentId === null,
+    status: "draft",
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
     y: at ? Math.max(at.y, 0) : 4,
     width: 28,
@@ -93,7 +108,54 @@ export async function createPortfolioItem(at?: { x: number; y: number }): Promis
     updatedAt: new Date(),
   });
 
-  redirect(`/admin/portfolio/${id}`);
+  return id;
+}
+
+/** Saves the details dialog and publishes the piece. */
+export async function savePortfolioItemDetails(
+  id: string,
+  details: { name: string; information: string; clickable: boolean },
+): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  const name = details.name.trim();
+  await db
+    .update(schema.portfolioItems)
+    .set({
+      name,
+      slug: await uniqueSlug(name, id, id),
+      information: details.information.trim(),
+      clickable: details.clickable,
+      status: "published",
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.portfolioItems.id, id));
+
+  refresh();
+}
+
+/**
+ * Clears a piece's images so a replacement can be uploaded.
+ *
+ * Removes the R2 objects as well; the rows alone would leave the bucket
+ * accumulating everything the artist ever replaced.
+ */
+export async function clearPortfolioImages(id: string): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  const images = await db
+    .select({ storageKey: schema.portfolioImages.storageKey })
+    .from(schema.portfolioImages)
+    .where(eq(schema.portfolioImages.itemId, id));
+
+  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+  const { env } = await getCloudflareContext({ async: true });
+  await Promise.all(images.map((i) => env.MEDIA.delete(i.storageKey)));
+
+  await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.itemId, id));
+  refresh();
 }
 
 export async function updatePortfolioItem(id: string, formData: FormData): Promise<void> {
@@ -169,10 +231,18 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   const db = await getDb();
 
   // Remove the R2 objects too, or the bucket accumulates orphans forever.
+  // Children cascade at the row level, but their objects do not, so sweep the
+  // whole family here.
+  const family = await db
+    .select({ id: schema.portfolioItems.id })
+    .from(schema.portfolioItems)
+    .where(eq(schema.portfolioItems.parentId, id));
+  const ids = [id, ...family.map((f) => f.id)];
+
   const images = await db
     .select({ storageKey: schema.portfolioImages.storageKey })
     .from(schema.portfolioImages)
-    .where(eq(schema.portfolioImages.itemId, id));
+    .where(inArray(schema.portfolioImages.itemId, ids));
 
   const { getCloudflareContext } = await import("@opennextjs/cloudflare");
   const { env } = await getCloudflareContext({ async: true });
@@ -180,7 +250,8 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 
   await db.delete(schema.portfolioItems).where(eq(schema.portfolioItems.id, id));
   refresh();
-  redirect("/admin/portfolio");
+  // No redirect: this is called from the wall, where cancelling a new image
+  // must not navigate the artist away from what she was doing.
 }
 
 // ---------------------------------------------------------------- text boxes
@@ -198,7 +269,10 @@ async function nextZ(): Promise<number> {
 }
 
 /** Placed where the artist opened the menu, not in a fixed corner. */
-export async function createWallText(at?: { x: number; y: number }): Promise<void> {
+export async function createWallText(
+  at?: { x: number; y: number },
+  parentId: string | null = null,
+): Promise<void> {
   await requireSession();
   const db = await getDb();
 
@@ -207,6 +281,7 @@ export async function createWallText(at?: { x: number; y: number }): Promise<voi
     content: "New text",
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
     y: at ? Math.max(at.y, 0) : 4,
+    parentId,
     width: 40,
     height: 8,
     z: await nextZ(),

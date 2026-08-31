@@ -4,6 +4,8 @@ import {
   coverImage,
   headingTextId,
   inReadingOrder,
+  isInteractive,
+  showsHoverName,
   type PortfolioItem,
   type WallText,
 } from "./portfolio";
@@ -18,6 +20,8 @@ const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
   y: 0,
   width: 30,
   z: 0,
+  parentId: null,
+  clickable: true,
   images: [],
   ...over,
 });
@@ -107,6 +111,7 @@ const text = (over: Partial<WallText>): WallText => ({
   underline: false,
   colour: "#101010",
   font: "sans",
+  parentId: null,
   ...over,
 });
 
@@ -139,5 +144,47 @@ describe("headingTextId", () => {
 
   it("returns null when there is no text at all", () => {
     expect(headingTextId([])).toBeNull();
+  });
+});
+
+describe("isInteractive", () => {
+  it("is true for a clickable top-level piece", () => {
+    expect(isInteractive(item({ clickable: true, parentId: null }))).toBe(true);
+  });
+
+  it("is false once clickable is turned off, which hides its page", () => {
+    expect(isInteractive(item({ clickable: false }))).toBe(false);
+  });
+
+  // Elements on a piece's page compose that page; they are not links onward.
+  it("is false for an element on a piece's own page, even if marked clickable", () => {
+    expect(isInteractive(item({ clickable: true, parentId: "parent" }))).toBe(false);
+  });
+});
+
+describe("showsHoverName", () => {
+  /**
+   * The rule that lets decorative marks and icons sit on the wall without
+   * advertising themselves as clickable.
+   */
+  it("shows nothing on hover when the piece has no title", () => {
+    expect(showsHoverName(item({ name: "" }), true)).toBe(false);
+    expect(showsHoverName(item({ name: "   " }), true)).toBe(false);
+  });
+
+  it("shows the name for a titled, clickable piece", () => {
+    expect(showsHoverName(item({ name: "Harbour Wall" }), true)).toBe(true);
+  });
+
+  it("respects the page-wide setting", () => {
+    expect(showsHoverName(item({ name: "Harbour Wall" }), false)).toBe(false);
+  });
+
+  it("shows nothing for a piece that is not clickable", () => {
+    expect(showsHoverName(item({ name: "Harbour Wall", clickable: false }), true)).toBe(false);
+  });
+
+  it("shows nothing for an element on a piece's own page", () => {
+    expect(showsHoverName(item({ name: "Detail", parentId: "parent" }), true)).toBe(false);
   });
 });

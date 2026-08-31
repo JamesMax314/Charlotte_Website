@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./catalogue";
 import type { PortfolioImage, PortfolioItem, WallText } from "./portfolio";
@@ -39,6 +39,8 @@ async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]
     name: row.name,
     information: row.information,
     status: row.status,
+    parentId: row.parentId,
+    clickable: row.clickable,
     x: row.x,
     y: row.y,
     width: row.width,
@@ -47,20 +49,52 @@ async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]
   }));
 }
 
+/** The home wall: top-level pieces only. */
 export const getPublishedPortfolio = async (): Promise<PortfolioItem[]> => {
   const db = await getDb();
   const rows = await db
     .select()
     .from(schema.portfolioItems)
-    .where(eq(schema.portfolioItems.status, "published"))
+    .where(
+      and(eq(schema.portfolioItems.status, "published"), isNull(schema.portfolioItems.parentId)),
+    )
     .orderBy(asc(schema.portfolioItems.z));
   return hydrate(rows);
 };
 
-/** Admin needs drafts too. */
-export const getAllPortfolioItems = async (): Promise<PortfolioItem[]> => {
+/**
+ * Admin needs drafts too. `parentId` selects which wall: null is the home page,
+ * an id is that piece's own page.
+ */
+export const getAllPortfolioItems = async (
+  parentId: string | null = null,
+): Promise<PortfolioItem[]> => {
   const db = await getDb();
-  const rows = await db.select().from(schema.portfolioItems).orderBy(asc(schema.portfolioItems.z));
+  const rows = await db
+    .select()
+    .from(schema.portfolioItems)
+    .where(
+      parentId === null
+        ? isNull(schema.portfolioItems.parentId)
+        : eq(schema.portfolioItems.parentId, parentId),
+    )
+    .orderBy(asc(schema.portfolioItems.z));
+  return hydrate(rows);
+};
+
+/** Published elements of a piece's own page. */
+export const getPublishedChildren = async (parentId: string): Promise<PortfolioItem[]> => {
+  const db = await getDb();
+  const rows = await db
+    .select()
+    .from(schema.portfolioItems)
+    .where(
+      and(
+        eq(schema.portfolioItems.status, "published"),
+        eq(schema.portfolioItems.parentId, parentId),
+      ),
+    )
+    .orderBy(asc(schema.portfolioItems.z));
   return hydrate(rows);
 };
 
@@ -81,7 +115,11 @@ export const getPortfolioItemBySlug = async (slug: string): Promise<PortfolioIte
     .from(schema.portfolioItems)
     .where(eq(schema.portfolioItems.slug, slug))
     .limit(1);
-  if (rows.length === 0 || rows[0].status === "draft") return undefined;
+  // Children have no page of their own, and a piece that is not clickable has
+  // its page hidden rather than deleted — both must 404 rather than resolve.
+  if (rows.length === 0) return undefined;
+  const row = rows[0];
+  if (row.status === "draft" || row.parentId !== null || !row.clickable) return undefined;
   return (await hydrate(rows))[0];
 };
 
@@ -100,10 +138,19 @@ const toText = (row: schema.WallTextRow): WallText => ({
   underline: row.underline,
   colour: row.colour,
   font: row.font,
+  parentId: row.parentId,
 });
 
-export const getWallTexts = async (): Promise<WallText[]> => {
+export const getWallTexts = async (parentId: string | null = null): Promise<WallText[]> => {
   const db = await getDb();
-  const rows = await db.select().from(schema.wallTexts).orderBy(asc(schema.wallTexts.z));
+  const rows = await db
+    .select()
+    .from(schema.wallTexts)
+    .where(
+      parentId === null
+        ? isNull(schema.wallTexts.parentId)
+        : eq(schema.wallTexts.parentId, parentId),
+    )
+    .orderBy(asc(schema.wallTexts.z));
   return rows.map(toText);
 };
