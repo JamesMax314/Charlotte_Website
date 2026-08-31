@@ -33,6 +33,18 @@ export interface PortfolioItem {
 export const coverImage = (item: PortfolioItem): PortfolioImage | undefined => item.images[0];
 
 /**
+ * A piece's height as a multiple of its width.
+ *
+ * Heights are never stored — they come from the cover image — which is what
+ * stops a resize from distorting artwork. Pieces with no photograph yet use the
+ * same 4:3 box the editor draws as a placeholder.
+ */
+export const aspectOf = (item: PortfolioItem): number => {
+  const cover = coverImage(item);
+  return cover ? cover.height / cover.width : 0.75;
+};
+
+/**
  * Reading order for the mobile stack: top to bottom, then left to right.
  *
  * Derived from the arrangement rather than stored separately, so the artist
@@ -48,11 +60,7 @@ export const inReadingOrder = (items: PortfolioItem[]): PortfolioItem[] =>
  * the arrangement and the artist never has to set a height by hand.
  */
 export const canvasHeightRatio = (items: PortfolioItem[]): number => {
-  const bottoms = items.map((item) => {
-    const cover = coverImage(item);
-    const aspect = cover ? cover.height / cover.width : 1;
-    return item.y + item.width * aspect;
-  });
+  const bottoms = items.map((item) => item.y + item.width * aspectOf(item));
 
   // Headroom matters: the editor must derive this from committed positions
   // only. Deriving it from the live drag made the canvas grow as a piece was

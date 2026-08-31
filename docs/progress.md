@@ -88,6 +88,16 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **Snap targets are computed once per gesture, not per frame.** The other pieces cannot
+  move while one is being dragged, so `collectGuides` runs in `begin` and is carried on
+  the drag ref. Snapping considers all six candidate edges of the moving piece — leading,
+  centre and trailing on both axes — and takes the closest, which is why a piece
+  sometimes aligns by an edge the artist was not consciously aiming with.
+
+- **Resizing snaps in width-space.** Only width is adjustable, so a bottom-edge snap is
+  solved back into a width via the aspect ratio rather than applied directly, and the two
+  axes are compared on the same scale before choosing a winner.
+
 - **The drag canvas attaches its pointer listeners synchronously, not in an effect.**
   An effect runs after the next render, so the opening moves of a gesture were dropped
   and dragging appeared completely dead. The listeners go on the window, because a quick

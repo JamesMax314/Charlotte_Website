@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { canvasHeightRatio, coverImage, type PortfolioItem } from "@/lib/portfolio";
+import { aspectOf, canvasHeightRatio, coverImage, type PortfolioItem } from "@/lib/portfolio";
+import { collectGuides, rectOf, snapMove, snapResize, type Guides } from "@/lib/snap";
 import { savePortfolioLayout } from "@/app/admin/portfolio-actions";
 
 /**
@@ -23,9 +24,15 @@ type Drag = {
   originY: number;
   originWidth: number;
   z: number;
+  aspect: number;
   moved: boolean;
   /** Live values, so the save never has to read back from render state. */
   latest: { x: number; y: number; width: number };
+  /**
+   * Snap targets, computed once when the gesture starts. The other pieces do
+   * not move during a drag, so recomputing them every frame would be waste.
+   */
+  guides: Guides;
 };
 
 /** Below this, a pointer gesture is a tap (open the piece), not a drag. */
@@ -37,6 +44,11 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
   const [items, setItems] = useState(initial);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** The guide lines currently being snapped to, drawn across the canvas. */
+  const [shown, setShown] = useState<{ vertical: number | null; horizontal: number | null }>({
+    vertical: null,
+    horizontal: null,
+  });
 
   /**
    * Interaction state lives in a ref, not React state.
@@ -90,8 +102,15 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       originY: item.y,
       originWidth: item.width,
       z: topZ,
+      aspect: aspectOf(item),
       moved: false,
       latest: { x: item.x, y: item.y, width: item.width },
+      guides: collectGuides(
+        items
+          .filter((other) => other.id !== item.id)
+          .map((other) => rectOf(other, aspectOf(other))),
+        ratio,
+      ),
     };
     dragRef.current = drag;
     setActiveId(item.id);
@@ -112,16 +131,36 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       const dx = asPercent(rawX);
       const dy = asPercent(rawY);
 
-      drag.latest =
-        drag.mode === "move"
-          ? { x: drag.originX + dx, y: Math.max(0, drag.originY + dy), width: drag.originWidth }
-          : // Only width is adjustable; height follows the cover image's own
-            // aspect ratio, so artwork can never be stretched out of shape.
-            {
-              x: drag.originX,
-              y: drag.originY,
-              width: Math.min(120, Math.max(5, drag.originWidth + dx)),
-            };
+      // Hold Alt to place a piece freely, ignoring the guides.
+      const snapping = !moveEvent.altKey;
+
+      if (drag.mode === "move") {
+        const loose = {
+          x: drag.originX + dx,
+          y: Math.max(0, drag.originY + dy),
+          width: drag.originWidth,
+        };
+        const snapped = snapping
+          ? snapMove(rectOf(loose, drag.aspect), drag.guides)
+          : { x: loose.x, y: loose.y, vertical: null, horizontal: null };
+
+        drag.latest = { x: snapped.x, y: Math.max(0, snapped.y), width: drag.originWidth };
+        setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
+      } else {
+        // Only width is adjustable; height follows the cover image's own aspect
+        // ratio, so artwork can never be stretched out of shape.
+        const loose = {
+          x: drag.originX,
+          y: drag.originY,
+          width: Math.min(120, Math.max(5, drag.originWidth + dx)),
+        };
+        const snapped = snapping
+          ? snapResize(rectOf(loose, drag.aspect), drag.aspect, drag.guides)
+          : { width: loose.width, vertical: null, horizontal: null };
+
+        drag.latest = { x: loose.x, y: loose.y, width: Math.min(120, Math.max(5, snapped.width)) };
+        setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
+      }
 
       const next = drag.latest;
       setItems((current) => current.map((i) => (i.id === drag.id ? { ...i, ...next } : i)));
@@ -131,6 +170,7 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       teardown();
       dragRef.current = null;
       setActiveId(null);
+      setShown({ vertical: null, horizontal: null });
 
       if (!drag.moved) {
         router.push(`/admin/portfolio/${drag.id}`);
@@ -161,7 +201,7 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       <p className="text-graphite mb-3 h-5 text-xs" aria-live="polite">
         {saving
           ? "Saving layout…"
-          : "Drag a piece to move it. Drag its bottom-right corner to resize. Tap to edit."}
+          : "Drag to move, drag the bottom-right corner to resize, tap to edit. Edges snap to line up — hold Alt to place freely."}
       </p>
 
       <div
@@ -240,6 +280,19 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
             </div>
           );
         })}
+
+        {shown.vertical !== null && (
+          <div
+            className="bg-accent pointer-events-none absolute top-0 bottom-0 z-50 w-px"
+            style={{ left: `${shown.vertical}%` }}
+          />
+        )}
+        {shown.horizontal !== null && (
+          <div
+            className="bg-accent pointer-events-none absolute right-0 left-0 z-50 h-px"
+            style={{ top: `${(shown.horizontal / ratio) * 100}%` }}
+          />
+        )}
 
         {items.length === 0 && (
           <p className="text-graphite absolute inset-0 flex items-center justify-center text-sm">
