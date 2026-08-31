@@ -88,6 +88,13 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **The context menu is portalled to `document.body`.** Wall elements carry their own
+  z-index, some in the thousands after the heading migration, and they share a stacking
+  context with anything rendered beside them — so a menu left in the canvas tree painted
+  _underneath_ the artwork no matter how high its z-index went, which reads as a
+  transparent menu. A portal sidesteps stacking contexts entirely. Its background is set
+  explicitly rather than inherited, since it sits over artwork.
+
 - **Only the primary button starts a canvas gesture.** A right-click still fires
   `pointerdown`, so without the `event.button !== 0` guard it began a drag that never
   moved — and pointerup then read it as a tap and opened the editor behind the context

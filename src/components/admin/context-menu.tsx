@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 export interface MenuEntry {
   label: string;
@@ -62,6 +63,12 @@ export const Icons = {
 /**
  * A menu anchored to where the pointer was.
  *
+ * Rendered through a portal onto document.body rather than inside the canvas.
+ * Wall elements carry their own z-index — some in the thousands — and they
+ * share a stacking context with anything rendered alongside them, so a menu
+ * left in the tree painted underneath the artwork however high its z-index
+ * was set. A portal sidesteps stacking contexts altogether.
+ *
  * Positioned with `fixed` against viewport coordinates, and nudged back inside
  * the window when opened near an edge so entries are never clipped.
  */
@@ -102,12 +109,18 @@ export function ContextMenu({
     if (box.bottom > window.innerHeight) el.style.top = `${window.innerHeight - box.height - 8}px`;
   }, []);
 
-  return (
+  // The menu only ever exists after a pointer interaction, so it is never
+  // part of the server render; this guard is for safety, not hydration.
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       ref={ref}
       role="menu"
-      className="border-line bg-paper fixed z-[100] min-w-44 border py-1 shadow-lg"
-      style={{ left: x, top: y }}
+      className="border-line fixed z-[9999] min-w-44 border py-1 shadow-xl"
+      // An explicit opaque background: the menu sits over artwork, and a
+      // translucent surface would leave the entries unreadable.
+      style={{ left: x, top: y, backgroundColor: "var(--paper)" }}
     >
       {entries.map((entry) => (
         <button
@@ -126,6 +139,7 @@ export function ContextMenu({
           {entry.label}
         </button>
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
