@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
+import { PageSettingsPanel } from "@/components/admin/page-settings";
 import { getAllPortfolioItems, getPortfolioItemById, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { requireSession } from "@/lib/auth";
@@ -46,6 +47,16 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
         </p>
       </div>
 
+      <PageSettingsPanel
+        settings={{
+          gutterEnabled: settings.gutterEnabled,
+          gutter: settings.gutter,
+          snapEnabled: settings.snapEnabled,
+          showNamesOnHover: settings.showNamesOnHover,
+        }}
+      />
+
+      <h2 className="text-graphite mb-3 text-xs tracking-[0.18em] uppercase">The wall</h2>
       <PortfolioCanvas
         items={items}
         texts={texts}

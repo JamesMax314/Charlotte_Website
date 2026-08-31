@@ -70,20 +70,14 @@ export default async function PortfolioItemPage({ params }: Props) {
         ← All work
       </Link>
 
-      <div className="max-w-3xl">
-        <h1 className="font-display text-3xl leading-tight tracking-tight text-balance sm:text-4xl">
-          {item.name || "Untitled"}
-        </h1>
-        {item.information && (
-          <p className="mt-5 leading-relaxed text-pretty whitespace-pre-line">{item.information}</p>
-        )}
-      </div>
-
       {/*
-        The piece's own page, composed on the same wall as the home page. Its
-        elements are inert: they are part of this page, not links onward.
+        No fixed heading or description: the artist places those herself as text
+        boxes on the wall, so she controls how they sit against the images. The
+        name and description are still stored — they carry the page title, the
+        meta description and the OG card — they are just not rendered here.
+        PortfolioWall promotes her largest text box to the <h1>.
       */}
-      <div className="mt-10">
+      <div className="mt-2">
         <PortfolioWall
           items={children}
           texts={texts}
