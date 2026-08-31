@@ -15,7 +15,7 @@ export default function NotFound() {
       </p>
       <Link
         href="/work"
-        className="hover:text-biro font-display mt-8 inline-block text-lg tracking-tight underline decoration-1 underline-offset-[6px] transition-colors"
+        className="hover:text-accent font-display mt-8 inline-block text-lg tracking-tight underline decoration-1 underline-offset-[6px] transition-colors"
       >
         See all work
       </Link>

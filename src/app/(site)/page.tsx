@@ -50,7 +50,7 @@ export default async function HomePage() {
               />
             </div>
             <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-              <h2 className="font-display group-hover:text-biro text-xl tracking-tight transition-colors">
+              <h2 className="font-display group-hover:text-accent text-xl tracking-tight transition-colors">
                 {hero.title}
               </h2>
               <p className="text-graphite text-sm">
@@ -70,7 +70,7 @@ export default async function HomePage() {
         <ArtworkGrid artworks={rest} />
         <Link
           href="/work"
-          className="hover:text-biro font-display inline-block text-lg tracking-tight underline decoration-1 underline-offset-[6px] transition-colors"
+          className="hover:text-accent font-display inline-block text-lg tracking-tight underline decoration-1 underline-offset-[6px] transition-colors"
         >
           See everything
         </Link>

@@ -25,12 +25,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Link href="/admin" className="font-display text-sm tracking-tight">
                 Studio
               </Link>
-              <Link href="/" className="text-graphite hover:text-biro text-xs transition-colors">
+              <Link href="/" className="text-graphite hover:text-accent text-xs transition-colors">
                 View site
               </Link>
             </div>
             <form action={logout}>
-              <button type="submit" className="text-graphite hover:text-biro text-xs">
+              <button type="submit" className="text-graphite hover:text-accent text-xs">
                 Sign out
               </button>
             </form>

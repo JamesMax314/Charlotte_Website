@@ -63,7 +63,7 @@ export default async function ArtworkPage({ params }: Props) {
 
       <Link
         href="/work"
-        className="text-graphite hover:text-biro mb-8 inline-block text-sm transition-colors"
+        className="text-graphite hover:text-accent mb-8 inline-block text-sm transition-colors"
       >
         ← All work
       </Link>

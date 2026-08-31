@@ -21,23 +21,23 @@ export async function SiteHeader() {
         <nav aria-label="Main">
           <ul className="flex items-center gap-6 text-sm">
             <li>
-              <Link className="hover:text-biro transition-colors" href="/work">
+              <Link className="hover:text-accent transition-colors" href="/work">
                 Work
               </Link>
             </li>
             <li>
-              <Link className="hover:text-biro transition-colors" href="/about">
+              <Link className="hover:text-accent transition-colors" href="/about">
                 About
               </Link>
             </li>
             <li>
-              <Link className="hover:text-biro transition-colors" href="/contact">
+              <Link className="hover:text-accent transition-colors" href="/contact">
                 Contact
               </Link>
             </li>
             <li>
               <a
-                className="text-graphite hover:text-biro hidden transition-colors sm:inline"
+                className="text-graphite hover:text-accent hidden transition-colors sm:inline"
                 href={settings.etsyShopUrl}
                 target="_blank"
                 rel="noopener noreferrer"

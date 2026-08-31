@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
+import { Fraunces, Inter } from "next/font/google";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
-const bricolage = Bricolage_Grotesque({
+const fraunces = Fraunces({
   subsets: ["latin"],
-  variable: "--font-bricolage",
+  variable: "--font-fraunces",
   display: "swap",
 });
 
-const instrument = Instrument_Sans({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-instrument",
+  variable: "--font-inter",
   display: "swap",
 });
 
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en-GB" className={`${bricolage.variable} ${instrument.variable}`}>
+    <html lang="en-GB" className={`${fraunces.variable} ${inter.variable}`}>
       <body>{children}</body>
     </html>
   );

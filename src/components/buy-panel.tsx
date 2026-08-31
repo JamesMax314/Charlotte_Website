@@ -28,7 +28,7 @@ function ListingRow({ listing, isPrimary }: { listing: Listing; isPrimary: boole
   // One primary action per panel. A £12 download rendered as loudly as a £65
   // print makes the reader choose between two shouts.
   const style = isPrimary
-    ? "bg-biro text-paper hover:bg-ink border border-transparent"
+    ? "bg-accent text-paper hover:bg-ink border border-transparent"
     : "border-line text-ink hover:border-ink border bg-transparent";
 
   return (

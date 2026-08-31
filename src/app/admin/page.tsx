@@ -25,7 +25,7 @@ export default async function AdminHome() {
           <input type="hidden" name="title" value="Untitled" />
           <button
             type="submit"
-            className="bg-biro text-paper hover:bg-ink px-5 py-3 text-sm transition-colors"
+            className="bg-accent text-paper hover:bg-ink px-5 py-3 text-sm transition-colors"
           >
             Add a piece
           </button>

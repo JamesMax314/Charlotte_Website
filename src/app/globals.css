@@ -8,7 +8,7 @@
 
   Direction: the artist's mark is a loose hand-drawn contour figure, so the site is
   built to feel drawn rather than typeset. The palette is a drawing desk — paper,
-  graphite, and biro blue — not a gallery wall.
+  graphite, and accent blue — not a gallery wall.
 
   Light-only by design: artwork is judged against a neutral ground, and a dark theme
   changes how every image reads. See docs/progress.md.
@@ -19,7 +19,7 @@
   --ink: #101010;
   --graphite: #6d6a66;
   --line: #dedcd6;
-  --biro: #2140d6;
+  --accent: #9a5b33;
 }
 
 @theme inline {
@@ -28,10 +28,10 @@
   --color-ink: var(--ink);
   --color-graphite: var(--graphite);
   --color-line: var(--line);
-  --color-biro: var(--biro);
+  --color-accent: var(--accent);
 
-  --font-display: var(--font-bricolage);
-  --font-sans: var(--font-instrument);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-inter);
 }
 
 body {
@@ -47,13 +47,13 @@ html {
 }
 
 ::selection {
-  background: var(--biro);
+  background: var(--accent);
   color: var(--paper);
 }
 
 /* WCAG 2.2 AA: focus must stay visible, including over dark imagery. */
 :focus-visible {
-  outline: 2px solid var(--biro);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
