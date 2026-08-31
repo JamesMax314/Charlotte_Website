@@ -24,16 +24,18 @@ export default function AboutPage() {
 
           <div className="mt-6 space-y-5 leading-relaxed text-pretty">
             <p>
-              I work in ink and brush pen, mostly from life and mostly quickly. The drawings start
-              as one continuous line and stop when the line stops being interesting.
+              I am an illustrator working in collage, drawing and digital colour. Most of my work is
+              commissioned: illustrated maps, interpretive panels, editorial spreads and sequences
+              that have to be read as well as looked at.
             </p>
             <p>
-              Prints are giclée, made on 310gsm cotton rag in editions of fifteen to forty. Each one
-              is signed and numbered on the lower margin before it goes out.
+              A piece usually begins with research and reference, then gets built up in layers —
+              drawn elements, photographed textures and typography arranged until the information
+              reads in the right order.
             </p>
             <p>
-              Everything is sold through my Etsy shop, which handles payment, postage and returns. I
-              pack and post each order myself, usually within three working days.
+              Prints of selected pieces are sold through my Etsy shop, which handles payment,
+              postage and returns. For commissions, please get in touch.
             </p>
           </div>
         </div>

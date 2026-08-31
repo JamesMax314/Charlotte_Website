@@ -18,11 +18,11 @@ const instrument = Instrument_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Charlotte — prints and drawings",
-    template: "%s · Charlotte",
+    default: "Charlotte Wilkinson — illustration",
+    template: "%s · Charlotte Wilkinson",
   },
   description:
-    "Limited-edition prints and digital downloads by Charlotte. Drawn by hand, printed in small runs.",
+    "Illustrated maps, editorial spreads and sequences by Charlotte Wilkinson. Selected prints available.",
 };
 
 /**

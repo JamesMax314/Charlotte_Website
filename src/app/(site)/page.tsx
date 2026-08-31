@@ -21,15 +21,16 @@ export default async function HomePage() {
           <div>
             <Mark className="text-ink animate-stride-in h-20 w-20" />
             <h1 className="font-display mt-6 text-5xl leading-[0.95] tracking-tight sm:text-7xl">
-              Drawings,
+              Drawn
               <br />
-              printed small.
+              to explain.
             </h1>
           </div>
 
           <p className="text-graphite max-w-md text-lg leading-relaxed text-pretty">
-            I draw people going about things — walking, swimming, standing at windows. Editions are
-            short, usually under forty, and every print is sold through my Etsy shop.
+            I make illustrated maps, editorial spreads and sequences — drawings that carry
+            information as well as atmosphere. Prints of selected pieces are available through my
+            Etsy shop.
           </p>
         </div>
       </Container>

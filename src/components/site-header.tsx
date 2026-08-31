@@ -9,9 +9,13 @@ export async function SiteHeader() {
   return (
     <header className="border-line border-b">
       <Container className="flex items-center justify-between gap-6 py-5">
-        <Link href="/" className="group flex items-center gap-3" aria-label="Charlotte, home">
+        <Link
+          href="/"
+          className="group flex items-center gap-3"
+          aria-label="Charlotte Wilkinson, home"
+        >
           <Mark className="text-ink h-9 w-9 shrink-0 transition-transform duration-300 group-hover:-rotate-6" />
-          <span className="font-display text-ink text-lg tracking-tight">Charlotte</span>
+          <span className="font-display text-ink text-lg tracking-tight">Charlotte Wilkinson</span>
         </Link>
 
         <nav aria-label="Main">

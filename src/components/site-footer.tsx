@@ -17,7 +17,8 @@ export async function SiteFooter() {
         <div className="flex items-start gap-3">
           <Mark className="text-graphite h-8 w-8 shrink-0" />
           <p className="text-graphite max-w-xs text-sm leading-relaxed">
-            Prints are sold through Etsy, which handles payment, postage and returns.
+            Commissions welcome. Prints of selected work are sold through Etsy, which handles
+            payment, postage and returns.
           </p>
         </div>
 
@@ -50,7 +51,7 @@ export async function SiteFooter() {
                 Privacy
               </Link>
             </li>
-            <li className="pt-2">© {new Date().getFullYear()} Charlotte</li>
+            <li className="pt-2">© {new Date().getFullYear()} Charlotte Wilkinson</li>
           </ul>
         </nav>
       </Container>
