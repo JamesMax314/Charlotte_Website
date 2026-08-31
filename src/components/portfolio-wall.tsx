@@ -56,7 +56,15 @@ export function PortfolioWall({ items }: { items: PortfolioItem[] }) {
         ))}
       </div>
 
-      <div className="relative hidden md:block" style={{ aspectRatio: `100 / ${ratio}` }}>
+      {/*
+        Clipped, matching the editor canvas. Without this a piece bled past the
+        edge would give the whole page a horizontal scrollbar, and the artist
+        would see something different from what she arranged.
+      */}
+      <div
+        className="relative hidden overflow-hidden md:block"
+        style={{ aspectRatio: `100 / ${ratio}` }}
+      >
         {shown.map((item, i) => (
           <div
             key={item.id}

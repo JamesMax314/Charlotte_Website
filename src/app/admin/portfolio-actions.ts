@@ -116,7 +116,7 @@ export async function updatePortfolioItem(id: string, formData: FormData): Promi
  */
 export async function savePortfolioLayout(
   id: string,
-  layout: { x: number; y: number; width: number },
+  layout: { x: number; y: number; width: number; z?: number },
 ): Promise<void> {
   await requireSession();
   const db = await getDb();
@@ -125,10 +125,13 @@ export async function savePortfolioLayout(
     .update(schema.portfolioItems)
     .set({
       // Clamped server-side too: a hand-crafted request must not be able to
-      // push a piece off the wall or give it a zero width.
-      x: Math.min(Math.max(layout.x, -20), 120),
+      // give a piece a zero width or strand it far off the wall. Overlap and a
+      // little bleed past the edges are allowed on purpose — the artist asked
+      // to place work freely.
+      x: Math.min(Math.max(layout.x, -25), 125),
       y: Math.max(layout.y, 0),
-      width: Math.min(Math.max(layout.width, 5), 100),
+      width: Math.min(Math.max(layout.width, 5), 120),
+      ...(layout.z === undefined ? {} : { z: Math.round(layout.z) }),
       updatedAt: new Date(),
     })
     .where(eq(schema.portfolioItems.id, id));

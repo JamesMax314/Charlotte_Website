@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { canvasHeightRatio, coverImage, type PortfolioItem } from "@/lib/portfolio";
 import { savePortfolioLayout } from "@/app/admin/portfolio-actions";
 
@@ -22,18 +22,30 @@ type Drag = {
   originX: number;
   originY: number;
   originWidth: number;
+  z: number;
   moved: boolean;
+  /** Live values, so the save never has to read back from render state. */
+  latest: { x: number; y: number; width: number };
 };
 
-/** Ignore sub-pixel jitter so a tap still reads as a tap, not a drag. */
+/** Below this, a pointer gesture is a tap (open the piece), not a drag. */
 const DRAG_THRESHOLD_PX = 4;
 
 export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState(initial);
-  const [drag, setDrag] = useState<Drag | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  /**
+   * Interaction state lives in a ref, not React state.
+   *
+   * Reading it from state made every gesture race the render: the pointerup
+   * handler saw a stale `moved` flag, decided the drag was a tap, and navigated
+   * to the edit page instead of moving the piece.
+   */
+  const dragRef = useRef<Drag | null>(null);
 
   // Resync when the server sends a fresh list (a piece added or deleted).
   const [lastServer, setLastServer] = useState(initial);
@@ -42,18 +54,34 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
     setItems(initial);
   }
 
-  const ratio = canvasHeightRatio(items);
+  /**
+   * Height comes from the committed server list, never the live drag. Deriving
+   * it from the drag made the canvas grow as a piece was pulled downward, which
+   * shifted every other piece and fought the gesture.
+   */
+  const ratio = canvasHeightRatio(lastServer);
 
   const asPercent = useCallback((px: number) => {
     const width = canvasRef.current?.offsetWidth ?? 1;
     return (px / width) * 100;
   }, []);
 
-  function begin(event: React.PointerEvent, item: PortfolioItem, mode: Drag["mode"]) {
+  /** Removes whatever listeners the current gesture installed. */
+  const teardownRef = useRef<(() => void) | null>(null);
+
+  // Safety net: if the component unmounts mid-gesture, do not leak listeners.
+  useEffect(() => () => teardownRef.current?.(), []);
+
+  const begin = (event: React.PointerEvent, item: PortfolioItem, mode: Drag["mode"]) => {
     event.preventDefault();
     event.stopPropagation();
-    (event.target as HTMLElement).setPointerCapture(event.pointerId);
-    setDrag({
+
+    // Dragged piece comes to the front, so overlapping work can be reordered
+    // just by picking it up.
+    const topZ = Math.max(0, ...items.map((i) => i.z)) + 1;
+    setItems((current) => current.map((i) => (i.id === item.id ? { ...i, z: topZ } : i)));
+
+    const drag: Drag = {
       id: item.id,
       mode,
       pointerX: event.clientX,
@@ -61,72 +89,94 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
       originX: item.x,
       originY: item.y,
       originWidth: item.width,
+      z: topZ,
       moved: false,
-    });
-  }
+      latest: { x: item.x, y: item.y, width: item.width },
+    };
+    dragRef.current = drag;
+    setActiveId(item.id);
 
-  function move(event: React.PointerEvent) {
-    if (!drag) return;
-    const dx = asPercent(event.clientX - drag.pointerX);
-    const dy = asPercent(event.clientY - drag.pointerY);
+    /*
+      Listeners are attached here rather than in an effect. An effect runs after
+      the next render, so the opening moves of a fast gesture were dropped and
+      the drag appeared dead. Attaching synchronously means no movement is ever
+      missed. They go on the window because a quick drag outruns the tile and
+      the pointer is often released outside it.
+    */
+    const onMove = (moveEvent: PointerEvent) => {
+      const rawX = moveEvent.clientX - drag.pointerX;
+      const rawY = moveEvent.clientY - drag.pointerY;
+      if (!drag.moved && Math.hypot(rawX, rawY) < DRAG_THRESHOLD_PX) return;
+      drag.moved = true;
 
-    if (
-      !drag.moved &&
-      Math.hypot(event.clientX - drag.pointerX, event.clientY - drag.pointerY) < DRAG_THRESHOLD_PX
-    ) {
-      return;
+      const dx = asPercent(rawX);
+      const dy = asPercent(rawY);
+
+      drag.latest =
+        drag.mode === "move"
+          ? { x: drag.originX + dx, y: Math.max(0, drag.originY + dy), width: drag.originWidth }
+          : // Only width is adjustable; height follows the cover image's own
+            // aspect ratio, so artwork can never be stretched out of shape.
+            {
+              x: drag.originX,
+              y: drag.originY,
+              width: Math.min(120, Math.max(5, drag.originWidth + dx)),
+            };
+
+      const next = drag.latest;
+      setItems((current) => current.map((i) => (i.id === drag.id ? { ...i, ...next } : i)));
+    };
+
+    const onUp = () => {
+      teardown();
+      dragRef.current = null;
+      setActiveId(null);
+
+      if (!drag.moved) {
+        router.push(`/admin/portfolio/${drag.id}`);
+        return;
+      }
+
+      setSaving(true);
+      void savePortfolioLayout(drag.id, { ...drag.latest, z: drag.z }).finally(() =>
+        setSaving(false),
+      );
+    };
+
+    function teardown() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      teardownRef.current = null;
     }
-    if (!drag.moved) setDrag({ ...drag, moved: true });
 
-    setItems((current) =>
-      current.map((item) => {
-        if (item.id !== drag.id) return item;
-        return drag.mode === "move"
-          ? { ...item, x: drag.originX + dx, y: Math.max(0, drag.originY + dy) }
-          : // Only width is adjustable; height follows the image's own aspect
-            // ratio, so artwork can never be stretched out of proportion.
-            { ...item, width: Math.min(100, Math.max(5, drag.originWidth + dx)) };
-      }),
-    );
-  }
-
-  function end(item: PortfolioItem) {
-    if (!drag) return;
-    const wasDrag = drag.moved;
-    setDrag(null);
-
-    if (!wasDrag) {
-      router.push(`/admin/portfolio/${item.id}`);
-      return;
-    }
-
-    const latest = items.find((i) => i.id === item.id);
-    if (!latest) return;
-    setSaving(true);
-    void savePortfolioLayout(item.id, { x: latest.x, y: latest.y, width: latest.width }).finally(
-      () => setSaving(false),
-    );
-  }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    teardownRef.current = teardown;
+  };
 
   return (
     <div>
       <p className="text-graphite mb-3 h-5 text-xs" aria-live="polite">
         {saving
           ? "Saving layout…"
-          : "Drag to move. Drag the corner to resize. Tap a piece to edit it."}
+          : "Drag a piece to move it. Drag its bottom-right corner to resize. Tap to edit."}
       </p>
 
       <div
         ref={canvasRef}
-        className="border-line bg-paper-sunk/40 relative w-full border"
+        className="border-line bg-paper-sunk/40 relative w-full overflow-hidden border"
         style={{ aspectRatio: `100 / ${ratio}` }}
       >
         {items.map((item) => {
           const cover = coverImage(item);
+          const dragging = activeId === item.id;
+
           return (
             <div
               key={item.id}
-              className="absolute touch-none select-none"
+              className="group absolute touch-none select-none"
               style={{
                 left: `${item.x}%`,
                 // y is a percentage of width; convert to a share of height.
@@ -138,16 +188,14 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
               <div
                 role="button"
                 tabIndex={0}
-                aria-label={`Move ${item.name}`}
+                aria-label={`Move ${item.name}. Press Enter to edit it.`}
                 onPointerDown={(e) => begin(e, item, "move")}
-                onPointerMove={move}
-                onPointerUp={() => end(item)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ")
                     router.push(`/admin/portfolio/${item.id}`);
                 }}
-                className={`relative block w-full cursor-grab overflow-hidden border active:cursor-grabbing ${
-                  drag?.id === item.id ? "border-accent shadow-lg" : "border-line"
+                className={`relative block w-full cursor-grab overflow-hidden border ${
+                  dragging ? "border-accent shadow-xl" : "border-line/70 hover:border-accent/60"
                 }`}
               >
                 {cover ? (
@@ -173,16 +221,22 @@ export function PortfolioCanvas({ items: initial }: { items: PortfolioItem[] }) 
                 )}
               </div>
 
-              {/* Resize grip. Deliberately large: the artist works on an iPad. */}
+              {/*
+                The resize grip sits on the image's own bottom-right corner
+                rather than floating beneath it, so the gesture starts where the
+                artist expects to grab. Sized generously for a fingertip.
+              */}
               <div
                 role="button"
                 tabIndex={-1}
                 aria-label={`Resize ${item.name}`}
                 onPointerDown={(e) => begin(e, item, "resize")}
-                onPointerMove={move}
-                onPointerUp={() => end(item)}
-                className="bg-accent border-paper absolute -right-2 -bottom-2 h-6 w-6 cursor-se-resize touch-none rounded-full border-2"
-              />
+                className={`absolute right-0 bottom-0 h-7 w-7 cursor-nwse-resize touch-none transition-opacity ${
+                  dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
+              </div>
             </div>
           );
         })}

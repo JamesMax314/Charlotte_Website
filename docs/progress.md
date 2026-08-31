@@ -88,6 +88,23 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **The drag canvas attaches its pointer listeners synchronously, not in an effect.**
+  An effect runs after the next render, so the opening moves of a gesture were dropped
+  and dragging appeared completely dead. The listeners go on the window, because a quick
+  drag outruns the tile and the pointer is usually released outside it.
+
+- **Gesture state lives in a ref, never React state.** Reading `moved` from state made
+  every drag race the render: pointerup saw a stale flag, concluded the gesture was a tap,
+  and navigated to the edit page instead of moving the piece.
+
+- **The editor canvas height derives from committed positions, never the live drag.**
+  Deriving it from the drag grew the canvas as a piece was pulled downward, which shifted
+  every other piece and fought the gesture.
+
+- **The public wall and the editor canvas must clip identically.** Pieces may be dragged
+  to overlap and to bleed past the edges; without matching `overflow-hidden` the site
+  gains a horizontal scrollbar and stops matching what the artist arranged.
+
 - **Portfolio layout is stored as percentages of canvas WIDTH — including `y`.** Using
   one axis for every unit is what lets the arrangement scale proportionally at any
   viewport width. Heights are never stored: they derive from each cover image's natural

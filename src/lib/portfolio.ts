@@ -53,5 +53,9 @@ export const canvasHeightRatio = (items: PortfolioItem[]): number => {
     const aspect = cover ? cover.height / cover.width : 1;
     return item.y + item.width * aspect;
   });
-  return Math.max(40, ...bottoms) + 4;
+
+  // Headroom matters: the editor must derive this from committed positions
+  // only. Deriving it from the live drag made the canvas grow as a piece was
+  // dragged down, which shifted every other piece and fought the drag.
+  return Math.max(80, ...bottoms) + 12;
 };

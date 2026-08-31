@@ -66,9 +66,18 @@ describe("canvasHeightRatio", () => {
   });
 
   it("accounts for aspect ratio, not just width", () => {
-    const wide = canvasHeightRatio([item({ y: 0, width: 40, images: withCover(200, 100) })]);
-    const tall = canvasHeightRatio([item({ y: 0, width: 40, images: withCover(100, 200) })]);
+    // Placed low and wide enough that both clear the minimum height, so this
+    // measures aspect ratio rather than the floor.
+    const wide = canvasHeightRatio([item({ y: 60, width: 60, images: withCover(200, 100) })]);
+    const tall = canvasHeightRatio([item({ y: 60, width: 60, images: withCover(100, 200) })]);
     expect(tall).toBeGreaterThan(wide);
+  });
+
+  it("leaves headroom below the lowest piece to drag into", () => {
+    const bottom = 60 + 60; // y + width * aspect, for a square cover
+    expect(
+      canvasHeightRatio([item({ y: 60, width: 60, images: withCover(100, 100) })]),
+    ).toBeGreaterThan(bottom);
   });
 
   it("keeps a floor so an empty or shallow wall still has height", () => {
