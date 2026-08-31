@@ -97,12 +97,23 @@ if (files.length === 0) throw new Error(`No images found in ${source}`);
 console.log(`Seeding from ${source}/ (${files.length} images)\n`);
 
 const work = mkdtempSync(path.join(tmpdir(), "seed-"));
+// A staggered starting arrangement so the wall is not a grid on first sight.
+// Percentages of canvas width; the artist drags from here.
+const LAYOUT = [
+  { x: 2, y: 2, width: 46 },
+  { x: 54, y: 10, width: 40 },
+  { x: 8, y: 44, width: 36 },
+  { x: 50, y: 56, width: 44 },
+];
+
 const statements = [
   "DELETE FROM listings;",
   "DELETE FROM artwork_images;",
   "DELETE FROM artworks;",
+  "DELETE FROM portfolio_images;",
+  "DELETE FROM portfolio_items;",
   "DELETE FROM site_settings;",
-  `INSERT INTO site_settings (id, etsy_shop_url, contact_email, instagram_url) VALUES (1, ${q(ETSY)}, ${q("hello@example.com")}, ${q("https://www.instagram.com/")});`,
+  `INSERT INTO site_settings (id, home_title, home_blurb, etsy_shop_url, contact_email, instagram_url) VALUES (1, ${q("Drawn to explain.")}, ${q("I make illustrated maps, editorial spreads and sequences — drawings that carry information as well as atmosphere.")}, ${q(ETSY)}, ${q("hello@example.com")}, ${q("https://www.instagram.com/")});`,
 ];
 
 files.forEach((file, index) => {
@@ -167,6 +178,14 @@ files.forEach((file, index) => {
 
   const id = `seed-${slug}`;
   const now = Date.now();
+
+  // The same images also seed the portfolio, which is a separate collection.
+  const place = LAYOUT[index % LAYOUT.length];
+  const portfolioId = `portfolio-${slug}`;
+  statements.push(
+    `INSERT INTO portfolio_items (id, slug, name, information, status, x, y, width, z, created_at, updated_at) VALUES (${q(portfolioId)}, ${q(slug)}, ${q(title)}, ${q(meta.description ?? "")}, 'published', ${place.x}, ${place.y}, ${place.width}, ${index + 1}, ${now}, ${now});`,
+    `INSERT INTO portfolio_images (id, item_id, storage_key, alt, width, height, lqip, sort_order) VALUES (${q(portfolioId + "-img")}, ${q(portfolioId)}, ${q(key)}, ${q(meta.description ?? title)}, ${width}, ${height}, NULL, 0);`,
+  );
   statements.push(
     `INSERT INTO artworks (id, slug, title, year, medium, dimensions_note, description, status, sort_order, is_featured, created_at, updated_at) VALUES (${q(id)}, ${q(slug)}, ${q(title)}, 2026, ${q(meta.medium ?? "Illustration")}, ${q(meta.note ?? null)}, ${q(meta.description ?? "")}, 'published', ${index + 1}, ${meta.featured ? 1 : 0}, ${now}, ${now});`,
     `INSERT INTO artwork_images (id, artwork_id, storage_key, alt, width, height, lqip, sort_order) VALUES (${q(id + "-img")}, ${q(id)}, ${q(key)}, ${q(meta.description ?? title)}, ${width}, ${height}, NULL, 0);`,

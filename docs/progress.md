@@ -34,7 +34,7 @@ The product specification is `docs/project-brief.md`.
 | 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                       |
 | 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                           |
 | 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser |
-| 3 (in progress) | Layout and styling pass on real artwork; reverted to Fraunces/Inter with a terracotta accent; removed the `/work` index so home is the single gallery                                      |
+| 3 (in progress) | Layout and styling on real artwork; Fraunces/Inter with a terracotta accent; `/work` index removed; home rebuilt as an editable free-form portfolio wall, with the store moved to `/shop`  |
 
 ---
 
@@ -82,6 +82,25 @@ Non-obvious decisions that the code alone does not explain.
   admin layout's session check protects pages only. Every action and route handler calls
   `requireSession()` / `hasValidSession()` itself. Removing one of those calls exposes it
   with no visible symptom.
+
+- **Portfolio and store are separate collections.** `portfolio_items` drives the home
+  page and has no price; `artworks` + `listings` are the store. They share the upload
+  endpoint and the `ImageManager` component but nothing else. Do not merge them — the
+  brief treats "shown" and "for sale" as different things.
+
+- **Portfolio layout is stored as percentages of canvas WIDTH — including `y`.** Using
+  one axis for every unit is what lets the arrangement scale proportionally at any
+  viewport width. Heights are never stored: they derive from each cover image's natural
+  aspect ratio, so resizing cannot distort artwork.
+
+- **The mobile stack order is derived, not stored.** `inReadingOrder` sorts by y then x,
+  so the artist arranges once and never maintains a second ordering that can drift out of
+  step with the wall.
+
+- **`src/lib/portfolio.ts` must stay free of database imports.** The admin canvas is a
+  client component and needs the layout maths, so pulling D1 in there breaks the build
+  with a `server-only` error. Queries live in `portfolio-queries.ts`. The same split
+  exists for `artworks.ts` / `catalogue.ts`.
 
 - **An artwork can have no images, and every surface must cope.** The artist creates a
   piece, publishes it, and uploads photographs afterwards — so `images[0]` is routinely

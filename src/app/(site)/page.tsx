@@ -1,85 +1,34 @@
-import Link from "next/link";
-import Image from "next/image";
 import { Container } from "@/components/container";
-import { DrawnRule } from "@/components/drawn-rule";
 import { Mark } from "@/components/mark";
-import { ArtworkGrid } from "@/components/artwork-grid";
-import { getPublishedArtworks } from "@/lib/catalogue";
-import { primaryImage } from "@/lib/artworks";
+import { PortfolioWall } from "@/components/portfolio-wall";
+import { getPublishedPortfolio } from "@/lib/portfolio-queries";
+import { getSiteSettings } from "@/lib/catalogue";
+
+// D1 is unreachable during `next build` (no binding outside the Worker), so
+// this renders per request. See docs/progress.md.
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  // Home is the only gallery now that /work is gone, so it lists everything
-  // published — otherwise pieces the artist has not featured are reachable only
-  // by direct URL.
-  const artworks = await getPublishedArtworks();
-
-  // A piece with no photograph yet cannot carry the hero. Prefer a featured one.
-  const hero =
-    artworks.find((artwork) => artwork.isFeatured && primaryImage(artwork)) ??
-    artworks.find((artwork) => primaryImage(artwork));
-  const rest = artworks.filter((artwork) => artwork !== hero);
-  const heroImage = hero ? primaryImage(hero) : undefined;
+  const [items, settings] = await Promise.all([getPublishedPortfolio(), getSiteSettings()]);
 
   return (
     <>
       <Container className="pt-16 pb-14 sm:pt-24">
-        <div className="grid items-end gap-10 lg:grid-cols-[1.1fr_1fr]">
-          <div>
-            <Mark className="text-ink animate-stride-in h-20 w-20" />
-            <h1 className="font-display mt-6 text-5xl leading-[0.95] tracking-tight sm:text-7xl">
-              Drawn
-              <br />
-              to explain.
-            </h1>
-          </div>
+        <Mark className="text-ink animate-stride-in h-20 w-20" />
 
+        <div className="mt-6 grid items-end gap-10 lg:grid-cols-[1.1fr_1fr]">
+          <h1 className="font-display text-5xl leading-[0.95] tracking-tight text-balance sm:text-6xl">
+            {settings.homeTitle}
+          </h1>
           <p className="text-graphite max-w-md text-lg leading-relaxed text-pretty">
-            I make illustrated maps, editorial spreads and sequences — drawings that carry
-            information as well as atmosphere. Prints of selected pieces are available through my
-            Etsy shop.
+            {settings.homeBlurb}
           </p>
         </div>
       </Container>
 
-      {hero && heroImage && (
-        <Container className="pb-16">
-          <Link href={`/work/${hero.slug}`} className="group block">
-            <div className="bg-paper-sunk border-line flex justify-center overflow-hidden border">
-              <Image
-                src={heroImage.src}
-                alt={heroImage.alt}
-                width={heroImage.width}
-                height={heroImage.height}
-                priority
-                sizes="(min-width: 1280px) 1152px, 100vw"
-                className="max-h-[68vh] w-auto object-contain"
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-              <h2 className="font-display group-hover:text-accent text-xl tracking-tight transition-colors">
-                {hero.title}
-              </h2>
-              <p className="text-graphite text-sm">
-                {hero.medium} · {hero.year}
-              </p>
-            </div>
-          </Link>
-        </Container>
-      )}
-
-      <Container>
-        <DrawnRule />
-      </Container>
-
-      <Container className="pt-14">
-        <h2 className="text-graphite mb-10 text-xs tracking-[0.18em] uppercase">Work</h2>
-        <ArtworkGrid artworks={rest} />
+      <Container className="pb-16">
+        <PortfolioWall items={items} />
       </Container>
     </>
   );
 }
-
-// D1 is unreachable during `next build` (no binding outside the Worker), so
-// these render per request. Revisit with "use cache" once there is traffic
-// that justifies it — see docs/progress.md.
-export const dynamic = "force-dynamic";

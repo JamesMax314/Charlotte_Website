@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * The catalogue, in D1. Shapes follow docs/project-brief.md §6.
@@ -77,11 +77,79 @@ export const listings = sqliteTable(
   (t) => [index("listings_artwork_idx").on(t.artworkId, t.sortOrder)],
 );
 
+/**
+ * The portfolio — what the home page shows.
+ *
+ * Deliberately separate from `artworks`, which is the store. Portfolio pieces
+ * carry no price: they exist to be looked at, not bought. A piece may hold
+ * several images because it can represent a whole project.
+ */
+export const portfolioItems = sqliteTable(
+  "portfolio_items",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    information: text("information").notNull().default(""),
+    status: text("status", { enum: ["draft", "published"] })
+      .notNull()
+      .default("published"),
+
+    /**
+     * Free-form placement on the home wall.
+     *
+     * All three are percentages of the canvas WIDTH, including `y` — using one
+     * axis for every unit is what makes the arrangement scale proportionally at
+     * any viewport width instead of distorting. Height is derived from the
+     * cover image's natural aspect ratio, so resizing can never squash artwork.
+     */
+    x: real("x").notNull().default(0),
+    y: real("y").notNull().default(0),
+    width: real("width").notNull().default(30),
+    z: integer("z").notNull().default(0),
+
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("portfolio_items_slug_idx").on(t.slug),
+    index("portfolio_items_status_idx").on(t.status),
+  ],
+);
+
+export const portfolioImages = sqliteTable(
+  "portfolio_images",
+  {
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => portfolioItems.id, { onDelete: "cascade" }),
+    storageKey: text("storage_key").notNull(),
+    alt: text("alt").notNull(),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    lqip: text("lqip"),
+    /** The first image is the cover shown on the home wall. */
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [index("portfolio_images_item_idx").on(t.itemId, t.sortOrder)],
+);
+
+export type PortfolioItemRow = typeof portfolioItems.$inferSelect;
+export type PortfolioImageRow = typeof portfolioImages.$inferSelect;
+
 /** Single row, id = 1. */
 export const siteSettings = sqliteTable("site_settings", {
   id: integer("id").primaryKey(),
   heroArtworkId: text("hero_artwork_id"),
   announcement: text("announcement"),
+  /** Home page copy, editable by the artist. */
+  homeTitle: text("home_title").notNull().default(""),
+  homeBlurb: text("home_blurb").notNull().default(""),
   etsyShopUrl: text("etsy_shop_url").notNull().default(""),
   contactEmail: text("contact_email").notNull().default(""),
   instagramUrl: text("instagram_url").notNull().default(""),

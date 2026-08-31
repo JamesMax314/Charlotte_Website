@@ -13,10 +13,28 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { deleteImage, reorderImages, updateImageAlt } from "@/app/admin/actions";
 import { WIDTH_LADDER } from "@/image-loader";
 
 type Item = { id: string; src: string; alt: string; width: number; height: number };
+
+/**
+ * Serves both collections — store artworks and portfolio pieces.
+ *
+ * The mutations differ per collection so they are injected, but the upload
+ * pipeline (downscale, responsive ladder, blur placeholder) is shared
+ * deliberately: two copies of it would drift.
+ */
+type Props = {
+  parentId: string;
+  /** Which field the upload endpoint expects the parent id under. */
+  uploadField: "artworkId" | "portfolioItemId";
+  images: Item[];
+  reorder: (parentId: string, ids: string[]) => Promise<void>;
+  updateAlt: (id: string, alt: string) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  heading?: string;
+  hint?: string;
+};
 
 const MAX_EDGE = WIDTH_LADDER[WIDTH_LADDER.length - 1];
 
@@ -62,7 +80,15 @@ async function prepare(file: File) {
   return { master, variants, width, height, lqip: tiny.toDataURL("image/jpeg", 0.4) };
 }
 
-function Thumb({ item, onDelete }: { item: Item; onDelete: (id: string) => void }) {
+function Thumb({
+  item,
+  onDelete,
+  updateAlt,
+}: {
+  item: Item;
+  onDelete: (id: string) => void;
+  updateAlt: (id: string, alt: string) => Promise<void>;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -96,7 +122,7 @@ function Thumb({ item, onDelete }: { item: Item; onDelete: (id: string) => void 
           <input
             value={alt}
             onChange={(e) => setAlt(e.target.value)}
-            onBlur={() => alt !== item.alt && updateImageAlt(item.id, alt)}
+            onBlur={() => alt !== item.alt && void updateAlt(item.id, alt)}
             className="border-line focus:border-ink mt-1 w-full border bg-transparent px-2 py-1 text-xs outline-none"
           />
         </label>
@@ -112,7 +138,16 @@ function Thumb({ item, onDelete }: { item: Item; onDelete: (id: string) => void 
   );
 }
 
-export function ImageManager({ artworkId, images }: { artworkId: string; images: Item[] }) {
+export function ImageManager({
+  parentId,
+  uploadField,
+  images,
+  reorder,
+  updateAlt,
+  remove,
+  heading = "Images",
+  hint = "Drag to reorder. The first image is the one shown in the gallery.",
+}: Props) {
   const [items, setItems] = useState(images);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +170,7 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
         const name = file.name.replace(/\.\w+$/, ".jpg");
         const body = new FormData();
         body.set("file", new File([master], name, { type: "image/jpeg" }));
-        body.set("artworkId", artworkId);
+        body.set(uploadField, parentId);
         body.set("width", String(width));
         body.set("height", String(height));
         body.set("lqip", lqip);
@@ -170,8 +205,8 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
     );
     setItems(next);
     startTransition(() => {
-      reorderImages(
-        artworkId,
+      void reorder(
+        parentId,
         next.map((i) => i.id),
       );
     });
@@ -180,16 +215,14 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
   function handleDelete(id: string) {
     setItems((current) => current.filter((i) => i.id !== id));
     startTransition(() => {
-      deleteImage(id);
+      void remove(id);
     });
   }
 
   return (
     <section>
-      <h2 className="font-display text-lg tracking-tight">Images</h2>
-      <p className="text-graphite mt-1 mb-4 text-xs">
-        Drag to reorder. The first image is the one shown in the gallery.
-      </p>
+      <h2 className="font-display text-lg tracking-tight">{heading}</h2>
+      <p className="text-graphite mt-1 mb-4 text-xs">{hint}</p>
 
       {items.length > 0 && (
         <DndContext
@@ -201,7 +234,7 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
           <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
             <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((item) => (
-                <Thumb key={item.id} item={item} onDelete={handleDelete} />
+                <Thumb key={item.id} item={item} onDelete={handleDelete} updateAlt={updateAlt} />
               ))}
             </ul>
           </SortableContext>

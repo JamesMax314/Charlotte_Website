@@ -26,7 +26,14 @@ export async function POST(request: Request) {
 
   const form = await request.formData();
   const file = form.get("file");
+
+  // One upload path serves both collections: the store (artworks) and the
+  // portfolio. They are separate tables but the R2 write is identical.
   const artworkId = String(form.get("artworkId") ?? "");
+  const portfolioItemId = String(form.get("portfolioItemId") ?? "");
+  if (!artworkId && !portfolioItemId) {
+    return Response.json({ error: "No destination given." }, { status: 400 });
+  }
 
   if (!(file instanceof File)) {
     return Response.json({ error: "No file received." }, { status: 400 });
@@ -39,14 +46,20 @@ export async function POST(request: Request) {
   }
 
   const db = await getDb();
-  const owner = await db
-    .select({ id: schema.artworks.id, title: schema.artworks.title })
-    .from(schema.artworks)
-    .where(eq(schema.artworks.id, artworkId))
-    .limit(1);
+  const owner = artworkId
+    ? await db
+        .select({ id: schema.artworks.id, title: schema.artworks.title })
+        .from(schema.artworks)
+        .where(eq(schema.artworks.id, artworkId))
+        .limit(1)
+    : await db
+        .select({ id: schema.portfolioItems.id, title: schema.portfolioItems.name })
+        .from(schema.portfolioItems)
+        .where(eq(schema.portfolioItems.id, portfolioItemId))
+        .limit(1);
 
   if (owner.length === 0) {
-    return Response.json({ error: "Unknown artwork." }, { status: 404 });
+    return Response.json({ error: "Unknown destination." }, { status: 404 });
   }
 
   const bytes = await file.arrayBuffer();
@@ -80,24 +93,33 @@ export async function POST(request: Request) {
       }),
   );
 
-  const [{ next }] = await db
-    .select({ next: sql<number>`coalesce(max(${schema.artworkImages.sortOrder}), -1) + 1` })
-    .from(schema.artworkImages)
-    .where(eq(schema.artworkImages.artworkId, artworkId));
-
   const id = crypto.randomUUID();
-  await db.insert(schema.artworkImages).values({
+  // Alt text is required to publish; seed it from the title so the field is
+  // never a blank wall, and let the artist correct it.
+  const shared = {
     id,
-    artworkId,
     storageKey,
-    // Alt text is required to publish; seed it from the title so the field is
-    // never a blank wall, and let the artist correct it.
     alt: String(form.get("alt") ?? "").trim() || owner[0].title,
     width: Number(form.get("width")) || 0,
     height: Number(form.get("height")) || 0,
     lqip: String(form.get("lqip") ?? "") || null,
-    sortOrder: next,
-  });
+  };
+
+  if (artworkId) {
+    const [{ next }] = await db
+      .select({ next: sql<number>`coalesce(max(${schema.artworkImages.sortOrder}), -1) + 1` })
+      .from(schema.artworkImages)
+      .where(eq(schema.artworkImages.artworkId, artworkId));
+    await db.insert(schema.artworkImages).values({ ...shared, artworkId, sortOrder: next });
+  } else {
+    const [{ next }] = await db
+      .select({ next: sql<number>`coalesce(max(${schema.portfolioImages.sortOrder}), -1) + 1` })
+      .from(schema.portfolioImages)
+      .where(eq(schema.portfolioImages.itemId, portfolioItemId));
+    await db
+      .insert(schema.portfolioImages)
+      .values({ ...shared, itemId: portfolioItemId, sortOrder: next });
+  }
 
   return Response.json({ id, src: `/media/${storageKey}` });
 }

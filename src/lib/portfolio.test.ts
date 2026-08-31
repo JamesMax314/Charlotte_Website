@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { canvasHeightRatio, coverImage, inReadingOrder, type PortfolioItem } from "./portfolio";
+
+const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
+  id: "a",
+  slug: "a",
+  name: "A",
+  information: "",
+  status: "published",
+  x: 0,
+  y: 0,
+  width: 30,
+  z: 0,
+  images: [],
+  ...over,
+});
+
+const withCover = (w: number, h: number) => [
+  { id: "i", src: "/media/a.jpg", alt: "", width: w, height: h },
+];
+
+describe("coverImage", () => {
+  it("is the first image, which is the one shown on the wall", () => {
+    const i = item({
+      images: [
+        { id: "1", src: "/a", alt: "", width: 10, height: 10 },
+        { id: "2", src: "/b", alt: "", width: 10, height: 10 },
+      ],
+    });
+    expect(coverImage(i)?.id).toBe("1");
+  });
+
+  it("is undefined before any photograph is uploaded", () => {
+    expect(coverImage(item({}))).toBeUndefined();
+  });
+});
+
+describe("inReadingOrder", () => {
+  // The mobile stack is derived from the arrangement rather than stored, so
+  // the artist never maintains a second ordering that can drift.
+  it("goes top to bottom, then left to right", () => {
+    const items = [
+      item({ id: "bottom-left", x: 5, y: 50 }),
+      item({ id: "top-right", x: 60, y: 2 }),
+      item({ id: "top-left", x: 4, y: 2 }),
+    ];
+    expect(inReadingOrder(items).map((i) => i.id)).toEqual([
+      "top-left",
+      "top-right",
+      "bottom-left",
+    ]);
+  });
+
+  it("does not mutate the array it is given", () => {
+    const items = [item({ id: "b", y: 9 }), item({ id: "a", y: 1 })];
+    inReadingOrder(items);
+    expect(items.map((i) => i.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("canvasHeightRatio", () => {
+  it("is tall enough to contain the lowest piece", () => {
+    // A square image 40 wide sitting at y=50 reaches 90.
+    const items = [item({ y: 50, width: 40, images: withCover(100, 100) })];
+    expect(canvasHeightRatio(items)).toBeGreaterThanOrEqual(90);
+  });
+
+  it("accounts for aspect ratio, not just width", () => {
+    const wide = canvasHeightRatio([item({ y: 0, width: 40, images: withCover(200, 100) })]);
+    const tall = canvasHeightRatio([item({ y: 0, width: 40, images: withCover(100, 200) })]);
+    expect(tall).toBeGreaterThan(wide);
+  });
+
+  it("keeps a floor so an empty or shallow wall still has height", () => {
+    expect(canvasHeightRatio([])).toBeGreaterThan(0);
+  });
+});

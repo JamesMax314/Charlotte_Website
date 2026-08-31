@@ -5,7 +5,14 @@ import { ImageManager } from "@/components/admin/image-manager";
 import { ListingsEditor } from "@/components/admin/listings-editor";
 import { getArtworkById } from "@/lib/catalogue";
 import { requireSession } from "@/lib/auth";
-import { archiveArtwork, deleteArtworkPermanently, updateArtwork } from "../../actions";
+import {
+  archiveArtwork,
+  deleteArtworkPermanently,
+  deleteImage,
+  reorderImages,
+  updateArtwork,
+  updateImageAlt,
+} from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +131,11 @@ export default async function EditArtworkPage({ params }: Props) {
 
       <div className="border-line mt-12 border-t pt-8">
         <ImageManager
-          artworkId={artwork.id}
+          parentId={artwork.id}
+          uploadField="artworkId"
+          reorder={reorderImages}
+          updateAlt={updateImageAlt}
+          remove={deleteImage}
           images={artwork.images.map((image) => ({
             id: image.id,
             src: image.src,

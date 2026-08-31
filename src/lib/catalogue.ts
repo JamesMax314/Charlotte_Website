@@ -123,6 +123,10 @@ export const getArtworkById = async (id: string): Promise<Artwork | undefined> =
 const SETTINGS_FALLBACK = {
   heroArtworkId: null as string | null,
   announcement: null as string | null,
+  // Shown until the artist writes her own in the admin.
+  homeTitle: "Drawn to explain.",
+  homeBlurb:
+    "I make illustrated maps, editorial spreads and sequences — drawings that carry information as well as atmosphere.",
   etsyShopUrl: "https://www.etsy.com/",
   contactEmail: "hello@example.com",
   instagramUrl: "https://www.instagram.com/",
