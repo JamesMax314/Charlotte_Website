@@ -88,6 +88,15 @@ Non-obvious decisions that the code alone does not explain.
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
 
+- **Floating surfaces go through `FloatingLayer`.** It portals to `document.body`,
+  keeps itself inside the window and closes on Escape or an outside click. Both the
+  context menu and the text formatting panel use it, so the stacking and dismissal
+  behaviour cannot drift apart.
+
+- **The formatting panel follows the pointer; it is never a fixed bar.** Pinned above the
+  canvas it was off-screen while editing a text box near the bottom of a tall wall, so
+  the artist could not see what her own changes did.
+
 - **The context menu is portalled to `document.body`.** Wall elements carry their own
   z-index, some in the thousands after the heading migration, and they share a stacking
   context with anything rendered beside them — so a menu left in the canvas tree painted

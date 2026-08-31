@@ -104,7 +104,7 @@ export function TextToolbar({
   onDelete: () => void;
 }) {
   return (
-    <div className="border-line bg-paper-sunk/60 mb-3 flex flex-wrap items-center gap-2 border p-2">
+    <div className="flex w-72 flex-wrap items-center gap-2 p-2">
       <label className="text-graphite flex items-center gap-1.5 text-xs">
         Size
         <input
@@ -172,7 +172,7 @@ export function TextToolbar({
       <button
         type="button"
         onClick={onDelete}
-        className="text-graphite ml-auto px-2 text-xs underline underline-offset-2 hover:text-red-700"
+        className="text-graphite mt-1 w-full px-1 text-left text-xs underline underline-offset-2 hover:text-red-700"
       >
         Delete text
       </button>
