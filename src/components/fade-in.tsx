@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { isOnScreenAtLoad, revealDelay } from "@/lib/reveal";
 
 /**
- * Reveals its contents once they scroll into view.
+ * Reveals its contents: on a timer for pieces already on screen at load, and
+ * on scroll for everything below the fold.
  *
  * Only used on the public site — the editor never fades, or the artist would
- * be arranging things she cannot see.
+ * be arranging work she cannot see.
  *
- * The hidden state is applied by this component rather than baked into the
- * markup. If the class were in the server HTML and the script then failed, the
- * page would be permanently blank; the CSS also carries a `prefers-reduced-
- * motion` and a `<noscript>` escape for the same reason.
+ * The hidden state is applied here rather than baked into the markup. If the
+ * class were in the server HTML and the script then failed, the page would be
+ * permanently blank; the CSS also carries a `prefers-reduced-motion` and a
+ * `<noscript>` escape for the same reason.
  */
 export function FadeIn({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -28,16 +30,22 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
 
     el.classList.add("fade-target");
 
-    /*
-      Lock in the hidden state before anything can reveal it.
+    const rect = el.getBoundingClientRect();
 
-      Reading the computed style forces a style recalculation, so `opacity: 0`
-      becomes the value a transition starts from. Without it an element already
-      on screen goes from class-added to revealed inside one frame, the browser
-      only ever paints the finished state, and the piece appears instantly
-      instead of fading.
+    /*
+      An observer is the wrong tool for anything already on screen: it reports
+      the intersection as soon as it starts watching, so the reveal lands in
+      the same frame as the hidden state and there is nothing to transition
+      from. Those pieces get a timer instead, staggered by how far down they
+      sit so the wall assembles from the top.
     */
-    void getComputedStyle(el).opacity;
+    if (isOnScreenAtLoad(rect, window.innerHeight)) {
+      const timer = setTimeout(
+        () => el.classList.add("is-visible"),
+        revealDelay(rect.top, window.innerHeight),
+      );
+      return () => clearTimeout(timer);
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -54,14 +62,8 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
       { rootMargin: "0px 0px -8% 0px" },
     );
 
-    // Observe on the next frame, so the hidden state has been painted once and
-    // pieces already in view fade in on load rather than snapping into place.
-    const frame = requestAnimationFrame(() => observer.observe(el));
-
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   return <div ref={ref}>{children}</div>;

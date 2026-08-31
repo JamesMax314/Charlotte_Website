@@ -186,6 +186,14 @@ Non-obvious decisions that the code alone does not explain.
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
 
+- **An IntersectionObserver cannot fade in what is already on screen.** It reports the
+  intersection as soon as it starts observing, so the reveal lands in the same frame as
+  the hidden state and there is nothing to transition from — the piece simply appears.
+  Pieces on screen at load are revealed on a timer instead, staggered by how far down
+  they sit so the wall assembles from the top; only pieces below the fold use the
+  observer. The timing lives in `src/lib/reveal.ts`, pure and unit-tested, because
+  measuring this in a browser proved unreliable.
+
 - **The fade-in never hides content in server markup.** `.fade-target` is applied by
   `src/components/fade-in.tsx` after it mounts, never rendered by the server. Markup that
   started hidden would stay hidden for good if the script failed to load. A `<noscript>`
