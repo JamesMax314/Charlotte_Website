@@ -34,7 +34,7 @@ The product specification is `docs/project-brief.md`.
 | 0               | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                       |
 | 1               | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                           |
 | 2               | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser |
-| 3 (in progress) | Layout and styling pass on real artwork; reverted to Fraunces/Inter with a terracotta accent                                                                                               |
+| 3 (in progress) | Layout and styling pass on real artwork; reverted to Fraunces/Inter with a terracotta accent; removed the `/work` index so home is the single gallery                                      |
 
 ---
 

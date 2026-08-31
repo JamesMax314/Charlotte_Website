@@ -21,11 +21,6 @@ export async function SiteHeader() {
         <nav aria-label="Main">
           <ul className="flex items-center gap-6 text-sm">
             <li>
-              <Link className="hover:text-accent transition-colors" href="/work">
-                Work
-              </Link>
-            </li>
-            <li>
               <Link className="hover:text-accent transition-colors" href="/about">
                 About
               </Link>

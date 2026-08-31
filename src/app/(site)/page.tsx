@@ -4,14 +4,20 @@ import { Container } from "@/components/container";
 import { DrawnRule } from "@/components/drawn-rule";
 import { Mark } from "@/components/mark";
 import { ArtworkGrid } from "@/components/artwork-grid";
-import { getFeaturedArtworks } from "@/lib/catalogue";
+import { getPublishedArtworks } from "@/lib/catalogue";
 import { primaryImage } from "@/lib/artworks";
 
 export default async function HomePage() {
-  const featured = await getFeaturedArtworks();
-  // A featured piece with no photograph yet cannot carry the hero.
-  const hero = featured.find((artwork) => primaryImage(artwork));
-  const rest = featured.filter((artwork) => artwork !== hero);
+  // Home is the only gallery now that /work is gone, so it lists everything
+  // published — otherwise pieces the artist has not featured are reachable only
+  // by direct URL.
+  const artworks = await getPublishedArtworks();
+
+  // A piece with no photograph yet cannot carry the hero. Prefer a featured one.
+  const hero =
+    artworks.find((artwork) => artwork.isFeatured && primaryImage(artwork)) ??
+    artworks.find((artwork) => primaryImage(artwork));
+  const rest = artworks.filter((artwork) => artwork !== hero);
   const heroImage = hero ? primaryImage(hero) : undefined;
 
   return (
@@ -66,14 +72,8 @@ export default async function HomePage() {
       </Container>
 
       <Container className="pt-14">
-        <h2 className="text-graphite mb-10 text-xs tracking-[0.18em] uppercase">Selected work</h2>
+        <h2 className="text-graphite mb-10 text-xs tracking-[0.18em] uppercase">Work</h2>
         <ArtworkGrid artworks={rest} />
-        <Link
-          href="/work"
-          className="hover:text-accent font-display inline-block text-lg tracking-tight underline decoration-1 underline-offset-[6px] transition-colors"
-        >
-          See everything
-        </Link>
       </Container>
     </>
   );
