@@ -192,7 +192,12 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
       </p>
 
       {items.length > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          id="arrange-artwork-images"
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
             <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((item) => (

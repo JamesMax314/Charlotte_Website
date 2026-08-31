@@ -73,6 +73,12 @@ Non-obvious decisions that the code alone does not explain.
   `requireSession()` / `hasValidSession()` itself. Removing one of those calls exposes it
   with no visible symptom.
 
+- **Every `DndContext` needs an explicit `id`.** dnd-kit derives its
+  `aria-describedby` target from a module-level counter that starts at zero on the server
+  but has already advanced on the client, so omitting the id causes a hydration mismatch
+  on every sortable item _and_ leaves the attribute pointing at an element that does not
+  exist — screen-reader users get no drag instructions at all.
+
 - **Reordering is one `CASE` statement, not a write per row.** The whole rearrange lands
   atomically in a single D1 round trip, so a dropped connection cannot leave the gallery
   half-reordered.

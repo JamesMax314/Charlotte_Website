@@ -129,7 +129,18 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
         {pending ? "Saving order…" : saved ? "Order saved" : "Drag to rearrange"}
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      {/*
+        A stable id is required, not optional. dnd-kit derives the
+        aria-describedby target from a module-level counter that starts at zero
+        on the server but has already advanced on the client, so without this
+        every sortable item hydrates with a mismatched attribute.
+      */}
+      <DndContext
+        id="arrange-artworks"
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
         <SortableContext items={items.map((a) => a.id)} strategy={rectSortingStrategy}>
           <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {items.map((artwork) => (
