@@ -4,11 +4,15 @@ import { Container } from "@/components/container";
 import { DrawnRule } from "@/components/drawn-rule";
 import { Mark } from "@/components/mark";
 import { ArtworkGrid } from "@/components/artwork-grid";
-import { getFeaturedArtworks } from "@/lib/artworks";
+import { getFeaturedArtworks } from "@/lib/catalogue";
+import { primaryImage } from "@/lib/artworks";
 
 export default async function HomePage() {
   const featured = await getFeaturedArtworks();
-  const [hero, ...rest] = featured;
+  // A featured piece with no photograph yet cannot carry the hero.
+  const hero = featured.find((artwork) => primaryImage(artwork));
+  const rest = featured.filter((artwork) => artwork !== hero);
+  const heroImage = hero ? primaryImage(hero) : undefined;
 
   return (
     <>
@@ -30,15 +34,15 @@ export default async function HomePage() {
         </div>
       </Container>
 
-      {hero && (
+      {hero && heroImage && (
         <Container className="pb-16">
           <Link href={`/work/${hero.slug}`} className="group block">
             <div className="bg-paper-sunk border-line flex justify-center overflow-hidden border">
               <Image
-                src={hero.images[0].src}
-                alt={hero.images[0].alt}
-                width={hero.images[0].width}
-                height={hero.images[0].height}
+                src={heroImage.src}
+                alt={heroImage.alt}
+                width={heroImage.width}
+                height={heroImage.height}
                 priority
                 sizes="(min-width: 1280px) 1152px, 100vw"
                 className="max-h-[68vh] w-auto object-contain"
@@ -73,3 +77,8 @@ export default async function HomePage() {
     </>
   );
 }
+
+// D1 is unreachable during `next build` (no binding outside the Worker), so
+// these render per request. Revisit with "use cache" once there is traffic
+// that justifies it — see docs/progress.md.
+export const dynamic = "force-dynamic";

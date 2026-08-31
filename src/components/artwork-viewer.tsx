@@ -28,6 +28,15 @@ export function ArtworkViewer({ images, title }: { images: ArtworkImage[]; title
 
   const active = images[index];
 
+  // The artist can publish before uploading photographs.
+  if (!active) {
+    return (
+      <div className="bg-paper-sunk border-line text-graphite flex aspect-[4/5] items-center justify-center border text-sm">
+        Photograph coming soon
+      </div>
+    );
+  }
+
   return (
     <>
       <button

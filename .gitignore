@@ -45,4 +45,8 @@ next-env.d.ts
 /.wrangler/
 .dev.vars
 .dev.vars.*
+!.dev.vars.example
 cloudflare-env.d.ts
+
+# passphrase rotation backups
+.dev.vars.backup-*

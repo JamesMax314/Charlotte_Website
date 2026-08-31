@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  getArtworkBySlug,
-  getPublishedArtworks,
-  getRoutableSlugs,
   headlinePricePence,
+  isPlaceholderSlug,
+  primaryImage,
+  isInGallery,
+  isPubliclyRoutable,
   isSoldOut,
+  isValidEtsyUrl,
+  toSlug,
   type Artwork,
 } from "./artworks";
 
 const artwork = (listings: Artwork["listings"]): Artwork => ({
+  id: "a",
   slug: "x",
   title: "X",
   year: 2026,
@@ -21,83 +25,43 @@ const artwork = (listings: Artwork["listings"]): Artwork => ({
   listings,
 });
 
+const listing = (over: Partial<Artwork["listings"][number]>): Artwork["listings"][number] => ({
+  id: "l",
+  kind: "print",
+  label: "A2",
+  etsyUrl: "https://www.etsy.com/listing/1",
+  pricePence: 6500,
+  availability: "available",
+  ...over,
+});
+
 describe("headlinePricePence", () => {
   it("ignores a cheaper digital download when a print is available", () => {
     const a = artwork([
-      {
-        id: "p",
-        kind: "print",
-        label: "A2",
-        etsyUrl: "",
-        pricePence: 6500,
-        availability: "available",
-      },
-      {
-        id: "d",
-        kind: "digital",
-        label: "File",
-        etsyUrl: "",
-        pricePence: 1200,
-        availability: "available",
-      },
+      listing({ id: "p", kind: "print", pricePence: 6500 }),
+      listing({ id: "d", kind: "digital", pricePence: 1200 }),
     ]);
     expect(headlinePricePence(a)).toBe(6500);
   });
 
   it("falls back to a download when there is no print", () => {
-    const a = artwork([
-      {
-        id: "d",
-        kind: "digital",
-        label: "File",
-        etsyUrl: "",
-        pricePence: 1200,
-        availability: "available",
-      },
-    ]);
-    expect(headlinePricePence(a)).toBe(1200);
+    expect(headlinePricePence(artwork([listing({ kind: "digital", pricePence: 1200 })]))).toBe(
+      1200,
+    );
   });
 
   it("takes the cheapest of several available prints", () => {
     const a = artwork([
-      {
-        id: "a",
-        kind: "print",
-        label: "A2",
-        etsyUrl: "",
-        pricePence: 6500,
-        availability: "available",
-      },
-      {
-        id: "b",
-        kind: "print",
-        label: "A3",
-        etsyUrl: "",
-        pricePence: 4500,
-        availability: "available",
-      },
+      listing({ id: "a", pricePence: 6500 }),
+      listing({ id: "b", pricePence: 4500 }),
     ]);
     expect(headlinePricePence(a)).toBe(4500);
   });
 
   it("skips sold-out prints when pricing", () => {
     const a = artwork([
-      {
-        id: "a",
-        kind: "print",
-        label: "A3",
-        etsyUrl: "",
-        pricePence: 4500,
-        availability: "sold_out",
-      },
-      {
-        id: "b",
-        kind: "print",
-        label: "A2",
-        etsyUrl: "",
-        pricePence: 6500,
-        availability: "available",
-      },
+      listing({ id: "a", pricePence: 4500, availability: "sold_out" }),
+      listing({ id: "b", pricePence: 6500 }),
     ]);
     expect(headlinePricePence(a)).toBe(6500);
   });
@@ -109,39 +73,86 @@ describe("headlinePricePence", () => {
 
 describe("isSoldOut", () => {
   it("distinguishes sold out from never having been for sale", () => {
-    const soldOut = artwork([
-      {
-        id: "a",
-        kind: "print",
-        label: "A3",
-        etsyUrl: "",
-        pricePence: 4500,
-        availability: "sold_out",
-      },
-    ]);
-    expect(isSoldOut(soldOut)).toBe(true);
+    expect(isSoldOut(artwork([listing({ availability: "sold_out" })]))).toBe(true);
     expect(isSoldOut(artwork([]))).toBe(false);
   });
 });
 
-describe("catalogue visibility", () => {
-  it("keeps drafts out of the gallery and off their own URL", async () => {
-    const published = await getPublishedArtworks();
-    expect(published.some((a) => a.slug === "her-mothers-coat")).toBe(false);
-    expect(await getArtworkBySlug("her-mothers-coat")).toBeUndefined();
-    expect(await getRoutableSlugs()).not.toContain("her-mothers-coat");
+describe("primaryImage", () => {
+  // The artist creates a piece, publishes it, and uploads photographs later.
+  // Every rendering surface has to survive that gap.
+  it("returns undefined when the piece has no photograph yet", () => {
+    expect(primaryImage(artwork([]))).toBeUndefined();
   });
 
-  it("hides archived work from the gallery but keeps its URL alive", async () => {
-    const published = await getPublishedArtworks();
-    expect(published.some((a) => a.slug === "night-bus")).toBe(false);
-    expect(await getArtworkBySlug("night-bus")).toBeDefined();
-    expect(await getRoutableSlugs()).toContain("night-bus");
+  it("returns the first image when there are several", () => {
+    const a = artwork([]);
+    a.images = [
+      { id: "1", src: "/media/a.jpg", alt: "a", width: 10, height: 10 },
+      { id: "2", src: "/media/b.jpg", alt: "b", width: 10, height: 10 },
+    ];
+    expect(primaryImage(a)?.id).toBe("1");
+  });
+});
+
+describe("visibility", () => {
+  it("keeps archived work out of the gallery but alive at its URL", () => {
+    expect(isInGallery("archived")).toBe(false);
+    expect(isPubliclyRoutable("archived")).toBe(true);
   });
 
-  it("returns the gallery in the artist's chosen order", async () => {
-    const published = await getPublishedArtworks();
-    const orders = published.map((a) => a.sortOrder);
-    expect(orders).toEqual([...orders].sort((a, b) => a - b));
+  it("hides drafts entirely", () => {
+    expect(isInGallery("draft")).toBe(false);
+    expect(isPubliclyRoutable("draft")).toBe(false);
+  });
+
+  it("shows published work everywhere", () => {
+    expect(isInGallery("published")).toBe(true);
+    expect(isPubliclyRoutable("published")).toBe(true);
+  });
+});
+
+describe("isValidEtsyUrl", () => {
+  it("accepts etsy listing urls, including regional subdomains", () => {
+    expect(isValidEtsyUrl("https://www.etsy.com/uk/listing/123/a-print")).toBe(true);
+    expect(isValidEtsyUrl("https://etsy.com/listing/123")).toBe(true);
+  });
+
+  it("rejects look-alike hosts", () => {
+    expect(isValidEtsyUrl("https://etsy.com.evil.example/listing/1")).toBe(false);
+    expect(isValidEtsyUrl("https://notetsy.com/listing/1")).toBe(false);
+  });
+
+  it("rejects insecure and malformed urls", () => {
+    expect(isValidEtsyUrl("http://www.etsy.com/listing/1")).toBe(false);
+    expect(isValidEtsyUrl("not a url")).toBe(false);
+    expect(isValidEtsyUrl("")).toBe(false);
+  });
+});
+
+describe("isPlaceholderSlug", () => {
+  it("recognises the auto-generated slugs so they follow the title", () => {
+    expect(isPlaceholderSlug("untitled")).toBe(true);
+    expect(isPlaceholderSlug("untitled-3")).toBe(true);
+  });
+
+  it("leaves a slug the artist chose alone", () => {
+    expect(isPlaceholderSlug("ltw-mag")).toBe(false);
+    expect(isPlaceholderSlug("untitled-sketches")).toBe(false);
+    expect(isPlaceholderSlug("the-untitled-one")).toBe(false);
+  });
+});
+
+describe("toSlug", () => {
+  it("lowercases and hyphenates", () => {
+    expect(toSlug("The Long Field")).toBe("the-long-field");
+  });
+
+  it("drops apostrophes rather than turning them into hyphens", () => {
+    expect(toSlug("Her Mother's Coat")).toBe("her-mothers-coat");
+  });
+
+  it("trims punctuation from the ends", () => {
+    expect(toSlug("  Swimmers!  ")).toBe("swimmers");
   });
 });
