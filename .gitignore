@@ -50,3 +50,6 @@ cloudflare-env.d.ts
 
 # passphrase rotation backups
 .dev.vars.backup-*
+
+#seed artwork
+/tmp_art/

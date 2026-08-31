@@ -5,7 +5,14 @@ import { ImageManager } from "@/components/admin/image-manager";
 import { ListingsEditor } from "@/components/admin/listings-editor";
 import { getArtworkById } from "@/lib/catalogue";
 import { requireSession } from "@/lib/auth";
-import { archiveArtwork, deleteArtworkPermanently, updateArtwork } from "../../actions";
+import {
+  archiveArtwork,
+  deleteArtworkPermanently,
+  deleteImage,
+  reorderImages,
+  updateArtwork,
+  updateImageAlt,
+} from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +29,7 @@ export default async function EditArtworkPage({ params }: Props) {
 
   return (
     <Container className="max-w-3xl pt-10 pb-20">
-      <Link href="/admin" className="text-graphite hover:text-biro mb-6 inline-block text-sm">
+      <Link href="/admin" className="text-graphite hover:text-accent mb-6 inline-block text-sm">
         ← All work
       </Link>
 
@@ -107,14 +114,14 @@ export default async function EditArtworkPage({ params }: Props) {
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="submit"
-            className="bg-biro text-paper hover:bg-ink px-5 py-3 text-sm transition-colors"
+            className="bg-accent text-paper hover:bg-ink px-5 py-3 text-sm transition-colors"
           >
             Save
           </button>
           {artwork.status === "published" && (
             <Link
               href={`/work/${artwork.slug}`}
-              className="text-graphite hover:text-biro text-sm underline underline-offset-4"
+              className="text-graphite hover:text-accent text-sm underline underline-offset-4"
             >
               View on the site
             </Link>
@@ -124,7 +131,11 @@ export default async function EditArtworkPage({ params }: Props) {
 
       <div className="border-line mt-12 border-t pt-8">
         <ImageManager
-          artworkId={artwork.id}
+          parentId={artwork.id}
+          uploadField="artworkId"
+          reorder={reorderImages}
+          updateAlt={updateImageAlt}
+          remove={deleteImage}
           images={artwork.images.map((image) => ({
             id: image.id,
             src: image.src,

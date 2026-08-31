@@ -17,7 +17,8 @@ export async function SiteFooter() {
         <div className="flex items-start gap-3">
           <Mark className="text-graphite h-8 w-8 shrink-0" />
           <p className="text-graphite max-w-xs text-sm leading-relaxed">
-            Prints are sold through Etsy, which handles payment, postage and returns.
+            Commissions welcome. Prints of selected work are sold through Etsy, which handles
+            payment, postage and returns.
           </p>
         </div>
 
@@ -25,7 +26,7 @@ export async function SiteFooter() {
           <ul className="text-graphite flex flex-col gap-2 text-sm sm:items-end">
             <li>
               <a
-                className="hover:text-biro transition-colors"
+                className="hover:text-accent transition-colors"
                 href={settings.etsyShopUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -36,7 +37,7 @@ export async function SiteFooter() {
             </li>
             <li>
               <a
-                className="hover:text-biro transition-colors"
+                className="hover:text-accent transition-colors"
                 href={settings.instagramUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -46,11 +47,11 @@ export async function SiteFooter() {
               </a>
             </li>
             <li>
-              <Link className="hover:text-biro transition-colors" href="/privacy">
+              <Link className="hover:text-accent transition-colors" href="/privacy">
                 Privacy
               </Link>
             </li>
-            <li className="pt-2">© {new Date().getFullYear()} Charlotte</li>
+            <li className="pt-2">© {new Date().getFullYear()} Charlotte Wilkinson</li>
           </ul>
         </nav>
       </Container>

@@ -22,15 +22,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Container className="flex items-center justify-between gap-4 py-3">
             <div className="flex items-center gap-3">
               <Mark className="text-ink h-6 w-6" />
-              <Link href="/admin" className="font-display text-sm tracking-tight">
+              <Link href="/admin/portfolio" className="font-display text-sm tracking-tight">
                 Studio
               </Link>
-              <Link href="/" className="text-graphite hover:text-biro text-xs transition-colors">
+              <Link
+                href="/admin/portfolio"
+                className="text-graphite hover:text-accent text-xs transition-colors"
+              >
+                Home page
+              </Link>
+              <Link
+                href="/admin"
+                className="text-graphite hover:text-accent text-xs transition-colors"
+              >
+                Store
+              </Link>
+              <Link href="/" className="text-graphite hover:text-accent text-xs transition-colors">
                 View site
               </Link>
             </div>
             <form action={logout}>
-              <button type="submit" className="text-graphite hover:text-biro text-xs">
+              <button type="submit" className="text-graphite hover:text-accent text-xs">
                 Sign out
               </button>
             </form>

@@ -123,6 +123,16 @@ export const getArtworkById = async (id: string): Promise<Artwork | undefined> =
 const SETTINGS_FALLBACK = {
   heroArtworkId: null as string | null,
   announcement: null as string | null,
+  // Superseded by wall_texts: the heading and introduction are now free text
+  // boxes on the wall. Kept so existing rows still read, and because the
+  // migration copied these values into text boxes rather than discarding them.
+  homeTitle: "Drawn to explain.",
+  homeBlurb:
+    "I make illustrated maps, editorial spreads and sequences — drawings that carry information as well as atmosphere.",
+  gutterEnabled: false,
+  gutter: 2,
+  snapEnabled: true,
+  showNamesOnHover: true,
   etsyShopUrl: "https://www.etsy.com/",
   contactEmail: "hello@example.com",
   instagramUrl: "https://www.instagram.com/",

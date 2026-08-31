@@ -38,7 +38,7 @@ export function ArtworkCard({
 
         {/* The print margin: title left, what it costs right. */}
         <div className="mt-4 flex items-baseline justify-between gap-4">
-          <h3 className="font-display group-hover:text-biro text-base tracking-tight transition-colors">
+          <h3 className="font-display group-hover:text-accent text-base tracking-tight transition-colors">
             {artwork.title}
           </h3>
           <span className="text-graphite shrink-0 text-xs tabular-nums">

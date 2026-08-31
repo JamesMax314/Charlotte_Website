@@ -13,56 +13,38 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { deleteImage, reorderImages, updateImageAlt } from "@/app/admin/actions";
-import { WIDTH_LADDER } from "@/image-loader";
+import { uploadImage } from "@/lib/client-upload";
 
 type Item = { id: string; src: string; alt: string; width: number; height: number };
 
-const MAX_EDGE = WIDTH_LADDER[WIDTH_LADDER.length - 1];
-
-function render(bitmap: ImageBitmap, width: number, height: number, quality: number) {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, width, height);
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-}
-
 /**
- * Downscales in the browser and writes the whole responsive ladder.
+ * Serves both collections — store artworks and portfolio pieces.
  *
- * Two reasons this happens client-side: the artist uploads from a phone, where
- * a 60MB camera file over mobile data stalls; and Workers has no image
- * optimizer, so the derivatives have to exist as real objects (see
- * src/image-loader.ts). Also grabs the blur placeholder while the bitmap is
- * already decoded.
+ * The mutations differ per collection so they are injected, but the upload
+ * pipeline (downscale, responsive ladder, blur placeholder) is shared
+ * deliberately: two copies of it would drift.
  */
-async function prepare(file: File) {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const width = Math.round(bitmap.width * scale);
-  const height = Math.round(bitmap.height * scale);
+type Props = {
+  parentId: string;
+  /** Which field the upload endpoint expects the parent id under. */
+  uploadField: "artworkId" | "portfolioItemId";
+  images: Item[];
+  reorder: (parentId: string, ids: string[]) => Promise<void>;
+  updateAlt: (id: string, alt: string) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  heading?: string;
+  hint?: string;
+};
 
-  const master = await render(bitmap, width, height, 0.86);
-
-  // Never upscale: a 900px original gets no 1600px derivative.
-  const variants = new Map<number, Blob>();
-  for (const target of WIDTH_LADDER) {
-    if (target >= width) continue;
-    const variant = await render(bitmap, target, Math.round((target * height) / width), 0.82);
-    if (variant) variants.set(target, variant);
-  }
-
-  const tiny = document.createElement("canvas");
-  tiny.width = 16;
-  tiny.height = Math.max(1, Math.round((16 * height) / width));
-  tiny.getContext("2d")?.drawImage(bitmap, 0, 0, tiny.width, tiny.height);
-  bitmap.close();
-
-  return { master, variants, width, height, lqip: tiny.toDataURL("image/jpeg", 0.4) };
-}
-
-function Thumb({ item, onDelete }: { item: Item; onDelete: (id: string) => void }) {
+function Thumb({
+  item,
+  onDelete,
+  updateAlt,
+}: {
+  item: Item;
+  onDelete: (id: string) => void;
+  updateAlt: (id: string, alt: string) => Promise<void>;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
   });
@@ -96,7 +78,7 @@ function Thumb({ item, onDelete }: { item: Item; onDelete: (id: string) => void 
           <input
             value={alt}
             onChange={(e) => setAlt(e.target.value)}
-            onBlur={() => alt !== item.alt && updateImageAlt(item.id, alt)}
+            onBlur={() => alt !== item.alt && void updateAlt(item.id, alt)}
             className="border-line focus:border-ink mt-1 w-full border bg-transparent px-2 py-1 text-xs outline-none"
           />
         </label>
@@ -112,7 +94,16 @@ function Thumb({ item, onDelete }: { item: Item; onDelete: (id: string) => void 
   );
 }
 
-export function ImageManager({ artworkId, images }: { artworkId: string; images: Item[] }) {
+export function ImageManager({
+  parentId,
+  uploadField,
+  images,
+  reorder,
+  updateAlt,
+  remove,
+  heading = "Images",
+  hint = "Drag to reorder. The first image is the one shown in the gallery.",
+}: Props) {
   const [items, setItems] = useState(images);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,29 +120,16 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
     for (const [index, file] of Array.from(files).entries()) {
       setBusy(`Preparing ${index + 1} of ${files.length}…`);
       try {
-        const { master, variants, width, height, lqip } = await prepare(file);
-        if (!master) throw new Error("Could not read that image.");
-
-        const name = file.name.replace(/\.\w+$/, ".jpg");
-        const body = new FormData();
-        body.set("file", new File([master], name, { type: "image/jpeg" }));
-        body.set("artworkId", artworkId);
-        body.set("width", String(width));
-        body.set("height", String(height));
-        body.set("lqip", lqip);
-        for (const [target, blob] of variants) {
-          body.set(`variant-${target}`, new File([blob], name, { type: "image/jpeg" }));
-        }
-
-        setBusy(`Uploading ${index + 1} of ${files.length}…`);
-        const response = await fetch("/api/admin/upload", { method: "POST", body });
-        const result = (await response.json()) as { id?: string; src?: string; error?: string };
-        if (!response.ok || !result.id || !result.src) {
-          throw new Error(result.error ?? "Upload failed.");
-        }
+        const uploaded = await uploadImage(file, { field: uploadField, parentId });
         setItems((current) => [
           ...current,
-          { id: result.id!, src: result.src!, alt: "", width, height },
+          {
+            id: uploaded.id,
+            src: uploaded.src,
+            alt: "",
+            width: uploaded.width,
+            height: uploaded.height,
+          },
         ]);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Upload failed.");
@@ -170,8 +148,8 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
     );
     setItems(next);
     startTransition(() => {
-      reorderImages(
-        artworkId,
+      void reorder(
+        parentId,
         next.map((i) => i.id),
       );
     });
@@ -180,16 +158,14 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
   function handleDelete(id: string) {
     setItems((current) => current.filter((i) => i.id !== id));
     startTransition(() => {
-      deleteImage(id);
+      void remove(id);
     });
   }
 
   return (
     <section>
-      <h2 className="font-display text-lg tracking-tight">Images</h2>
-      <p className="text-graphite mt-1 mb-4 text-xs">
-        Drag to reorder. The first image is the one shown in the gallery.
-      </p>
+      <h2 className="font-display text-lg tracking-tight">{heading}</h2>
+      <p className="text-graphite mt-1 mb-4 text-xs">{hint}</p>
 
       {items.length > 0 && (
         <DndContext
@@ -201,7 +177,7 @@ export function ImageManager({ artworkId, images }: { artworkId: string; images:
           <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
             <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((item) => (
-                <Thumb key={item.id} item={item} onDelete={handleDelete} />
+                <Thumb key={item.id} item={item} onDelete={handleDelete} updateAlt={updateAlt} />
               ))}
             </ul>
           </SortableContext>

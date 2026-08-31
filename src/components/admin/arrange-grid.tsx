@@ -73,7 +73,7 @@ function Tile({ artwork }: { artwork: Artwork }) {
       <div className="flex items-baseline justify-between gap-2 px-3 py-2">
         <Link
           href={`/admin/artworks/${artwork.id}`}
-          className="hover:text-biro truncate text-sm transition-colors"
+          className="hover:text-accent truncate text-sm transition-colors"
         >
           {artwork.title}
         </Link>
