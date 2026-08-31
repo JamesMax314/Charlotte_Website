@@ -176,6 +176,17 @@ Non-obvious decisions that the code alone does not explain.
   but the priority image. Fixing it means one DOM tree switched by CSS custom properties
   and `order`, which is a worthwhile follow-up rather than a quick change.
 
+- **Snap guides record which edge may reach them.** Without that, any edge could reach
+  any guide: with a gap set, a piece's trailing edge still latched onto a neighbour's
+  leading edge — flush, no gap — and competed with the gutter position, so pieces came to
+  rest at a mixture of spacings on both axes. Alignment guides now accept only the
+  matching edge (left to left, right to right), and abutting guides only the facing one.
+  With no gutter the two collapse onto the same line, which restores flush contact.
+
+- **The gutter is one distance, not two.** Both axes are percentages of canvas width, so a
+  horizontal and a vertical gap are the same size on screen. Tests assert the two are
+  equal rather than merely non-zero.
+
 - **The gutter shifts snap targets; it does not forbid closeness.** With the gap on,
   pieces snap to sit a gutter apart rather than flush, while alignment guides (edge to
   edge, centre to centre) stay available so work can still be stacked in a column.

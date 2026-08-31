@@ -15,9 +15,24 @@ export interface Rect {
   height: number;
 }
 
+/**
+ * Which edge of the box being moved may snap to a guide.
+ *
+ * Recording this is what makes a gutter mean anything. Without it every edge
+ * could snap to every line, so a piece's trailing edge would land on a
+ * neighbour's leading edge — flush, no gap — and compete with the gutter
+ * position. Pieces then came to rest at a mixture of spacings.
+ */
+export type EdgeRole = "leading" | "centre" | "trailing";
+
+export interface Guide {
+  at: number;
+  edges: EdgeRole[];
+}
+
 export interface Guides {
-  vertical: number[];
-  horizontal: number[];
+  vertical: Guide[];
+  horizontal: Guide[];
 }
 
 export interface SnapResult {
@@ -33,7 +48,20 @@ export const SNAP_THRESHOLD = 1.2;
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
-const dedupe = (values: number[]) => [...new Set(values.map(round))].sort((a, b) => a - b);
+/** Merges guides that land on the same line, unioning the edges they accept. */
+function collapse(guides: Guide[]): Guide[] {
+  const byPosition = new Map<number, Set<EdgeRole>>();
+  for (const guide of guides) {
+    const at = round(guide.at);
+    const edges = byPosition.get(at) ?? new Set<EdgeRole>();
+    for (const edge of guide.edges) edges.add(edge);
+    byPosition.set(at, edges);
+  }
+
+  return [...byPosition.entries()]
+    .map(([at, edges]) => ({ at, edges: [...edges] }))
+    .sort((a, b) => a.at - b.at);
+}
 
 export const rectOf = (item: { x: number; y: number; width: number }, aspect: number): Rect => ({
   x: item.x,
@@ -47,21 +75,50 @@ export const rectOf = (item: { x: number; y: number; width: number }, aspect: nu
  * piece, plus the canvas edges and its vertical centre line.
  */
 export const collectGuides = (others: Rect[], canvasHeight: number, gutter = 0): Guides => {
-  const vertical = [0, 50, 100];
-  const horizontal = [0, canvasHeight];
+  const vertical: Guide[] = [
+    { at: 0, edges: ["leading"] },
+    { at: 50, edges: ["centre"] },
+    { at: 100, edges: ["trailing"] },
+  ];
+  const horizontal: Guide[] = [
+    { at: 0, edges: ["leading"] },
+    { at: canvasHeight, edges: ["trailing"] },
+  ];
 
   for (const r of others) {
-    // Alignment guides: line an edge or centre up with a neighbour's.
-    vertical.push(r.x, r.x + r.width / 2, r.x + r.width);
-    horizontal.push(r.y, r.y + r.height / 2, r.y + r.height);
+    // Alignment: line the same edge up with a neighbour's — left with left,
+    // centre with centre, right with right.
+    vertical.push(
+      { at: r.x, edges: ["leading"] },
+      { at: r.x + r.width / 2, edges: ["centre"] },
+      { at: r.x + r.width, edges: ["trailing"] },
+    );
+    horizontal.push(
+      { at: r.y, edges: ["leading"] },
+      { at: r.y + r.height / 2, edges: ["centre"] },
+      { at: r.y + r.height, edges: ["trailing"] },
+    );
 
-    // Abutting guides: sit beside a neighbour, a gutter apart. With no gutter
-    // these land on the neighbour's edges, so pieces butt up flush.
-    vertical.push(r.x - gutter, r.x + r.width + gutter);
-    horizontal.push(r.y - gutter, r.y + r.height + gutter);
+    /*
+      Abutting: sit beside a neighbour, one gutter away. Only the facing edge
+      may use these, which is what stops a piece also snapping flush and
+      leaving a mixture of spacings across the wall.
+
+      The gutter is measured in the same unit on both axes — percentages of
+      canvas width — so a horizontal and a vertical gap are the same distance
+      on screen.
+    */
+    vertical.push(
+      { at: r.x - gutter, edges: ["trailing"] },
+      { at: r.x + r.width + gutter, edges: ["leading"] },
+    );
+    horizontal.push(
+      { at: r.y - gutter, edges: ["trailing"] },
+      { at: r.y + r.height + gutter, edges: ["leading"] },
+    );
   }
 
-  return { vertical: dedupe(vertical), horizontal: dedupe(horizontal) };
+  return { vertical: collapse(vertical), horizontal: collapse(horizontal) };
 };
 
 /**
@@ -72,18 +129,21 @@ export const collectGuides = (others: Rect[], canvasHeight: number, gutter = 0):
  */
 function nearest(
   origin: number,
-  offsets: number[],
-  guides: number[],
+  candidates: { role: EdgeRole; offset: number }[],
+  guides: Guide[],
   threshold: number,
 ): { position: number; guide: number } | null {
   let best: { position: number; guide: number; delta: number } | null = null;
 
-  for (const offset of offsets) {
+  for (const candidate of candidates) {
     for (const guide of guides) {
-      const delta = Math.abs(guide - (origin + offset));
+      // A guide only accepts the edges it was created for.
+      if (!guide.edges.includes(candidate.role)) continue;
+
+      const delta = Math.abs(guide.at - (origin + candidate.offset));
       if (delta > threshold) continue;
       if (!best || delta < best.delta) {
-        best = { position: guide - offset, guide, delta };
+        best = { position: guide.at - candidate.offset, guide: guide.at, delta };
       }
     }
   }
@@ -93,8 +153,26 @@ function nearest(
 
 /** Snaps a piece being moved. Its size never changes. */
 export const snapMove = (rect: Rect, guides: Guides, threshold = SNAP_THRESHOLD): SnapResult => {
-  const h = nearest(rect.x, [0, rect.width / 2, rect.width], guides.vertical, threshold);
-  const v = nearest(rect.y, [0, rect.height / 2, rect.height], guides.horizontal, threshold);
+  const h = nearest(
+    rect.x,
+    [
+      { role: "leading", offset: 0 },
+      { role: "centre", offset: rect.width / 2 },
+      { role: "trailing", offset: rect.width },
+    ],
+    guides.vertical,
+    threshold,
+  );
+  const v = nearest(
+    rect.y,
+    [
+      { role: "leading", offset: 0 },
+      { role: "centre", offset: rect.height / 2 },
+      { role: "trailing", offset: rect.height },
+    ],
+    guides.horizontal,
+    threshold,
+  );
 
   return {
     x: h ? h.position : rect.x,
@@ -125,6 +203,11 @@ export const snapResize = (
   const right = rect.x + rect.width;
   const bottom = rect.y + rect.width * aspect;
 
+  // Resizing from the bottom-right corner moves only the trailing edges, so
+  // only guides that accept a trailing edge apply. With a gutter set this is
+  // what stops a piece being resized flush against its neighbour.
+  const trailing = (list: Guide[]) => list.filter((g) => g.edges.includes("trailing"));
+
   let best: {
     width: number;
     delta: number;
@@ -132,26 +215,26 @@ export const snapResize = (
     horizontal: number | null;
   } | null = null;
 
-  for (const guide of guides.vertical) {
-    const delta = Math.abs(guide - right);
+  for (const guide of trailing(guides.vertical)) {
+    const delta = Math.abs(guide.at - right);
     if (delta > threshold) continue;
     if (!best || delta < best.delta) {
-      best = { width: guide - rect.x, delta, vertical: guide, horizontal: null };
+      best = { width: guide.at - rect.x, delta, vertical: guide.at, horizontal: null };
     }
   }
 
   if (aspect > 0) {
-    for (const guide of guides.horizontal) {
-      const delta = Math.abs(guide - bottom);
+    for (const guide of trailing(guides.horizontal)) {
+      const delta = Math.abs(guide.at - bottom);
       if (delta > threshold) continue;
       // Compare in width-space so the two axes are judged on the same scale.
       const widthDelta = delta / aspect;
       if (!best || widthDelta < best.delta) {
         best = {
-          width: (guide - rect.y) / aspect,
+          width: (guide.at - rect.y) / aspect,
           delta: widthDelta,
           vertical: null,
-          horizontal: guide,
+          horizontal: guide.at,
         };
       }
     }
@@ -184,28 +267,29 @@ export const snapResizeFree = (
 ): FreeResizeSnapResult => {
   const right = rect.x + rect.width;
   const bottom = rect.y + rect.height;
+  const trailing = (list: Guide[]) => list.filter((g) => g.edges.includes("trailing"));
 
   let width = rect.width;
   let vertical: number | null = null;
   let bestV = threshold;
-  for (const guide of guides.vertical) {
-    const delta = Math.abs(guide - right);
-    if (delta <= bestV && guide - rect.x > 0) {
+  for (const guide of trailing(guides.vertical)) {
+    const delta = Math.abs(guide.at - right);
+    if (delta <= bestV && guide.at - rect.x > 0) {
       bestV = delta;
-      width = guide - rect.x;
-      vertical = guide;
+      width = guide.at - rect.x;
+      vertical = guide.at;
     }
   }
 
   let height = rect.height;
   let horizontal: number | null = null;
   let bestH = threshold;
-  for (const guide of guides.horizontal) {
-    const delta = Math.abs(guide - bottom);
-    if (delta <= bestH && guide - rect.y > 0) {
+  for (const guide of trailing(guides.horizontal)) {
+    const delta = Math.abs(guide.at - bottom);
+    if (delta <= bestH && guide.at - rect.y > 0) {
       bestH = delta;
-      height = guide - rect.y;
-      horizontal = guide;
+      height = guide.at - rect.y;
+      horizontal = guide.at;
     }
   }
 
