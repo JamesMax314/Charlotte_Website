@@ -91,6 +91,30 @@ Non-obvious decisions that the code alone does not explain.
 
 ---
 
+## Running it locally
+
+One-time setup:
+
+```bash
+pnpm install
+cp .dev.vars.example .dev.vars   # then fill it from the next command
+pnpm admin:passphrase            # prints the passphrase and both secret values
+pnpm db:migrate:local            # creates the D1 tables
+pnpm seed                        # loads eight placeholder artworks into D1 and R2
+```
+
+Then either:
+
+```bash
+pnpm dev       # fast iteration on http://localhost:3000
+pnpm preview   # the real Worker on http://localhost:8787 — build first, slower
+```
+
+**Test in `preview` before believing anything.** `next dev` does not run the deployed
+worker and will happily hide production-only failures. The missing image optimiser in
+Phase 2 is the worked example: every image on the site was broken in the worker while
+`next dev` looked perfect.
+
 ## Deploying for the first time
 
 Not yet done. Requires a Cloudflare account and these one-off steps:
