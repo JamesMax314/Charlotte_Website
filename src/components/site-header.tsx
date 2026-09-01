@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Container } from "./container";
+import { InstagramGlyph } from "./instagram-glyph";
 import { Mark } from "./mark";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
@@ -100,11 +101,6 @@ export async function SiteHeader() {
                 About
               </Link>
             </li>
-            <li>
-              <Link className="hover:text-accent transition-colors" href="/contact">
-                Contact
-              </Link>
-            </li>
             {/*
               The shop is ours now, not a link straight out to Etsy — the
               handoff happens on the product page. The footer still carries the
@@ -115,6 +111,26 @@ export async function SiteHeader() {
                 Shop
               </Link>
             </li>
+            {/*
+              Hidden rather than pointed nowhere when the artist has not set
+              one, exactly as the footer's link is. Icon-only, so the accessible
+              name and the new-tab warning are carried by the visually hidden
+              text — the glyph itself is `aria-hidden`, or a screen reader would
+              announce the link twice.
+            */}
+            {settings.instagramUrl && (
+              <li>
+                <a
+                  className="hover:text-accent flex items-center transition-colors"
+                  href={settings.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <InstagramGlyph className="h-[1.45em] w-[1.45em]" />
+                  <span className="sr-only">Instagram (opens in a new tab)</span>
+                </a>
+              </li>
+            )}
           </ul>
         </nav>
       </Container>
