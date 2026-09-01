@@ -57,7 +57,7 @@ export default async function ArtworkPage({ params }: Props) {
   };
 
   return (
-    <Container className="pt-10 pb-4">
+    <Container>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

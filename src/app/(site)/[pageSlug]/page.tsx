@@ -59,7 +59,7 @@ export default async function CustomPage({ params }: Props) {
     box to the <h1>.
   */
   return (
-    <Container className="pt-16 pb-16 sm:pt-24">
+    <Container>
       <PortfolioWall
         items={items}
         texts={texts}

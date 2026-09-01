@@ -46,8 +46,9 @@ The product specification is `docs/project-brief.md`.
   asserts no client relationships.
 
 - **A settings page the artist owns.** `/admin/settings` carries her name and mark, her
-  Instagram and Etsy links, the top bar's height and type sizes with a working miniature
-  of it, the highlight colour, uploaded fonts, and the copy for the
+  Instagram and Etsy links, the top bar's height and type sizes and the space it leaves
+  around her work — with a working miniature of it — the highlight colour, uploaded fonts,
+  and the copy for the
   About, Contact and Privacy pages — with a photograph beside the About text. The mark is
   both the circular badge in the header and the browser-tab icon, and she picks the body
   and heading typefaces the public site is set in.
@@ -75,7 +76,7 @@ The product specification is `docs/project-brief.md`.
 | 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                    |
 | 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
 | 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                              |
-| 11    | The top bar's height and its two type sizes moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders                                                                                                                       |
+| 11    | The top bar's height, its two type sizes and the space around the page moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders. Vertical rhythm moved out of the pages and into the layout                                |
 
 ---
 
@@ -201,6 +202,13 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **The site layout owns the vertical space around the page; no page sets its own.**
+  Every page used to carry its own `pt-*`/`pb-*` — between `pt-10` and `sm:pt-24` — and the
+  footer added a further `mt-24` underneath, so the gap above the content and the gap below
+  it were never the same number, on any page. One `py-[var(--content-space)]` on `#main`
+  replaces all of it, which is what lets a single control keep the two ends equal. Putting
+  vertical padding back on a page silently breaks that setting for that page only.
 
 - **The header's height is a `min-height`, and the panel has to say so.** A fixed height
   would clip the artist's name in a large face, and would fight the nav wrapping to a

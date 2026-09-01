@@ -13,10 +13,11 @@ import {
 
 describe("headerStyle", () => {
   it("passes through a style already in range", () => {
-    expect(headerStyle({ height: 90, nameSize: 22, navSize: 13 })).toEqual({
+    expect(headerStyle({ height: 90, nameSize: 22, navSize: 13, contentSpace: 40 })).toEqual({
       height: 90,
       nameSize: 22,
       navSize: 13,
+      contentSpace: 40,
     });
   });
 
@@ -26,27 +27,27 @@ describe("headerStyle", () => {
    * site would refuse is the one bug this arrangement exists to prevent.
    */
   it("clamps every field to its bounds", () => {
-    const low = headerStyle({ height: -50, nameSize: 0, navSize: 1 });
+    const low = headerStyle({ height: -50, nameSize: 0, navSize: 1, contentSpace: -300 });
     expect(low).toEqual({
       height: HEADER_LIMITS.height.min,
       nameSize: HEADER_LIMITS.nameSize.min,
       navSize: HEADER_LIMITS.navSize.min,
+      contentSpace: HEADER_LIMITS.contentSpace.min,
     });
 
-    const high = headerStyle({ height: 9000, nameSize: 400, navSize: 99 });
+    const high = headerStyle({ height: 9000, nameSize: 400, navSize: 99, contentSpace: 9000 });
     expect(high).toEqual({
       height: HEADER_LIMITS.height.max,
       nameSize: HEADER_LIMITS.nameSize.max,
       navSize: HEADER_LIMITS.navSize.max,
+      contentSpace: HEADER_LIMITS.contentSpace.max,
     });
   });
 
   it("rounds, so a fractional value cannot reach the stylesheet", () => {
-    expect(headerStyle({ height: 76.6, nameSize: 18.2, navSize: 14.5 })).toEqual({
-      height: 77,
-      nameSize: 18,
-      navSize: 15,
-    });
+    expect(
+      headerStyle({ height: 76.6, nameSize: 18.2, navSize: 14.5, contentSpace: 63.4 }),
+    ).toEqual({ height: 77, nameSize: 18, navSize: 15, contentSpace: 63 });
   });
 
   it("falls back to the defaults for anything missing", () => {
@@ -69,17 +70,28 @@ describe("headerStyleFromSettings", () => {
   // two vocabularies meet, so a swapped pair would be silent everywhere else.
   it("maps the prefixed columns onto the style", () => {
     expect(
-      headerStyleFromSettings({ headerHeight: 90, headerNameSize: 24, headerNavSize: 16 }),
-    ).toEqual({ height: 90, nameSize: 24, navSize: 16 });
+      headerStyleFromSettings({
+        headerHeight: 90,
+        headerNameSize: 24,
+        headerNavSize: 16,
+        contentSpace: 48,
+      }),
+    ).toEqual({ height: 90, nameSize: 24, navSize: 16, contentSpace: 48 });
   });
 
   it("clamps what it reads, so a hand-edited row cannot reach the stylesheet", () => {
     expect(
-      headerStyleFromSettings({ headerHeight: 5000, headerNameSize: 2, headerNavSize: 900 }),
+      headerStyleFromSettings({
+        headerHeight: 5000,
+        headerNameSize: 2,
+        headerNavSize: 900,
+        contentSpace: -1,
+      }),
     ).toEqual({
       height: HEADER_LIMITS.height.max,
       nameSize: HEADER_LIMITS.nameSize.min,
       navSize: HEADER_LIMITS.navSize.max,
+      contentSpace: HEADER_LIMITS.contentSpace.min,
     });
   });
 });
@@ -107,20 +119,43 @@ describe("exceedsHeight", () => {
   });
 });
 
+describe("contentSpace", () => {
+  /**
+   * The artist asked for the gap above her work and the gap below it to match.
+   * One field is what guarantees that: two would only ever be used to make
+   * them disagree, and the layout applies this single value to both ends.
+   */
+  it("is one number, and zero is a legitimate value rather than a mistake", () => {
+    expect(HEADER_LIMITS.contentSpace.min).toBe(0);
+    expect(headerStyle({ contentSpace: 0 }).contentSpace).toBe(0);
+  });
+
+  it("is emitted as a single token, so both ends cannot drift apart", () => {
+    const tokens = headerTokens(headerStyle({ contentSpace: 96 }));
+    expect(tokens["--content-space"]).toBe("96px");
+    expect(Object.keys(tokens).filter((k) => k.includes("space"))).toHaveLength(1);
+  });
+});
+
 describe("headerTokens", () => {
   it("emits pixel values for the three properties the header reads", () => {
-    expect(headerTokens({ height: 80, nameSize: 20, navSize: 12 })).toEqual({
+    expect(headerTokens({ height: 80, nameSize: 20, navSize: 12, contentSpace: 48 })).toEqual({
       "--header-height": "80px",
       "--header-name-size": "20px",
       "--header-nav-size": "12px",
+      "--content-space": "48px",
     });
   });
 
   // The layout interpolates this into a <style> element, so a stray brace or
   // angle bracket would have to come from a number that was never a number.
   it("serialises to a declaration body with no markup in it", () => {
-    const css = headerTokenCss(headerStyle({ height: 80, nameSize: 20, navSize: 12 }));
-    expect(css).toBe("--header-height:80px;--header-name-size:20px;--header-nav-size:12px");
+    const css = headerTokenCss(
+      headerStyle({ height: 80, nameSize: 20, navSize: 12, contentSpace: 48 }),
+    );
+    expect(css).toBe(
+      "--header-height:80px;--header-name-size:20px;--header-nav-size:12px;--content-space:48px",
+    );
     expect(css).not.toMatch(/[<>{}]/);
   });
 });

@@ -80,7 +80,7 @@ export default async function SettingsPage() {
 
       <SettingsSection
         title="The top bar"
-        hint="How tall it is, and how large your name and the links are set. Everything here shows in the preview as you drag."
+        hint="How tall it is, how large your name and the links are set, and how much room your work has beneath it. Everything here shows in the preview as you drag."
       >
         <HeaderStyleField
           initial={headerStyleFromSettings(settings)}

@@ -1,5 +1,6 @@
 /**
- * The proportions of the top bar, which the artist sets herself.
+ * The proportions of the top bar and the space it leaves around the page,
+ * which the artist sets herself.
  *
  * Pure, and shared by three surfaces that must agree: the site layout emits
  * these as custom properties, the header consumes them, and the settings
@@ -15,9 +16,21 @@ export interface HeaderStyle {
   nameSize: number;
   /** Every link in the bar — the artist's pages and the fixed ones alike. */
   navSize: number;
+  /**
+   * The gap above the content and below it, in pixels.
+   *
+   * One number for both ends deliberately: the two were asked to match, and a
+   * separate control for each could only be used to make them disagree.
+   */
+  contentSpace: number;
 }
 
-export const HEADER_DEFAULTS: HeaderStyle = { height: 76, nameSize: 18, navSize: 14 };
+export const HEADER_DEFAULTS: HeaderStyle = {
+  height: 76,
+  nameSize: 18,
+  navSize: 14,
+  contentSpace: 64,
+};
 
 /**
  * The bounds each control moves between.
@@ -35,6 +48,9 @@ export const HEADER_LIMITS = {
   height: { min: 56, max: 180 },
   nameSize: { min: 12, max: 54 },
   navSize: { min: 10, max: 30 },
+  // Zero is a legitimate choice, not a mistake: work that runs straight up
+  // under the bar is a real way to hang a wall.
+  contentSpace: { min: 0, max: 160 },
 } as const;
 
 const clamp = (value: number, { min, max }: { min: number; max: number }): number =>
@@ -45,6 +61,10 @@ export const headerStyle = (raw: Partial<HeaderStyle> | null | undefined): Heade
   height: clamp(raw?.height ?? HEADER_DEFAULTS.height, HEADER_LIMITS.height),
   nameSize: clamp(raw?.nameSize ?? HEADER_DEFAULTS.nameSize, HEADER_LIMITS.nameSize),
   navSize: clamp(raw?.navSize ?? HEADER_DEFAULTS.navSize, HEADER_LIMITS.navSize),
+  contentSpace: clamp(
+    raw?.contentSpace ?? HEADER_DEFAULTS.contentSpace,
+    HEADER_LIMITS.contentSpace,
+  ),
 });
 
 /**
@@ -58,11 +78,13 @@ export const headerStyleFromSettings = (settings: {
   headerHeight: number;
   headerNameSize: number;
   headerNavSize: number;
+  contentSpace: number;
 }): HeaderStyle =>
   headerStyle({
     height: settings.headerHeight,
     nameSize: settings.headerNameSize,
     navSize: settings.headerNavSize,
+    contentSpace: settings.contentSpace,
   });
 
 /**
@@ -98,6 +120,7 @@ export const headerTokens = (style: HeaderStyle): Record<string, string> => ({
   "--header-height": `${style.height}px`,
   "--header-name-size": `${style.nameSize}px`,
   "--header-nav-size": `${style.navSize}px`,
+  "--content-space": `${style.contentSpace}px`,
 });
 
 /** The same properties as a CSS declaration body, for the layout's `<style>`. */

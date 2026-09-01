@@ -4,7 +4,7 @@ import { Mark } from "@/components/mark";
 
 export default function NotFound() {
   return (
-    <Container className="pt-24 pb-4">
+    <Container>
       <Mark className="text-line h-20 w-20 -scale-x-100" />
       <h1 className="font-display mt-6 text-4xl tracking-tight sm:text-5xl">
         Walked off somewhere

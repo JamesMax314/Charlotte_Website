@@ -39,7 +39,7 @@ export default async function AboutPage() {
       : null;
 
   return (
-    <Container className="pt-16 pb-4">
+    <Container>
       <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
         {/*
           Below lg the grid collapses to one column and the photo stacks above

@@ -96,7 +96,14 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         Skip to content
       </a>
       <SiteHeader />
-      <div id="main" className="flex-1">
+      {/*
+        The space between the chrome and the page is owned here, not by each
+        page. Every page used to set its own top and bottom padding and the
+        footer added a further 96px beneath, so the gap above the content and
+        the gap below it were never the same twice — which is exactly what the
+        artist now has one control for.
+      */}
+      <div id="main" className="flex-1 py-[var(--content-space,64px)]">
         {children}
       </div>
       <SiteFooter />

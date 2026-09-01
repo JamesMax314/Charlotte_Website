@@ -303,6 +303,17 @@ export const siteSettings = sqliteTable("site_settings", {
   headerNavSize: integer("header_nav_size").notNull().default(14),
 
   /*
+    The space between the bar and the page, and between the page and the
+    footer — one number, because the artist asked for the two to match and a
+    pair of controls could only ever be used to make them disagree.
+
+    Owned by the site layout rather than each page. Before this, every page set
+    its own and the footer added a further 96px on top, so the gap above the
+    content and the gap below it were never the same number twice.
+  */
+  contentSpace: integer("content_space").notNull().default(64),
+
+  /*
     The faces the public site is set in. Keys into the font registry
     (src/lib/fonts.ts) rather than an enum, for the same reason as
     `wall_texts.font`: an uploaded font joins the same list with no migration.

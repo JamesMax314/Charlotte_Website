@@ -109,7 +109,8 @@ export function HeaderStyleField({
     if (
       style.height === initial.height &&
       style.nameSize === initial.nameSize &&
-      style.navSize === initial.navSize
+      style.navSize === initial.navSize &&
+      style.contentSpace === initial.contentSpace
     ) {
       return;
     }
@@ -177,21 +178,33 @@ export function HeaderStyleField({
             </ul>
           </div>
 
-          {/* A little of the page beneath it, so the bar has something to sit against. */}
-          <div className="px-5 py-6">
+          {/*
+            The gap, a slab standing in for the page, then the same gap again
+            and the top of the footer. Drawn at full size rather than scaled,
+            because a gap shown at half its height would answer the question
+            wrongly — and because seeing the two ends match is the whole reason
+            there is one control rather than two.
+          */}
+          <div className="px-5 py-[var(--content-space)]">
             <div className="bg-paper-sunk h-16 w-full" />
+          </div>
+          <div className="border-line mx-5 border-t pt-4 pb-5">
+            <span className="text-graphite text-[length:var(--header-nav-size)]">
+              The footer starts here
+            </span>
           </div>
         </div>
 
         <p className="text-graphite mt-2 text-xs">
-          The bar is {renderedHeight(style)}px tall.{" "}
+          The bar is {renderedHeight(style)}px tall, with {style.contentSpace}px above your work and
+          the same below it.{" "}
           {outgrown
             ? "Your name needs more room than the height you chose, so the bar has grown to fit it — raise the height, or use a smaller name."
             : "On a phone the links wrap underneath, and the bar grows to suit."}
         </p>
       </div>
 
-      <div className="grid max-w-2xl gap-5 sm:grid-cols-3">
+      <div className="grid max-w-3xl gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <Slider
           label="Bar height"
           value={style.height}
@@ -214,6 +227,14 @@ export function HeaderStyleField({
           min={HEADER_LIMITS.navSize.min}
           max={HEADER_LIMITS.navSize.max}
           onInput={(navSize) => patch({ navSize })}
+          onCommit={commit}
+        />
+        <Slider
+          label="Space above and below"
+          value={style.contentSpace}
+          min={HEADER_LIMITS.contentSpace.min}
+          max={HEADER_LIMITS.contentSpace.max}
+          onInput={(contentSpace) => patch({ contentSpace })}
           onCommit={commit}
         />
       </div>

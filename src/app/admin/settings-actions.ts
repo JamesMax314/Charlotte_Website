@@ -125,12 +125,14 @@ export async function setHeaderStyle(patch: Partial<HeaderStyle>): Promise<void>
     height: patch.height ?? current.headerHeight,
     nameSize: patch.nameSize ?? current.headerNameSize,
     navSize: patch.navSize ?? current.headerNavSize,
+    contentSpace: patch.contentSpace ?? current.contentSpace,
   });
 
   await upsertSiteSettings({
     headerHeight: next.height,
     headerNameSize: next.nameSize,
     headerNavSize: next.navSize,
+    contentSpace: next.contentSpace,
   });
   refresh();
 }

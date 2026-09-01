@@ -154,6 +154,7 @@ const SETTINGS_FALLBACK = {
   headerHeight: HEADER_DEFAULTS.height,
   headerNameSize: HEADER_DEFAULTS.nameSize,
   headerNavSize: HEADER_DEFAULTS.navSize,
+  contentSpace: HEADER_DEFAULTS.contentSpace,
   // Only reached when D1 is unavailable. A stored empty string spreads *over*
   // these, so the pages fall back themselves — see src/lib/default-copy.ts.
   aboutCopy: DEFAULT_ABOUT_COPY,

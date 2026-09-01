@@ -20,7 +20,7 @@ export default async function ContactPage() {
   const body = written.length > 0 ? written : toParagraphs(DEFAULT_CONTACT_COPY);
 
   return (
-    <Container className="pt-16 pb-4">
+    <Container>
       <div className="max-w-prose">
         <h1 className="font-display text-4xl tracking-tight sm:text-5xl">Contact</h1>
 

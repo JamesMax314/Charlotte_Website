@@ -19,7 +19,7 @@ export default async function ShopPage() {
   const artworks = await getPublishedArtworks();
 
   return (
-    <Container className="pt-10 pb-4">
+    <Container>
       <header className="border-line mb-10 border-b pb-6">
         <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Shop</h1>
         <p className="text-graphite mt-2 max-w-prose text-sm">

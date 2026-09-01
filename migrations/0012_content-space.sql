@@ -1,0 +1,1 @@
+ALTER TABLE `site_settings` ADD `content_space` integer DEFAULT 64 NOT NULL;

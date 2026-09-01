@@ -9,7 +9,9 @@ export async function SiteFooter() {
   const settings = await getSiteSettings();
 
   return (
-    <footer className="mt-24">
+    // No top margin: the gap above the footer is the page's bottom padding,
+    // set once in the site layout so it matches the gap under the top bar.
+    <footer>
       <Container>
         <DrawnRule />
       </Container>
