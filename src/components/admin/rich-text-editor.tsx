@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   activeSpanMark,
   applyDocToElement,
@@ -93,6 +94,7 @@ export function RichTextEditor({
   minHeight,
   style,
   toolbar = true,
+  layout = "top",
 }: {
   value: RichDoc;
   onChange: (doc: RichDoc) => void;
@@ -104,6 +106,15 @@ export function RichTextEditor({
   style?: React.CSSProperties;
   /** Off for the wall, whose boxes carry the toolbar in their own panel. */
   toolbar?: boolean;
+  /**
+   * Where the controls sit.
+   *
+   * `top` for a field with room above it. `side` for the wall, where a bar
+   * across the top pushed the artist's text down inside a box she had sized
+   * herself, and wrapped out of sight entirely in any box narrower than the
+   * controls.
+   */
+  layout?: "top" | "side";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [colourOpen, setColourOpen] = useState(false);
@@ -128,6 +139,42 @@ export function RichTextEditor({
     // would reseed the box — losing the caret — whenever the parent re-rendered.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
+
+  /*
+    Where the side panel sits, in viewport coordinates.
+
+    Followed rather than computed once: the box can be dragged, resized or
+    scrolled while it is being edited, and a panel that stayed where the box
+    used to be would be worse than one across the top.
+  */
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    if (!toolbar || layout !== "side") return;
+    const el = ref.current;
+    if (!el) return;
+
+    const PANEL = 176; // w-44, and the gap either side
+    const place = () => {
+      const box = el.getBoundingClientRect();
+      // Flips to the left of the box rather than hanging off the window.
+      const right = box.right + 8;
+      const left = right + PANEL > window.innerWidth ? box.left - PANEL - 8 : right;
+      setAnchor({ left: Math.max(8, left), top: Math.max(8, box.top) });
+    };
+
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(el);
+    // Capture, because the canvas scrolls inside the page rather than with it.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [toolbar, layout]);
 
   const read = useCallback(() => {
     const el = ref.current;
@@ -211,160 +258,203 @@ export function RichTextEditor({
     command("createLink", href);
   };
 
-  return (
-    <div className="flex flex-col">
-      {toolbar && (
-        <div
-          className="border-line bg-paper-sunk/60 flex flex-wrap items-center gap-1 border border-b-0 p-1.5"
-          role="toolbar"
-          aria-label={`Formatting for ${ariaLabel}`}
-        >
-          <select
-            aria-label="Typeface"
-            value={active.font ?? ""}
-            onChange={(e) => e.target.value && span({ font: e.target.value })}
-            className="border-line focus:border-ink max-w-36 border bg-transparent px-1 py-1 text-xs outline-none"
-          >
-            {/*
+  const controls = (
+    <>
+      <select
+        aria-label="Typeface"
+        value={active.font ?? ""}
+        onChange={(e) => e.target.value && span({ font: e.target.value })}
+        className={`border-line focus:border-ink w-full border bg-transparent px-1 py-1 text-xs outline-none ${
+          layout === "top" ? "max-w-36" : ""
+        }`}
+      >
+        {/*
               Disabled, not hidden: it is how the box reports "no face of its
               own, inheriting the one the box is set in", and Chrome still
               shows a disabled option as the current value. Selectable, it
               would be a choice that does nothing.
             */}
-            <option value="" disabled>
-              Box typeface
-            </option>
-            {fonts.map((font) => (
-              <option key={font.id} value={font.id} style={{ fontFamily: font.family }}>
-                {font.label}
-              </option>
-            ))}
-          </select>
+        <option value="" disabled>
+          Box typeface
+        </option>
+        {fonts.map((font) => (
+          <option key={font.id} value={font.id} style={{ fontFamily: font.family }}>
+            {font.label}
+          </option>
+        ))}
+      </select>
 
-          <select
-            aria-label="Size"
-            // Normal is a real value rather than a placeholder: a run at 1 is
-            // stored as no size mark at all, so the two agree by construction.
-            value={String(active.size ?? 1)}
-            onChange={(e) => span({ size: Number(e.target.value) })}
-            className="border-line focus:border-ink border bg-transparent px-1 py-1 text-xs outline-none"
-          >
-            {SIZES.map((size) => (
-              <option key={size.label} value={size.value}>
-                {size.label}
-              </option>
-            ))}
-          </select>
+      <select
+        aria-label="Size"
+        // Normal is a real value rather than a placeholder: a run at 1 is
+        // stored as no size mark at all, so the two agree by construction.
+        value={String(active.size ?? 1)}
+        onChange={(e) => span({ size: Number(e.target.value) })}
+        className="border-line focus:border-ink border bg-transparent px-1 py-1 text-xs outline-none"
+      >
+        {SIZES.map((size) => (
+          <option key={size.label} value={size.value}>
+            {size.label}
+          </option>
+        ))}
+      </select>
 
-          <span className="bg-line mx-0.5 h-5 w-px" aria-hidden="true" />
+      <span
+        className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}
+        aria-hidden="true"
+      />
 
+      <div className={layout === "side" ? "flex gap-1" : "contents"}>
+        <button
+          type="button"
+          aria-label="Bold"
+          onClick={() => command("bold")}
+          className={`${BUTTON} font-bold`}
+        >
+          B
+        </button>
+        <button
+          type="button"
+          aria-label="Italic"
+          onClick={() => command("italic")}
+          className={`${BUTTON} italic`}
+        >
+          I
+        </button>
+        <button
+          type="button"
+          aria-label="Underline"
+          onClick={() => command("underline")}
+          className={`${BUTTON} underline`}
+        >
+          U
+        </button>
+      </div>
+
+      <span
+        className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}
+        aria-hidden="true"
+      />
+
+      <div className={layout === "side" ? "flex items-center gap-1" : "contents"}>
+        <div className="relative">
           <button
             type="button"
-            aria-label="Bold"
-            onClick={() => command("bold")}
-            className={`${BUTTON} font-bold`}
+            aria-label="Text colour"
+            aria-expanded={colourOpen}
+            onClick={() => setColourOpen((o) => !o)}
+            className={BUTTON}
           >
-            B
+            <span className="border-line h-3 w-3 border bg-current" aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            aria-label="Italic"
-            onClick={() => command("italic")}
-            className={`${BUTTON} italic`}
-          >
-            I
-          </button>
-          <button
-            type="button"
-            aria-label="Underline"
-            onClick={() => command("underline")}
-            className={`${BUTTON} underline`}
-          >
-            U
-          </button>
-
-          <span className="bg-line mx-0.5 h-5 w-px" aria-hidden="true" />
-
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="Text colour"
-              aria-expanded={colourOpen}
-              onClick={() => setColourOpen((o) => !o)}
-              className={BUTTON}
-            >
-              <span className="border-line h-3 w-3 border bg-current" aria-hidden="true" />
-            </button>
-            {colourOpen && (
-              <div className="border-line bg-paper absolute top-8 left-0 z-50 flex w-40 flex-wrap gap-2 border p-2 shadow-lg">
-                {SWATCHES.map((hex) => (
-                  <button
-                    key={hex}
-                    type="button"
-                    aria-label={hex}
-                    onClick={() => {
-                      span({ colour: hex });
-                      setColourOpen(false);
-                    }}
-                    className="border-line h-6 w-6 border"
-                    style={{ background: hex }}
-                  />
-                ))}
-                <input
-                  type="color"
-                  aria-label="Pick a colour"
-                  onChange={(e) => span({ colour: e.target.value })}
-                  className="h-7 w-full cursor-pointer bg-transparent"
+          {colourOpen && (
+            <div className="border-line bg-paper absolute top-8 left-0 z-50 flex w-40 flex-wrap gap-2 border p-2 shadow-lg">
+              {SWATCHES.map((hex) => (
+                <button
+                  key={hex}
+                  type="button"
+                  aria-label={hex}
+                  onClick={() => {
+                    span({ colour: hex });
+                    setColourOpen(false);
+                  }}
+                  className="border-line h-6 w-6 border"
+                  style={{ background: hex }}
                 />
-              </div>
-            )}
-          </div>
+              ))}
+              <input
+                type="color"
+                aria-label="Pick a colour"
+                onChange={(e) => span({ colour: e.target.value })}
+                className="h-7 w-full cursor-pointer bg-transparent"
+              />
+            </div>
+          )}
+        </div>
 
-          <div className="relative">
-            <button
-              type="button"
-              aria-label="Add a link"
-              aria-expanded={linkOpen}
-              onClick={() => setLinkOpen((o) => !o)}
-              className={BUTTON}
-            >
-              link
-            </button>
-            {linkOpen && (
-              <div className="border-line bg-paper absolute top-8 left-0 z-50 flex w-64 flex-col gap-2 border p-2 shadow-lg">
-                <input
-                  autoFocus
-                  value={linkDraft}
-                  onChange={(e) => setLinkDraft(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addLink()}
-                  placeholder="https://… or /exhibitions"
-                  spellCheck={false}
-                  className="border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none"
-                />
-                <div className="flex gap-2">
-                  <button type="button" onClick={addLink} className={BUTTON}>
-                    Link
-                  </button>
-                  <button type="button" onClick={() => command("unlink")} className={BUTTON}>
-                    Unlink
-                  </button>
-                </div>
-                <p className="text-graphite text-[11px]">
-                  Select the words first. Web addresses need https://
-                </p>
-              </div>
-            )}
-          </div>
-
+        <div className="relative">
           <button
             type="button"
-            onClick={() => command("removeFormat")}
-            className={`${BUTTON} text-graphite`}
+            aria-label="Add a link"
+            aria-expanded={linkOpen}
+            onClick={() => setLinkOpen((o) => !o)}
+            className={BUTTON}
           >
-            Clear
+            link
           </button>
+          {linkOpen && (
+            <div className="border-line bg-paper absolute top-8 left-0 z-50 flex w-64 flex-col gap-2 border p-2 shadow-lg">
+              <input
+                autoFocus
+                value={linkDraft}
+                onChange={(e) => setLinkDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addLink()}
+                placeholder="https://… or /exhibitions"
+                spellCheck={false}
+                className="border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={addLink} className={BUTTON}>
+                  Link
+                </button>
+                <button type="button" onClick={() => command("unlink")} className={BUTTON}>
+                  Unlink
+                </button>
+              </div>
+              <p className="text-graphite text-[11px]">
+                Select the words first. Web addresses need https://
+              </p>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => command("removeFormat")}
+          className={`${BUTTON} text-graphite`}
+        >
+          Clear
+        </button>
+      </div>
+    </>
+  );
+
+  /*
+    Side placement is portalled, and has to be. The canvas clips to its own
+    bounds so the editor matches what visitors see, and every text box sits in a
+    positioned element carrying its own z-index — so a panel left in the tree is
+    clipped away for a box near the canvas edge and painted under the artwork
+    for the rest. The context menu portals for exactly this reason.
+  */
+  const sidePanel =
+    toolbar && layout === "side" && anchor !== null && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            role="toolbar"
+            aria-orientation="vertical"
+            aria-label={`Formatting for ${ariaLabel}`}
+            className="border-line fixed z-[9999] flex w-44 flex-col items-stretch gap-1.5 border p-2 shadow-xl"
+            // Opaque rather than inherited: it stands over artwork.
+            style={{ left: anchor.left, top: anchor.top, backgroundColor: "var(--paper)" }}
+          >
+            {controls}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <div className="flex h-full flex-col">
+      {toolbar && layout === "top" && (
+        <div
+          className="border-line bg-paper-sunk/60 flex flex-wrap items-center gap-1 border border-b-0 p-1.5"
+          role="toolbar"
+          aria-label={`Formatting for ${ariaLabel}`}
+        >
+          {controls}
         </div>
       )}
+      {sidePanel}
 
       <div
         ref={ref}

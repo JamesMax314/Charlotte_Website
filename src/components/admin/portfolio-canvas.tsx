@@ -589,10 +589,11 @@ export function PortfolioCanvas({
               >
                 {selected ? (
                   /*
-                    The formatting controls sit along the top of the box, which
-                    is what the brief asks for and what makes "apply to what I
-                    type next" legible: the artist can see the marks she has
-                    armed while the caret is still where she left it.
+                    The controls stand beside the box, not above it. A bar
+                    across the top pushed her text down inside a box she had
+                    sized herself, and in any box narrower than the controls it
+                    wrapped out of sight — so the settings appeared to do
+                    nothing at exactly the sizes where they matter most.
                   */
                   <div
                     onPointerDown={(e) => e.stopPropagation()}
@@ -603,7 +604,8 @@ export function PortfolioCanvas({
                       onChange={(rich) => patchText(text.id, { rich })}
                       fonts={fonts}
                       ariaLabel="this text box"
-                      className="w-full bg-transparent p-1 leading-snug"
+                      layout="side"
+                      className="h-full w-full bg-transparent p-1 leading-snug"
                       style={textStyle(text, { fonts })}
                     />
                   </div>
