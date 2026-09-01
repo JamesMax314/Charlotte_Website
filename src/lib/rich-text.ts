@@ -52,6 +52,31 @@ export const RICH_LIMITS = {
   size: { min: 0.4, max: 6 },
 } as const;
 
+/**
+ * A run's size in points, given the size of the box it sits in.
+ *
+ * Runs store a *multiple* of the surrounding size, not an absolute one, so
+ * that a box holding mixed sizes stays coherent when it is resized and so type
+ * still scales with the wall. Points are therefore a view, computed against
+ * whatever the box is currently set to — which is why this takes a base rather
+ * than reading one.
+ */
+export const runSizeInPt = (basePt: number, multiple = 1): number => basePt * multiple;
+
+/**
+ * The multiple to store for a point size the artist typed.
+ *
+ * Rounded to two decimals and clamped to the same bounds as `clampSize`, which
+ * sanitises it again on the way into the database — a run at exactly the box's
+ * size is stored as no size mark at all, so typing the base size clears the
+ * mark rather than writing a redundant 1.
+ */
+export const runSizeFromPt = (basePt: number, pt: number): number => {
+  if (!(basePt > 0)) return 1;
+  const multiple = Math.round((pt / basePt) * 100) / 100;
+  return Math.min(Math.max(multiple, RICH_LIMITS.size.min), RICH_LIMITS.size.max);
+};
+
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /**

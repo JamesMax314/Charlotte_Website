@@ -7,6 +7,7 @@ import {
   aspectOf,
   canvasHeightRatio,
   coverImage,
+  cqwToPt,
   HOME_WALL,
   textStyle,
   type PortfolioItem,
@@ -607,6 +608,9 @@ export function PortfolioCanvas({
                       layout="side"
                       className="h-full w-full bg-transparent p-1 leading-snug"
                       style={textStyle(text, { fonts })}
+                      // Run sizes are a multiple of this, so the panel can
+                      // only show points if it knows what the box is set to.
+                      basePt={cqwToPt(text.fontSize)}
                     />
                   </div>
                 ) : (

@@ -10,7 +10,14 @@ import {
   type SpanMark,
 } from "@/lib/rich-dom";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
-import { docToPlain, safeHref, type RichDoc } from "@/lib/rich-text";
+import {
+  RICH_LIMITS,
+  docToPlain,
+  runSizeFromPt,
+  runSizeInPt,
+  safeHref,
+  type RichDoc,
+} from "@/lib/rich-text";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
 
 /**
@@ -36,15 +43,6 @@ import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
 
 const BUTTON =
   "border-line hover:border-ink flex h-7 min-w-7 items-center justify-center border px-1.5 text-xs transition-colors";
-
-/** Relative, because the wall sizes its boxes in `cqw` and runs must scale with them. */
-const SIZES: { label: string; value: number }[] = [
-  { label: "Small", value: 0.75 },
-  { label: "Normal", value: 1 },
-  { label: "Large", value: 1.4 },
-  { label: "Larger", value: 2 },
-  { label: "Huge", value: 3 },
-];
 
 const SWATCHES = [INK, "#6d6a66", DEFAULT_ACCENT, PAPER, "#2140d6"];
 
@@ -93,6 +91,7 @@ export function RichTextEditor({
   ariaLabel,
   minHeight,
   style,
+  basePt = 12,
   toolbar = true,
   layout = "top",
 }: {
@@ -104,6 +103,13 @@ export function RichTextEditor({
   minHeight?: string;
   /** The box's base type, which runs are relative to. */
   style?: React.CSSProperties;
+  /**
+   * The size of the box this text sits in, in points, which run sizes are
+   * shown against. Runs store a multiple, so points only mean anything
+   * relative to something — on the wall that is the box's own size, and in a
+   * settings field it is body copy at 12pt.
+   */
+  basePt?: number;
   /** Off for the wall, whose boxes carry the toolbar in their own panel. */
   toolbar?: boolean;
   /**
@@ -203,6 +209,8 @@ export function RichTextEditor({
     copy of "where am I" is a second thing that can be wrong.
   */
   const [active, setActive] = useState<SpanMark>({});
+  /* Held while she types, for the reason given on the same field in TextToolbar. */
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
 
   useEffect(() => {
     const remember = () => {
@@ -284,20 +292,35 @@ export function RichTextEditor({
         ))}
       </select>
 
-      <select
-        aria-label="Size"
-        // Normal is a real value rather than a placeholder: a run at 1 is
-        // stored as no size mark at all, so the two agree by construction.
-        value={String(active.size ?? 1)}
-        onChange={(e) => span({ size: Number(e.target.value) })}
-        className="border-line focus:border-ink border bg-transparent px-1 py-1 text-xs outline-none"
-      >
-        {SIZES.map((size) => (
-          <option key={size.label} value={size.value}>
-            {size.label}
-          </option>
-        ))}
-      </select>
+      {/*
+        Points, converted against the box the text sits in. The stored value is
+        still a multiple — see runSizeInPt — so this number moves if the box is
+        resized, which is the price of type that scales with the wall.
+      */}
+      <span className="relative inline-flex items-center">
+        <input
+          type="number"
+          aria-label="Size"
+          min={Math.ceil(runSizeInPt(basePt, RICH_LIMITS.size.min))}
+          max={Math.floor(runSizeInPt(basePt, RICH_LIMITS.size.max))}
+          step={1}
+          value={sizeDraft ?? Math.round(runSizeInPt(basePt, active.size ?? 1))}
+          onChange={(e) => {
+            setSizeDraft(e.target.value);
+            const pt = Number(e.target.value);
+            if (!Number.isFinite(pt) || pt <= 0) return;
+            span({ size: runSizeFromPt(basePt, pt) });
+          }}
+          onBlur={() => setSizeDraft(null)}
+          className="border-line focus:border-ink w-16 border bg-transparent py-1 pr-6 pl-1.5 text-xs outline-none"
+        />
+        <span
+          aria-hidden
+          className="text-graphite/70 pointer-events-none absolute right-1.5 text-[10px]"
+        >
+          pt
+        </span>
+      </span>
 
       <span
         className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}
