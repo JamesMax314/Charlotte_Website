@@ -201,13 +201,28 @@ Non-obvious decisions that the code alone does not explain.
   `src/components/fade-in.tsx` now keeps a single module-level set of pending targets and
   measures them with `getBoundingClientRect`, so every piece is revealed the same way.
 
-- **The opening screenful is revealed by the inline script, not by React.** Nothing can
-  fade in while `js-fade` hides it, so while the reveal lived only in the component the
-  wall stayed blank for exactly as long as the bundle took to arrive and hydrate — seconds
-  on a phone, and read as a slow site rather than a broken one. The script already runs
-  during parsing, so it does the first pass itself and `FadeIn` owns only what is below the
-  fold, which a visitor cannot reach before the bundle lands. The band and stagger figures
-  are duplicated there out of necessity: it runs before any module can be imported.
+- **The whole reveal is the inline script, and `FadeIn` is not a client component.**
+  Nothing can fade in while `js-fade` hides it, so any reveal that waits for the bundle is
+  a wall that waits for the bundle. Splitting it made that worse rather than better: with
+  the opening pass inline and the rest in React, a phone showed the first screenful and
+  then nothing, because hydration never completed and the safety net had been disabled by
+  its own guard (below). The script in `src/lib/fade-script.ts` now owns scroll, resize,
+  image `load` and a poll, and `src/components/fade-in.tsx` only emits the class. A fade is
+  presentation; it must not depend on hydration. Do not move any part of it back.
+
+- **The safety net asks whether a pass ever ran, never whether anything is visible.** The
+  visible test looked equivalent and was not: the opening pass always reveals something, so
+  the net switched itself off permanently and stranded everything below the fold the moment
+  it started working. It also must not reveal on its deadline — that flattens the feature
+  into a five-second delay, which is exactly what the bug looked like from a phone.
+
+- **`src/lib/fade-script.test.ts` runs the real script against a DOM, and the assertions
+  about events must advance the clock by less than the poll.** The reveal broke three times
+  while `reveal.ts` was fully unit-tested, because every failure was in the wiring rather
+  than the arithmetic. The first version of the DOM test was worthless for the same reason
+  in miniature: it advanced far enough for the poll to do the work, so it passed with the
+  scroll listener deleted. Each mechanism is now proved by deleting it and watching exactly
+  one test fail.
 
 - **That sweep listens for `load` in the capture phase, and that line is load-bearing.**
   Images arriving reflow everything beneath them without firing a scroll event, so without

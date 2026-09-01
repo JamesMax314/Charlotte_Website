@@ -22,6 +22,14 @@ export const REVEAL_BAND = 0.92;
 export const SETTLE_MS = 900;
 
 /**
+ * How often the reveal re-measures regardless of events.
+ *
+ * Scroll and resize cover the ordinary cases; this covers the ones no event
+ * announces, such as a late web font reflowing the wall beneath the fold.
+ */
+export const POLL_INTERVAL_MS = 500;
+
+/**
  * When a piece already on screen at load should begin to fade in.
  *
  * Ordered by vertical position, so the wall assembles from the top down rather
