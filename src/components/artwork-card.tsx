@@ -1,9 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Artwork } from "@/lib/artworks";
-import { headlinePricePence, isSoldOut, primaryImage } from "@/lib/artworks";
+import { isSoldOut, primaryImage, productTypeLabel, soleListing } from "@/lib/artworks";
 import { formatPrice } from "@/lib/format";
 
+/**
+ * One product in the shop grid.
+ *
+ * Every tile is the same 3:4 rectangle whatever shape the photograph is, so
+ * the grid reads as a catalogue rather than a wall — the piece's true
+ * proportions are the product page's job.
+ */
 export function ArtworkCard({
   artwork,
   priority = false,
@@ -12,13 +19,13 @@ export function ArtworkCard({
   priority?: boolean;
 }) {
   const image = primaryImage(artwork);
-  const from = headlinePricePence(artwork);
+  const listing = soleListing(artwork);
   const soldOut = isSoldOut(artwork);
 
   return (
-    <article className="mb-14 break-inside-avoid">
-      <Link href={`/work/${artwork.slug}`} className="group block">
-        <div className="bg-paper-sunk border-line overflow-hidden border">
+    <article>
+      <Link href={`/shop/${artwork.slug}`} className="group block">
+        <div className="bg-paper-sunk border-line relative aspect-[3/4] overflow-hidden border">
           {image ? (
             <Image
               src={image.src}
@@ -26,26 +33,34 @@ export function ArtworkCard({
               width={image.width}
               height={image.height}
               priority={priority}
-              sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
-              className="h-auto w-full transition-transform duration-500 ease-out group-hover:scale-[1.015]"
+              sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 45vw"
+              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.015]"
             />
           ) : (
-            <div className="text-graphite flex aspect-[4/5] items-center justify-center text-xs">
+            <div className="text-graphite flex h-full items-center justify-center px-4 text-center text-xs">
               Photograph coming soon
             </div>
+          )}
+
+          {soldOut && (
+            <span className="bg-ink/80 text-paper absolute top-2 left-2 px-1.5 py-0.5 text-[10px] tracking-wide uppercase">
+              Sold out
+            </span>
           )}
         </div>
 
         {/* The print margin: title left, what it costs right. */}
-        <div className="mt-4 flex items-baseline justify-between gap-4">
+        <div className="mt-3 flex items-baseline justify-between gap-4">
           <h3 className="font-display group-hover:text-accent text-base tracking-tight transition-colors">
             {artwork.title}
           </h3>
-          <span className="text-graphite shrink-0 text-xs tabular-nums">
-            {soldOut ? "Sold out" : from !== null ? `From ${formatPrice(from)}` : artwork.year}
-          </span>
+          {listing && (
+            <span className="shrink-0 text-sm tabular-nums">{formatPrice(listing.pricePence)}</span>
+          )}
         </div>
-        <p className="text-graphite mt-1 text-xs">{artwork.medium}</p>
+        <p className="text-graphite mt-0.5 text-xs">
+          {listing ? productTypeLabel(listing.kind) : artwork.medium}
+        </p>
       </Link>
     </article>
   );
