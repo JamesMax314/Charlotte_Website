@@ -136,6 +136,20 @@ html {
   transform: none;
 }
 
+/*
+  Done. The transition is dropped once it has run, because a transform is what
+  puts a piece on its own compositing layer: below `md` the wall is a tall
+  stack of large images, and holding every one of them on a layer runs a phone
+  out of the memory it decodes images in. It evicts them, and the artwork
+  visibly disappears and comes back as the visitor scrolls.
+*/
+.js-fade .fade-target.is-settled {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  will-change: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Motion off means the content is simply there. */
   .js-fade .fade-target,

@@ -53,6 +53,8 @@ The product specification is `docs/project-brief.md`.
 | 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                     |
 | 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop` |
 | 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                        |
+| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                               |
+| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold                                       |
 
 ---
 
@@ -188,13 +190,51 @@ Non-obvious decisions that the code alone does not explain.
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
 
-- **An IntersectionObserver cannot fade in what is already on screen.** It reports the
-  intersection as soon as it starts observing, so the reveal lands in the same frame as
-  the hidden state and there is nothing to transition from — the piece simply appears.
-  Pieces on screen at load are revealed on a timer instead, staggered by how far down
-  they sit so the wall assembles from the top; only pieces below the fold use the
-  observer. The timing lives in `src/lib/reveal.ts`, pure and unit-tested, because
-  measuring this in a browser proved unreliable.
+- **The reveal is one shared scroll sweep, and must never split into two mechanisms.**
+  It used to pick per element: on screen at mount meant a timer, below the fold meant an
+  IntersectionObserver. Which path dominates is decided by the breakpoint. Above `md` the
+  wall is bounded by an `aspect-ratio` and is roughly one screen tall, so almost every
+  piece took the timer. Below `md` it is a stack thousands of pixels tall, so almost every
+  piece took the observer — which never delivered, leaving the whole gallery blank until
+  the layout's failsafe fired. The bug therefore looked like "Safari is broken" when it was
+  really "tall pages are broken", and a fix aimed at one engine could not have found it.
+  `src/components/fade-in.tsx` now keeps a single module-level set of pending targets and
+  measures them with `getBoundingClientRect`, so every piece is revealed the same way.
+
+- **The whole reveal is the inline script, and `FadeIn` is not a client component.**
+  Nothing can fade in while `js-fade` hides it, so any reveal that waits for the bundle is
+  a wall that waits for the bundle. Splitting it made that worse rather than better: with
+  the opening pass inline and the rest in React, a phone showed the first screenful and
+  then nothing, because hydration never completed and the safety net had been disabled by
+  its own guard (below). The script in `src/lib/fade-script.ts` now owns scroll, resize,
+  image `load` and a poll, and `src/components/fade-in.tsx` only emits the class. A fade is
+  presentation; it must not depend on hydration. Do not move any part of it back.
+
+- **The safety net asks whether a pass ever ran, never whether anything is visible.** The
+  visible test looked equivalent and was not: the opening pass always reveals something, so
+  the net switched itself off permanently and stranded everything below the fold the moment
+  it started working. It also must not reveal on its deadline — that flattens the feature
+  into a five-second delay, which is exactly what the bug looked like from a phone.
+
+- **`src/lib/fade-script.test.ts` runs the real script against a DOM, and the assertions
+  about events must advance the clock by less than the poll.** The reveal broke three times
+  while `reveal.ts` was fully unit-tested, because every failure was in the wiring rather
+  than the arithmetic. The first version of the DOM test was worthless for the same reason
+  in miniature: it advanced far enough for the poll to do the work, so it passed with the
+  scroll listener deleted. Each mechanism is now proved by deleting it and watching exactly
+  one test fail.
+
+- **That sweep listens for `load` in the capture phase, and that line is load-bearing.**
+  Images arriving reflow everything beneath them without firing a scroll event, so without
+  it the pieces under the fold are measured once, at the wrong position, and never again.
+  Capture, because `load` on an image does not bubble.
+
+- **A piece is measured before its image has loaded, so it can be zero-high.** A zero-high
+  box has `bottom === top`, so the obvious `rect.bottom > 0` test rejects anything sitting
+  at the very top of the document and strands it for good. `isWithinRevealBand` floors the
+  height at a pixel for exactly this reason. The timing and geometry live in
+  `src/lib/reveal.ts`, pure and unit-tested, because measuring this in a browser proved
+  unreliable.
 
 - **The fade hides before first paint, via an inline script, not from React.** Hiding
   from the component meant the wall painted once, vanished, then faded — a visible
@@ -205,10 +245,59 @@ Non-obvious decisions that the code alone does not explain.
 
 - **Loading priority is chosen by size and position, never by array index.** The wall's
   array is ordered by layer, so `priority={i === 0}` prioritised whichever piece happened
-  to sit at the back. `lcpCandidateId` picks the largest piece above the fold; the rest of
-  the first screenful merely opts out of lazy loading, so they do not all compete for
-  bandwidth by being preloaded. Lazily loading an image already on screen always delays
-  the Largest Contentful Paint.
+  to sit at the back. `lcpCandidateId` picks the largest piece above the fold.
+
+- **At most two pieces are eager; everything else is lazy.** The rest of the first screenful
+  used to opt out of lazy loading as well, chosen by `y` — a coordinate on the desktop
+  arrangement, which does not exist below `md`. On a phone those pieces are a stack in
+  reading order, so the ones marked eager were mostly far down the page and fetched at
+  full size regardless. Eight 1600px JPEGs decoded at once is past what a phone will hold,
+  so it evicted and refetched them in a loop and the artwork visibly disappeared and came
+  back while scrolling. Lazy costs desktop nothing, because `loading="lazy"` does not defer
+  an image that is already in the viewport — it defers only what the visitor cannot see.
+
+- **The two layouts disagree about which image is the LCP, and one set of markup serves
+  both.** Above `md` it is the largest piece near the top of the arrangement; below `md`
+  that arrangement does not exist and it is simply whatever heads the stack. Prioritising
+  only the desktop answer left the mobile LCP lazily loaded, which Next warns about and
+  which costs the metric the brief puts a budget on. `eagerIds` returns both, which is one
+  piece as often as two — and never the first-screenful fan-out that flooded a phone.
+
+- **The reveal never retires, and its listeners must outlive the page it started on.**
+  Skipping the measurement when nothing is pending is free and correct — `querySelectorAll`
+  costs nothing, `getBoundingClientRect` forces a synchronous layout — but tearing the
+  listeners and the poll down is not. A client-side navigation mounts fresh targets into a
+  document where `js-fade` is still set, so a retired reveal leaves them hidden with nothing
+  left to show them: going into a piece's page and back rendered an empty home page.
+
+- **`FadeIn` carries `suppressHydrationWarning`, for the same reason `<html>` does.** The
+  script reveals by adding classes to that element, and on a phone it has usually finished
+  long before the bundle arrives to hydrate — so the class list React finds can never be
+  the one it sent. The divergence is the mechanism, not a fault. It covers that element
+  alone, so a genuine mismatch anywhere else is still reported.
+
+- **`images.deviceSizes` must stay identical to `WIDTH_LADDER`.** Next builds the srcset
+  from `deviceSizes`, and `src/image-loader.ts` then rounds each width up to a rung that
+  exists in R2. With Next's defaults the two lists disagree and every width is rounded
+  twice: a phone needing 774px picked Next's `828`, which the loader rounded to `1600` —
+  twice the image and four times the decode memory, for nothing. Change one list and you
+  must change the other.
+
+- **The wall's mobile `sizes` is deliberately smaller than the slot it fills.** At `90vw` a
+  3x phone asks for ~1050px and lands on the 1600 rung; at `60vw` every current phone lands
+  on 800, a quarter of the decode memory and still over twice the density of the slot. This
+  looks like a mistake and is not — the honest figure is what put the gallery past what a
+  phone can hold.
+
+- **The fade lets go of the transition once it has run.** A transform is what puts a piece
+  on its own compositing layer, and below `md` the wall is a tall stack of large images —
+  holding every one of them on a layer is the other half of the memory problem above. The
+  `is-settled` class drops the transform and the transition a moment after the reveal.
+
+- **The failsafe reveals the wall; it does not unhide it.** Removing `js-fade` dropped
+  every piece in at once, unfaded — which is precisely what a visitor on a phone saw each
+  time the reveal failed, so the safety net was itself mistaken for the bug. It now adds
+  `is-visible`, making the worst case a graceful fade.
 
 - **The fade defers the LCP, by design.** An element at `opacity: 0` is not contentful, so
   the metric is recorded when a piece reveals rather than when it loads — and the

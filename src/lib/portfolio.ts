@@ -72,6 +72,33 @@ export const lcpCandidateId = (items: PortfolioItem[]): string | null => {
 };
 
 /**
+ * The pieces worth loading eagerly — at most two, usually one.
+ *
+ * The two layouts do not agree on which image is the Largest Contentful Paint,
+ * and one set of markup serves both. Above `md` it is the biggest piece near
+ * the top of the arrangement; below `md` that arrangement does not exist and
+ * the LCP is simply whatever heads the stack, which is the first piece in
+ * reading order. Prioritising only the desktop answer left the mobile LCP
+ * lazily loaded — which Next warns about, and which costs the metric the brief
+ * puts a budget on.
+ *
+ * They are frequently the same piece, and never more than two, so this is a
+ * preload of one image or two rather than the first-screenful fan-out that
+ * previously flooded a phone.
+ */
+export const eagerIds = (items: PortfolioItem[]): Set<string> => {
+  const ids = new Set<string>();
+
+  const desktop = lcpCandidateId(items);
+  if (desktop) ids.add(desktop);
+
+  const mobile = inReadingOrder(items.filter((item) => coverImage(item)))[0];
+  if (mobile) ids.add(mobile.id);
+
+  return ids;
+};
+
+/**
  * Whether a visitor can click through to a piece's own page.
  *
  * Elements placed on a piece's page are always inert: they are part of that

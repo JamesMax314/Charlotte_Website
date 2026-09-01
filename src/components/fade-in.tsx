@@ -1,19 +1,26 @@
-"use client";
-
-import { useEffect, useRef } from "react";
-import { isOnScreenAtLoad, revealDelay } from "@/lib/reveal";
-
 /**
- * Reveals its contents: on a timer for pieces already on screen at load, and
- * on scroll for everything below the fold.
+ * Marks its contents as something the fade reveals.
  *
- * Only used on the public site — the editor never fades, or the artist would
- * be arranging work she cannot see.
+ * Deliberately does no work of its own — no effect, no observer, not even a
+ * client component. The `fade-target` class ships in the server markup, the CSS
+ * only acts on it under `.js-fade`, and the reveal itself belongs to the inline
+ * script in the site layout (`src/lib/fade-script.ts`).
  *
- * The `fade-target` class ships in the server markup, but the CSS only hides it
- * under `.js-fade`, which an inline script in the site layout adds during
- * parsing. Hiding from this component instead meant the content painted once,
- * vanished, then faded — a visible flicker.
+ * Every version of this that revealed from React failed the same way: nothing
+ * can fade in while `js-fade` hides it, so the wall was hostage to the bundle.
+ * On a phone that meant a blank gallery for seconds, and when hydration did not
+ * complete at all, pieces below the fold never appeared. Reverting to an effect
+ * here — or to an IntersectionObserver — reintroduces both.
+ *
+ * `suppressHydrationWarning` is required, for the same reason `<html>` carries
+ * it. The script reveals by adding classes to this element, and on a phone it
+ * has usually done so long before the bundle arrives to hydrate — so the class
+ * list React finds can never be the one it sent. That divergence is the
+ * mechanism, not a fault. It covers this element alone, so a genuine mismatch
+ * anywhere else is still reported.
+ *
+ * Only used on the public site. The editor never fades, or the artist would be
+ * arranging work she cannot see.
  */
 export function FadeIn({
   children,
@@ -28,56 +35,8 @@ export function FadeIn({
   className?: string;
   style?: React.CSSProperties;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    // Older browsers get the content, just not the effect.
-    if (typeof IntersectionObserver === "undefined") {
-      el.classList.add("is-visible");
-      return;
-    }
-
-    const rect = el.getBoundingClientRect();
-
-    /*
-      An observer is the wrong tool for anything already on screen: it reports
-      the intersection as soon as it starts watching, so the reveal lands in
-      the same frame as the hidden state and there is nothing to transition
-      from. Those pieces get a timer instead, staggered by how far down they
-      sit so the wall assembles from the top.
-    */
-    if (isOnScreenAtLoad(rect, window.innerHeight)) {
-      const timer = setTimeout(
-        () => el.classList.add("is-visible"),
-        revealDelay(rect.top, window.innerHeight),
-      );
-      return () => clearTimeout(timer);
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          entry.target.classList.add("is-visible");
-          // Fades once. Re-hiding on scroll back up is distracting, and it
-          // would keep the observer alive for the life of the page.
-          observer.unobserve(entry.target);
-        }
-      },
-      // A little short of the fold, so a piece is already arriving as it
-      // enters rather than popping in after it is fully visible.
-      { rootMargin: "0px 0px -8% 0px" },
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <div ref={ref} className={`fade-target ${className}`.trim()} style={style}>
+    <div className={`fade-target ${className}`.trim()} style={style} suppressHydrationWarning>
       {children}
     </div>
   );
