@@ -10,6 +10,8 @@ import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
 import { SITE_URL } from "@/lib/site";
 import type { WallScope } from "@/lib/portfolio";
+import { getSitePageById } from "@/lib/site-pages-queries";
+import { navLabel } from "@/lib/site-pages";
 
 // Reads D1 at request time; see docs/progress.md.
 export const dynamic = "force-dynamic";
@@ -45,12 +47,27 @@ export default async function PortfolioItemPage({ params }: Props) {
   // Everything on this piece's own wall — inert by construction, because the
   // scope is `piece` rather than `home` or `page`.
   const scope: WallScope = { kind: "piece", id: item.id };
-  const [children, texts, settings, fonts] = await Promise.all([
+  const [children, texts, settings, fonts, shownOn] = await Promise.all([
     getPublishedWall(scope),
     getWallTexts(scope),
     getSiteSettings(),
     getSiteFonts(),
+    // Which wall the visitor came from, so the way back is the way in.
+    item.pageId ? getSitePageById(item.pageId) : undefined,
   ]);
+
+  /*
+    Back to the wall this piece is shown on, not always to the home page.
+
+    A piece reached from one of the artist's own pages sent the visitor home,
+    which silently loses their place — the home wall is not where they were.
+    A draft page falls back to home deliberately: this piece's URL still
+    resolves while its page does not, so linking to it would offer a 404.
+  */
+  const back =
+    shownOn && shownOn.status === "published"
+      ? { href: `/${shownOn.slug}`, label: navLabel(shownOn) }
+      : { href: "/", label: "All work" };
 
   // VisualArtwork only. No Product/Offer markup: nothing here is for sale.
   const cover = item.images[0];
@@ -70,8 +87,8 @@ export default async function PortfolioItemPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <Link href="/" className="text-graphite hover:text-accent mb-8 inline-block text-sm">
-        ← All work
+      <Link href={back.href} className="text-graphite hover:text-accent mb-8 inline-block text-sm">
+        ← {back.label}
       </Link>
 
       {/*

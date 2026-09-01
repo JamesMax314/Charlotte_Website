@@ -209,6 +209,13 @@ Non-obvious decisions that the code alone does not explain.
   so the illegal both-set state has nowhere to come from. Do not reintroduce a bare
   `parentId` parameter.
 
+- **A piece's back link follows the wall it is shown on, and the two surfaces differ.**
+  `/work/<slug>` and the studio's piece editor are reached from whichever wall the piece
+  sits on, so a hardcoded link home silently loses the visitor's place. The public page
+  falls back to home when that wall is a draft custom page — the piece's own URL still
+  resolves while its page does not, so linking to it would offer a 404 — while the studio
+  follows the draft, because the artist can reach it perfectly well.
+
 - **A custom page is a wall, not a piece's page, and `isInteractive` must keep ignoring
   `pageId`.** Work shown on one behaves exactly as it does at home: clickable, with a page
   of its own. Only `parent_id` makes an element inert. Widening the test to "is this row

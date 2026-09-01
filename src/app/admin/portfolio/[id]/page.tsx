@@ -9,6 +9,8 @@ import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
 import { requireSession } from "@/lib/auth";
 import type { WallScope } from "@/lib/portfolio";
+import { getSitePageById } from "@/lib/site-pages-queries";
+import { navLabel } from "@/lib/site-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -28,20 +30,28 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
   if (!item) notFound();
 
   const scope: WallScope = { kind: "piece", id };
-  const [items, texts, settings, fonts] = await Promise.all([
+  const [items, texts, settings, fonts, shownOn] = await Promise.all([
     getAllPortfolioItems(scope),
     getWallTexts(scope),
     getSiteSettings(),
     getSiteFonts(),
+    // Which wall this piece sits on, so the way back is the way in.
+    item.pageId ? getSitePageById(item.pageId) : undefined,
   ]);
+
+  /*
+    Unlike the public page, a draft is still followed here: the studio's job is
+    to take the artist back to the wall she was arranging, and she can reach a
+    draft page perfectly well.
+  */
+  const back = shownOn
+    ? { href: `/admin/pages/${shownOn.id}`, label: navLabel(shownOn) }
+    : { href: "/admin/portfolio", label: "Home page" };
 
   return (
     <Container className="pt-10 pb-20">
-      <Link
-        href="/admin/portfolio"
-        className="text-graphite hover:text-accent mb-6 inline-block text-sm"
-      >
-        ← Home page
+      <Link href={back.href} className="text-graphite hover:text-accent mb-6 inline-block text-sm">
+        ← {back.label}
       </Link>
 
       <div className="mb-8">
