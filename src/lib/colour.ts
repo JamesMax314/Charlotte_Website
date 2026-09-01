@@ -10,6 +10,27 @@ export const PAPER = "#fbfbf9";
 export const INK = "#101010";
 export const DEFAULT_ACCENT = "#9a5b33";
 
+/**
+ * Starting points for the highlight, offered above the picker.
+ *
+ * The shipped brown leads the row, so it is one tap to get back to after
+ * trying something else — the browser's own picker has its own preset swatches
+ * and none of them is this brown, which made returning to it a matter of
+ * remembering the hex.
+ *
+ * Deliberately one brown and no near-misses: a second, similar brown beside it
+ * is a choice nobody wants to have to make. Every entry clears 4.5:1 against
+ * paper, so a suggestion never trips the picker's own contrast warning.
+ */
+export const ACCENT_SUGGESTIONS: { hex: string; name: string }[] = [
+  { hex: DEFAULT_ACCENT, name: "Brown — the original" },
+  { hex: "#101010", name: "Ink" },
+  { hex: "#7a2231", name: "Oxblood" },
+  { hex: "#2f6a3f", name: "Forest" },
+  { hex: "#1f6f6b", name: "Teal" },
+  { hex: "#3b3b8f", name: "Indigo" },
+];
+
 const SHORT = /^#?([0-9a-f])([0-9a-f])([0-9a-f])$/i;
 const LONG = /^#?([0-9a-f]{6})$/i;
 
