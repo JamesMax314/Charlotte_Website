@@ -131,3 +131,25 @@ export const soleListing = (artwork: Artwork): Listing | undefined => artwork.li
 /** How a product type reads to a visitor. */
 export const productTypeLabel = (kind: ListingKind): string =>
   kind === "print" ? "Print" : "Digital download";
+
+/**
+ * Everything the store dialog edits, in one shape.
+ *
+ * Lives here rather than beside the action because a "use server" module may
+ * only export async functions — a type declared there cannot be imported.
+ * `price` and `etsyUrl` arrive exactly as typed; the server validates them.
+ */
+export interface ArtworkDetails {
+  title: string;
+  description: string;
+  status: ArtworkStatus;
+  kind: ListingKind;
+  label: string;
+  price: string;
+  etsyUrl: string;
+  soldOut: boolean;
+  year: string;
+  medium: string;
+  dimensionsNote: string;
+  slug: string;
+}
