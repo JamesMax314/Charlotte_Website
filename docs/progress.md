@@ -445,14 +445,24 @@ pnpm seed                        # loads eight placeholder artworks into D1 and 
 Then either:
 
 ```bash
-pnpm dev       # fast iteration on http://localhost:3000
-pnpm preview   # the real Worker on http://localhost:8787 — build first, slower
+pnpm dev          # fast iteration on http://localhost:3000
+pnpm preview      # the real Worker on http://localhost:8787 — build first, slower
+pnpm preview:lan  # the same, reachable from a phone at http://<this-machine>:8787
 ```
 
 **Test in `preview` before believing anything.** `next dev` does not run the deployed
 worker and will happily hide production-only failures. The missing image optimiser in
 Phase 2 is the worked example: every image on the site was broken in the worker while
 `next dev` looked perfect.
+
+**On a phone, `pnpm preview:lan` — not `pnpm dev`.** `next dev` binds every interface, so
+a phone can reach it and it becomes the path of least resistance; `wrangler dev` binds
+localhost, so plain `preview` cannot be reached and the temptation is to fall back. What
+`next dev` adds is a Fast Refresh websocket, and a phone that drops it — by backgrounding
+the tab, or over patchy wifi — gets a full page reload on reconnect. That is
+indistinguishable from the site reloading itself, and it cost real time during the mobile
+fade work: repeated `GET /` in the dev log was read as the page misbehaving. Find this
+machine's address with `ipconfig getifaddr en0`.
 
 ## Deploying for the first time
 
