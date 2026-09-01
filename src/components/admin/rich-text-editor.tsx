@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyDocToElement, docFromElement } from "@/lib/rich-dom";
+import { applyDocToElement, docFromElement, markSpan, type SpanMark } from "@/lib/rich-dom";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { docToPlain, safeHref, type RichDoc } from "@/lib/rich-text";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
@@ -41,26 +41,15 @@ const SIZES: { label: string; value: number }[] = [
 
 const SWATCHES = [INK, "#6d6a66", DEFAULT_ACCENT, PAPER, "#2140d6"];
 
-type SpanMark = { colour?: string; font?: string; size?: number };
-
 /** Writes a span mark onto the current selection, or arms it for the next keystroke. */
-function applySpanMark(mark: SpanMark): void {
+function applySpanMark(mark: SpanMark, fonts: FontOption[]): void {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return;
   const range = selection.getRangeAt(0);
 
-  const span = document.createElement("span");
-  if (mark.colour !== undefined) {
-    span.setAttribute("data-rt-colour", mark.colour);
-    span.style.color = mark.colour;
-  }
-  if (mark.font !== undefined) {
-    span.setAttribute("data-rt-font", mark.font);
-  }
-  if (mark.size !== undefined) {
-    span.setAttribute("data-rt-size", String(mark.size));
-    span.style.fontSize = `${mark.size}em`;
-  }
+  // Built by the same function that seeds the editor, so the mark cannot be
+  // stored without also being visible.
+  const span = markSpan(mark, fonts);
 
   if (range.collapsed) {
     /*
@@ -191,7 +180,7 @@ export function RichTextEditor({
 
   const span = (mark: SpanMark) => {
     restoreSelection();
-    applySpanMark(mark);
+    applySpanMark(mark, fonts);
     read();
   };
 

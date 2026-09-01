@@ -22,24 +22,48 @@ const MARK_ATTR = {
   size: "data-rt-size",
 } as const;
 
+/** The marks carried by a span rather than by a tag. */
+export type SpanMark = { colour?: string; font?: string; size?: number };
+
+export const hasSpanMark = (mark: SpanMark): boolean =>
+  mark.colour !== undefined || mark.font !== undefined || mark.size !== undefined;
+
+/**
+ * The span for a colour, face or size mark.
+ *
+ * Shared by the two places that build one — seeding the editor from a stored
+ * document, and applying a mark to a live selection — because they drifted
+ * once already: the toolbar set the face's data attribute without its style,
+ * so a chosen typeface saved correctly and rendered on the site while showing
+ * no change in the editor until the box was reloaded.
+ *
+ * Both halves matter and neither is redundant. The style is what the artist
+ * sees; the data attribute is what is read back, because recovering a font id
+ * from whatever the browser made of `font-family` is a guess.
+ */
+export function markSpan(mark: SpanMark, fonts: FontOption[]): HTMLSpanElement {
+  const span = document.createElement("span");
+  if (mark.colour !== undefined) {
+    span.setAttribute(MARK_ATTR.colour, mark.colour);
+    span.style.color = mark.colour;
+  }
+  if (mark.font !== undefined) {
+    span.setAttribute(MARK_ATTR.font, mark.font);
+    span.style.fontFamily = resolveFontFamily(mark.font, fonts);
+  }
+  if (mark.size !== undefined) {
+    span.setAttribute(MARK_ATTR.size, String(mark.size));
+    span.style.fontSize = `${mark.size}em`;
+  }
+  return span;
+}
+
 /** Builds the element for one run, innermost mark first. */
 function runToNode(run: RichRun, fonts: FontOption[]): Node {
   let node: Node = document.createTextNode(run.text);
 
-  if (run.colour !== undefined || run.font !== undefined || run.size !== undefined) {
-    const span = document.createElement("span");
-    if (run.colour !== undefined) {
-      span.setAttribute(MARK_ATTR.colour, run.colour);
-      span.style.color = run.colour;
-    }
-    if (run.font !== undefined) {
-      span.setAttribute(MARK_ATTR.font, run.font);
-      span.style.fontFamily = resolveFontFamily(run.font, fonts);
-    }
-    if (run.size !== undefined) {
-      span.setAttribute(MARK_ATTR.size, String(run.size));
-      span.style.fontSize = `${run.size}em`;
-    }
+  if (hasSpanMark(run)) {
+    const span = markSpan(run, fonts);
     span.appendChild(node);
     node = span;
   }

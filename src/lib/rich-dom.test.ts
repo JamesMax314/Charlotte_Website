@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_FONTS } from "./fonts";
-import { applyDocToElement, docFromElement } from "./rich-dom";
+import { applyDocToElement, docFromElement, markSpan } from "./rich-dom";
 import { docToPlain, type RichDoc } from "./rich-text";
 
 const editable = (html: string): HTMLElement => {
@@ -119,6 +119,43 @@ describe("docFromElement", () => {
     const strong = el.querySelector("strong")!;
     for (const ch of "hello") strong.appendChild(document.createTextNode(ch));
     expect(docFromElement(el)).toEqual([[{ text: "hello", bold: true }]]);
+  });
+});
+
+describe("markSpan", () => {
+  /**
+   * The regression this function exists to prevent. The toolbar used to build
+   * its own span and set the face's data attribute without its style, so a
+   * chosen typeface saved correctly, rendered correctly on the site, and
+   * showed no change whatsoever in the editor until the box was reloaded.
+   *
+   * Every mark must write both halves: the style is what the artist sees, the
+   * attribute is what is read back.
+   */
+  it("writes both a style and a data attribute for every mark", () => {
+    const id = BUILT_IN_FONTS[0].id;
+    for (const [mark, styleProp] of [
+      [{ colour: "#aabbcc" }, "color"],
+      [{ font: id }, "fontFamily"],
+      [{ size: 1.5 }, "fontSize"],
+    ] as const) {
+      const span = markSpan(mark, BUILT_IN_FONTS);
+      expect(span.style[styleProp], `${styleProp} is not set`).not.toBe("");
+      expect(span.attributes.length, "no data attribute written").toBeGreaterThan(0);
+    }
+  });
+
+  it("round-trips through the reader it is paired with", () => {
+    const id = BUILT_IN_FONTS[0].id;
+    const block = document.createElement("div");
+    const span = markSpan({ colour: "#aabbcc", font: id, size: 1.5 }, BUILT_IN_FONTS);
+    span.textContent = "x";
+    block.appendChild(span);
+    const root = document.createElement("div");
+    root.appendChild(block);
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      [{ text: "x", colour: "#aabbcc", font: id, size: 1.5 }],
+    ]);
   });
 });
 
