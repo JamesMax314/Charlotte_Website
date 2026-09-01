@@ -8,6 +8,24 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS",
   },
+  /*
+    The live domain, declared here rather than attached in the dashboard so the
+    binding is in the repository and every deploy asserts it — dashboard-only
+    routing is state nobody reading this can see.
+
+    `custom_domain` makes Cloudflare create and own the DNS record, which is
+    why there is no A or CNAME to write by hand. It is the apex only: the site
+    canonicalises to the apex (see SITE_HOST in src/lib/site.ts), so serving it
+    on www as well would publish the whole site at a second origin that
+    robots.txt then has to keep out of the index. www wants a redirect rule,
+    not a second copy of the site.
+  */
+  "routes": [
+    {
+      "pattern": "charlottewilkinsonart.co.uk",
+      "custom_domain": true,
+    },
+  ],
   "services": [
     {
       // Self-reference, required by the incremental cache. Must match "name" above.
@@ -19,10 +37,9 @@
     {
       "binding": "DB",
       "database_name": "charlotte-website",
-      // Local development ignores this. Before the first remote deploy run
-      //   pnpm exec wrangler d1 create charlotte-website
-      // and paste the returned uuid here.
-      "database_id": "PLACEHOLDER_RUN_D1_CREATE",
+      // Local development ignores this; the remote deploy binds to it. Created
+      // in WEUR on the artist's own Cloudflare account.
+      "database_id": "38852db7-f670-4773-9e3d-24c544f9e31c",
       "migrations_dir": "migrations",
     },
   ],
