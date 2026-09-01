@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { getDb } from "@/lib/catalogue";
+import { getDb } from "@/lib/db";
+import { releaseMedia } from "@/lib/publish";
 import { toSlug } from "@/lib/artworks";
 import { requireSession } from "@/lib/auth";
 import { isReservedPageSlug, UNTITLED_PAGE_TITLE } from "@/lib/site-pages";
@@ -163,9 +164,7 @@ export async function deleteSitePage(id: string): Promise<void> {
       .from(schema.portfolioImages)
       .where(inArray(schema.portfolioImages.itemId, ids));
 
-    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const { env } = await getCloudflareContext({ async: true });
-    await Promise.all(images.map((i) => env.MEDIA.delete(i.storageKey)));
+    await releaseMedia(images.map((i) => i.storageKey));
   }
 
   await db.delete(schema.sitePages).where(eq(schema.sitePages.id, id));

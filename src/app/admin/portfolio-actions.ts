@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { getDb } from "@/lib/catalogue";
+import { getDb } from "@/lib/db";
+import { releaseMedia } from "@/lib/publish";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { docFromPlain, docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
@@ -194,9 +195,7 @@ export async function clearPortfolioImages(id: string): Promise<void> {
     .from(schema.portfolioImages)
     .where(eq(schema.portfolioImages.itemId, id));
 
-  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-  const { env } = await getCloudflareContext({ async: true });
-  await Promise.all(images.map((i) => env.MEDIA.delete(i.storageKey)));
+  await releaseMedia(images.map((i) => i.storageKey));
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.itemId, id));
   refresh();
@@ -296,9 +295,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
     .from(schema.portfolioImages)
     .where(inArray(schema.portfolioImages.itemId, ids));
 
-  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-  const { env } = await getCloudflareContext({ async: true });
-  await Promise.all(images.map((i) => env.MEDIA.delete(i.storageKey)));
+  await releaseMedia(images.map((i) => i.storageKey));
 
   await db.delete(schema.portfolioItems).where(eq(schema.portfolioItems.id, id));
   refresh();
@@ -481,11 +478,7 @@ export async function deletePortfolioImage(id: string): Promise<void> {
     .where(eq(schema.portfolioImages.id, id))
     .limit(1);
 
-  if (rows.length > 0) {
-    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const { env } = await getCloudflareContext({ async: true });
-    await env.MEDIA.delete(rows[0].storageKey);
-  }
+  await releaseMedia([rows[0]?.storageKey]);
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.id, id));
   refresh();

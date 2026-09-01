@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Container } from "@/components/container";
 import { Mark } from "@/components/mark";
 import { NavPages } from "@/components/admin/nav-pages";
+import { PublishButton } from "@/components/admin/publish-button";
 import { hasValidSession } from "@/lib/auth";
+import { getPublishState } from "@/lib/publish";
 import { getAllSitePages } from "@/lib/site-pages-queries";
 import { logout } from "./actions";
 
@@ -18,7 +20,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const signedIn = await hasValidSession();
   // Only once signed in: this read is gated on the session rather than run
   // unconditionally, so the login page still renders if D1 is unreachable.
-  const pages = signedIn ? await getAllSitePages() : [];
+  /*
+    Both gated on the session for the same reason: the login page has to
+    render when D1 is unreachable. The publish state is the more expensive of
+    the two — it builds the whole draft snapshot to hash it — but it is the
+    only honest way to answer "is what I am looking at what visitors see", and
+    every admin action already revalidates this layout, so it is recomputed
+    exactly when the answer can have changed.
+  */
+  const [pages, publishState] = signedIn
+    ? await Promise.all([getAllSitePages(), getPublishState()])
+    : [[], null];
 
   return (
     <div className="min-h-dvh">
@@ -75,6 +87,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </div>
 
             <div className="flex items-center gap-4 md:justify-self-end">
+              {publishState && (
+                <PublishButton
+                  live={publishState.live}
+                  publishedAt={
+                    publishState.publishedAt
+                      ? publishState.publishedAt.toLocaleString("en-GB", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })
+                      : null
+                  }
+                />
+              )}
               <Link href="/" className="text-graphite hover:text-accent text-xs transition-colors">
                 View site
               </Link>

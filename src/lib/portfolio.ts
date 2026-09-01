@@ -43,6 +43,24 @@ export const scopeOf = (row: { parentId: string | null; pageId: string | null })
       ? { kind: "page", id: row.pageId }
       : HOME_WALL;
 
+export const sameScope = (a: WallScope, b: WallScope): boolean =>
+  a.kind === b.kind && (a.kind === "home" || b.kind === "home" || a.id === b.id);
+
+/**
+ * Whether a row sits on a given wall — the in-memory twin of `onWall` in
+ * src/lib/portfolio-queries.ts, used when the site is read from a published
+ * revision instead of from D1.
+ *
+ * Deliberately built out of `scopeOf` rather than testing the two columns
+ * again. The pair rule is load-bearing and a second hand-rolled copy of it is
+ * exactly how a custom page's work ends up on the home wall; expressed this
+ * way there is still only one place that reads the pair.
+ */
+export const isOnWall = (
+  row: { parentId: string | null; pageId: string | null },
+  scope: WallScope,
+): boolean => sameScope(scopeOf(row), scope);
+
 export interface PortfolioImage {
   id: string;
   src: string;

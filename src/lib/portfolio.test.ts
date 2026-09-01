@@ -7,6 +7,7 @@ import {
   inReadingOrder,
   isInteractive,
   isLikelyAboveFold,
+  isOnWall,
   lcpCandidateId,
   HOME_WALL,
   scopeColumns,
@@ -333,5 +334,40 @@ describe("isLikelyAboveFold", () => {
 
   it("treats pieces further down as below it", () => {
     expect(isLikelyAboveFold(item({ y: 120 }))).toBe(false);
+  });
+});
+
+describe("isOnWall", () => {
+  /*
+    The in-memory twin of the SQL `onWall`, used when the site is served from a
+    published revision. The failure it guards against is the same one: a test
+    that reads one column and forgets the other silently shows a custom page's
+    work on the home wall.
+  */
+  const home = { parentId: null, pageId: null };
+  const onPage = { parentId: null, pageId: "page-1" };
+  const onPiece = { parentId: "piece-1", pageId: null };
+
+  it("puts the pair of nulls on the home wall and nowhere else", () => {
+    expect(isOnWall(home, HOME_WALL)).toBe(true);
+    expect(isOnWall(home, { kind: "page", id: "page-1" })).toBe(false);
+    expect(isOnWall(home, { kind: "piece", id: "piece-1" })).toBe(false);
+  });
+
+  it("keeps a custom page's work off the home wall", () => {
+    expect(isOnWall(onPage, HOME_WALL)).toBe(false);
+    expect(isOnWall(onPage, { kind: "page", id: "page-1" })).toBe(true);
+    expect(isOnWall(onPage, { kind: "page", id: "page-2" })).toBe(false);
+  });
+
+  it("keeps a piece's own page off both", () => {
+    expect(isOnWall(onPiece, HOME_WALL)).toBe(false);
+    expect(isOnWall(onPiece, { kind: "piece", id: "piece-1" })).toBe(true);
+    expect(isOnWall(onPiece, { kind: "piece", id: "piece-2" })).toBe(false);
+    expect(isOnWall(onPiece, { kind: "page", id: "piece-1" })).toBe(false);
+  });
+
+  it("agrees with scopeOf, which is the rule it is built from", () => {
+    for (const row of [home, onPage, onPiece]) expect(isOnWall(row, scopeOf(row))).toBe(true);
   });
 });

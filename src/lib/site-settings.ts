@@ -2,7 +2,8 @@ import "server-only";
 import { cache } from "react";
 import { asc, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { getDb } from "./catalogue";
+import { getDb } from "./db";
+import { getSiteSource } from "./publish";
 import type { UploadedFont } from "./fonts";
 
 /**
@@ -42,8 +43,16 @@ export const upsertSiteSettings = async (
  */
 export const getSiteFonts = cache(async (): Promise<UploadedFont[]> => {
   try {
-    const db = await getDb();
-    const rows = await db.select().from(schema.siteFonts).orderBy(asc(schema.siteFonts.createdAt));
+    const source = await getSiteSource();
+    const rows =
+      source.kind === "live"
+        ? source.snapshot.fonts
+        : await (
+            await getDb()
+          )
+            .select()
+            .from(schema.siteFonts)
+            .orderBy(asc(schema.siteFonts.createdAt));
     return rows.map((row) => ({
       id: row.id,
       label: row.label,

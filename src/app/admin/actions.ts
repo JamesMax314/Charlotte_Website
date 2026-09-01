@@ -6,7 +6,8 @@ import { cookies } from "next/headers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import type { ListingRow } from "@/db/schema";
-import { getDb } from "@/lib/catalogue";
+import { getDb } from "@/lib/db";
+import { publishSite, releaseMedia } from "@/lib/publish";
 import {
   isPlaceholderSlug,
   isValidEtsyUrl,
@@ -23,6 +24,23 @@ import { SESSION_COOKIE, checkPassphrase, createSessionValue, requireSession } f
  */
 
 function refreshPublicPages() {
+  revalidatePath("/", "layout");
+}
+
+// ---------------------------------------------------------------- publishing
+
+/**
+ * Pushes everything the artist has been working on to the public site.
+ *
+ * The one action that is not about a single piece: it takes the whole site at
+ * once, which is the point of it. Everything else she does is saved as a draft
+ * that only she can see until this runs.
+ */
+export async function makeSiteLive(): Promise<void> {
+  await requireSession();
+  await publishSite();
+  // The layout, so the badge in the studio's top bar re-reads its state and
+  // every public page picks up the revision that was just written.
   revalidatePath("/", "layout");
 }
 
@@ -221,9 +239,7 @@ export async function deleteArtworkPermanently(id: string) {
     .from(schema.artworkImages)
     .where(eq(schema.artworkImages.artworkId, id));
 
-  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-  const { env } = await getCloudflareContext({ async: true });
-  await Promise.all(images.map((i) => env.MEDIA.delete(i.storageKey)));
+  await releaseMedia(images.map((i) => i.storageKey));
 
   await db.delete(schema.artworks).where(eq(schema.artworks.id, id));
   refreshPublicPages();
@@ -293,11 +309,7 @@ export async function deleteImage(id: string) {
     .where(eq(schema.artworkImages.id, id))
     .limit(1);
 
-  if (rows.length > 0) {
-    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const { env } = await getCloudflareContext({ async: true });
-    await env.MEDIA.delete(rows[0].storageKey);
-  }
+  await releaseMedia([rows[0]?.storageKey]);
 
   await db.delete(schema.artworkImages).where(eq(schema.artworkImages.id, id));
   refreshPublicPages();

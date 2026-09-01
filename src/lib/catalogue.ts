@@ -1,9 +1,10 @@
 import "server-only";
 import { cache } from "react";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { drizzle } from "drizzle-orm/d1";
 import { asc, eq, inArray, ne } from "drizzle-orm";
 import * as schema from "@/db/schema";
+import { getDb } from "./db";
+import { getSiteSource } from "./publish";
+import type { Timeless } from "./site-snapshot";
 import { DEFAULT_ACCENT } from "./colour";
 import { HEADER_DEFAULTS } from "./header-style";
 import { DEFAULT_FONT_ID, DISPLAY_FONT_ID } from "./fonts";
@@ -20,11 +21,10 @@ import type { Artwork, ArtworkImage, Listing } from "./artworks";
  *
  * These were seeded arrays in Phase 1 and the signatures were already async, so
  * swapping in real queries touched no component.
+ *
+ * Every public read here chooses its source: a visitor is served the published
+ * revision, the signed-in artist the draft tables. See src/lib/publish.ts.
  */
-export const getDb = async () => {
-  const { env } = await getCloudflareContext({ async: true });
-  return drizzle(env.DB, { schema });
-};
 
 const toImage = (row: schema.ArtworkImageRow): ArtworkImage => ({
   id: row.id,
@@ -45,6 +45,33 @@ const toListing = (row: schema.ListingRow): Listing => ({
   editionRemaining: row.editionRemaining,
 });
 
+/**
+ * Rows and their children, shaped into domain objects.
+ *
+ * Split out of `hydrate` so the published-revision path shares it rather than
+ * reimplementing it — see the same split in src/lib/portfolio-queries.ts.
+ */
+function shape(
+  rows: Timeless<schema.ArtworkRow>[],
+  images: schema.ArtworkImageRow[],
+  listingRows: schema.ListingRow[],
+): Artwork[] {
+  return rows.map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    year: row.year,
+    medium: row.medium,
+    dimensionsNote: row.dimensionsNote,
+    description: row.description,
+    status: row.status,
+    sortOrder: row.sortOrder,
+    isFeatured: row.isFeatured,
+    images: images.filter((i) => i.artworkId === row.id).map(toImage),
+    listings: listingRows.filter((l) => l.artworkId === row.id).map(toListing),
+  }));
+}
+
 /** Loads children for a set of artworks in two queries rather than N. */
 async function hydrate(rows: schema.ArtworkRow[]): Promise<Artwork[]> {
   if (rows.length === 0) return [];
@@ -64,23 +91,19 @@ async function hydrate(rows: schema.ArtworkRow[]): Promise<Artwork[]> {
       .orderBy(asc(schema.listings.sortOrder)),
   ]);
 
-  return rows.map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    year: row.year,
-    medium: row.medium,
-    dimensionsNote: row.dimensionsNote,
-    description: row.description,
-    status: row.status,
-    sortOrder: row.sortOrder,
-    isFeatured: row.isFeatured,
-    images: images.filter((i) => i.artworkId === row.id).map(toImage),
-    listings: listingRows.filter((l) => l.artworkId === row.id).map(toListing),
-  }));
+  return shape(rows, images, listingRows);
 }
 
 export const getPublishedArtworks = async (): Promise<Artwork[]> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") {
+    return shape(
+      source.snapshot.artworks.filter((row) => row.status === "published"),
+      source.snapshot.artworkImages,
+      source.snapshot.listings,
+    );
+  }
+
   const db = await getDb();
   const rows = await db
     .select()
@@ -95,6 +118,14 @@ export const getFeaturedArtworks = async (): Promise<Artwork[]> =>
 
 /** Published and archived resolve; drafts do not. */
 export const getArtworkBySlug = async (slug: string): Promise<Artwork | undefined> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") {
+    // Drafts never reached the revision, so status needs no test here.
+    const row = source.snapshot.artworks.find((candidate) => candidate.slug === slug);
+    if (row === undefined) return undefined;
+    return shape([row], source.snapshot.artworkImages, source.snapshot.listings)[0];
+  }
+
   const db = await getDb();
   const rows = await db
     .select()
@@ -107,6 +138,9 @@ export const getArtworkBySlug = async (slug: string): Promise<Artwork | undefine
 
 /** Every slug that should be prerendered and appear in the sitemap. */
 export const getRoutableSlugs = async (): Promise<string[]> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") return source.snapshot.artworks.map((row) => row.slug);
+
   const db = await getDb();
   const rows = await db
     .select({ slug: schema.artworks.slug })
@@ -191,6 +225,12 @@ const SETTINGS_FALLBACK = {
  */
 export const getSiteSettings = cache(async () => {
   try {
+    const source = await getSiteSource();
+    if (source.kind === "live") {
+      const stored = source.snapshot.settings;
+      return stored === null ? SETTINGS_FALLBACK : { ...SETTINGS_FALLBACK, ...stored };
+    }
+
     const db = await getDb();
     const rows = await db.select().from(schema.siteSettings).where(eq(schema.siteSettings.id, 1));
     return rows.length === 0 ? SETTINGS_FALLBACK : { ...SETTINGS_FALLBACK, ...rows[0] };

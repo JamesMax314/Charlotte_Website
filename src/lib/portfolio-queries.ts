@@ -1,12 +1,15 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { getDb } from "./catalogue";
+import { getDb } from "./db";
 import { mergeFonts, type FontOption } from "./fonts";
 import { parseDoc } from "./rich-text";
 import { getSiteFonts } from "./site-settings";
+import { getSiteSource } from "./publish";
+import type { Timeless } from "./site-snapshot";
 import {
   HOME_WALL,
+  isOnWall,
   type PortfolioImage,
   type PortfolioItem,
   type WallScope,
@@ -27,6 +30,9 @@ import {
  * page. Every query below goes through here, as does the one write that
  * touches a whole wall at once — see `makeRoomAtTop` in the portfolio actions.
  * Nothing hand-rolls the pair.
+ *
+ * Reading from a published revision needs the same rule against objects rather
+ * than SQL, which is `isOnWall` in src/lib/portfolio.ts.
  */
 export const onWall = (
   table: typeof schema.portfolioItems | typeof schema.wallTexts,
@@ -48,21 +54,17 @@ const toImage = (row: schema.PortfolioImageRow): PortfolioImage => ({
   lqip: row.lqip,
 });
 
-async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]> {
-  if (rows.length === 0) return [];
-  const db = await getDb();
-
-  const images = await db
-    .select()
-    .from(schema.portfolioImages)
-    .where(
-      inArray(
-        schema.portfolioImages.itemId,
-        rows.map((r) => r.id),
-      ),
-    )
-    .orderBy(asc(schema.portfolioImages.sortOrder));
-
+/**
+ * Rows and their images, shaped into domain objects.
+ *
+ * Split out of `hydrate` so the published-revision path and the D1 path share
+ * it: a snapshot arrives with its images already in hand, and reimplementing
+ * the shaping for it is how the two would drift.
+ */
+function shape(
+  rows: Timeless<schema.PortfolioItemRow>[],
+  images: schema.PortfolioImageRow[],
+): PortfolioItem[] {
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
@@ -80,6 +82,24 @@ async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]
   }));
 }
 
+async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]> {
+  if (rows.length === 0) return [];
+  const db = await getDb();
+
+  const images = await db
+    .select()
+    .from(schema.portfolioImages)
+    .where(
+      inArray(
+        schema.portfolioImages.itemId,
+        rows.map((r) => r.id),
+      ),
+    )
+    .orderBy(asc(schema.portfolioImages.sortOrder));
+
+  return shape(rows, images);
+}
+
 /**
  * The published content of one wall — the home page, a custom page, or a
  * piece's own page.
@@ -87,8 +107,22 @@ async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]
  * One function for all three, because they differ only in the scope: the home
  * wall and a custom page's wall are the same feature pointed at a different
  * set of rows.
+ *
+ * "Published" now means two things at once: the piece is not a draft, and the
+ * artist has pressed "Make live" since she placed it. The first is a property
+ * of the row and the second of the site, which is why the source is chosen
+ * here rather than filtered for.
  */
 export const getPublishedWall = async (scope: WallScope = HOME_WALL): Promise<PortfolioItem[]> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") {
+    // Already status-filtered and z-ordered when the revision was built.
+    return shape(
+      source.snapshot.items.filter((row) => isOnWall(row, scope)),
+      source.snapshot.itemImages,
+    );
+  }
+
   const db = await getDb();
   const rows = await db
     .select()
@@ -121,20 +155,28 @@ export const getPortfolioItemById = async (id: string): Promise<PortfolioItem | 
   return rows.length === 0 ? undefined : (await hydrate(rows))[0];
 };
 
+// Children have no page of their own, and a piece that is not clickable has
+// its page hidden rather than deleted — both must 404 rather than resolve.
+// A piece on a custom page is not a child and does resolve: `page_id` says
+// where it is shown, not whether it has a page.
+const hasOwnPage = (row: Timeless<schema.PortfolioItemRow>): boolean =>
+  row.status !== "draft" && row.parentId === null && row.clickable;
+
 export const getPortfolioItemBySlug = async (slug: string): Promise<PortfolioItem | undefined> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") {
+    const row = source.snapshot.items.find((candidate) => candidate.slug === slug);
+    if (row === undefined || !hasOwnPage(row)) return undefined;
+    return shape([row], source.snapshot.itemImages)[0];
+  }
+
   const db = await getDb();
   const rows = await db
     .select()
     .from(schema.portfolioItems)
     .where(eq(schema.portfolioItems.slug, slug))
     .limit(1);
-  // Children have no page of their own, and a piece that is not clickable has
-  // its page hidden rather than deleted — both must 404 rather than resolve.
-  // A piece on a custom page is not a child and does resolve: `page_id` says
-  // where it is shown, not whether it has a page.
-  if (rows.length === 0) return undefined;
-  const row = rows[0];
-  if (row.status === "draft" || row.parentId !== null || !row.clickable) return undefined;
+  if (rows.length === 0 || !hasOwnPage(rows[0])) return undefined;
   return (await hydrate(rows))[0];
 };
 
@@ -147,6 +189,16 @@ export const getPortfolioItemBySlug = async (slug: string): Promise<PortfolioIte
  * has not published.
  */
 export const getRoutableWorkSlugs = async (): Promise<string[]> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") {
+    const livePages = new Set(
+      source.snapshot.pages.filter((page) => page.status === "published").map((page) => page.id),
+    );
+    return source.snapshot.items
+      .filter((row) => hasOwnPage(row) && (row.pageId === null || livePages.has(row.pageId)))
+      .map((row) => row.slug);
+  }
+
   const db = await getDb();
   const rows = await db
     .select({ slug: schema.portfolioItems.slug })
@@ -163,7 +215,7 @@ export const getRoutableWorkSlugs = async (): Promise<string[]> => {
   return rows.map((r) => r.slug);
 };
 
-const toText = (row: schema.WallTextRow, fonts: FontOption[]): WallText => ({
+const toText = (row: Timeless<schema.WallTextRow>, fonts: FontOption[]): WallText => ({
   id: row.id,
   content: row.content,
   // Sanitised on the way out as well as in: a row can predate a rule, or have
@@ -186,7 +238,7 @@ const toText = (row: schema.WallTextRow, fonts: FontOption[]): WallText => ({
 });
 
 export const getWallTexts = async (scope: WallScope = HOME_WALL): Promise<WallText[]> => {
-  const db = await getDb();
+  const source = await getSiteSource();
   /*
     The registry is needed to judge each run's font id, and the uploads live in
     their own table. Read once per call and passed down rather than held in a
@@ -195,6 +247,14 @@ export const getWallTexts = async (scope: WallScope = HOME_WALL): Promise<WallTe
     symptom would be a run quietly losing its face.
   */
   const fonts = mergeFonts(await getSiteFonts());
+
+  if (source.kind === "live") {
+    return source.snapshot.texts
+      .filter((row) => isOnWall(row, scope))
+      .map((row) => toText(row, fonts));
+  }
+
+  const db = await getDb();
   const rows = await db
     .select()
     .from(schema.wallTexts)

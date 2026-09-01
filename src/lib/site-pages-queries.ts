@@ -1,15 +1,17 @@
 import "server-only";
 import { asc, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { getDb } from "./catalogue";
+import { getDb } from "./db";
+import { getSiteSource } from "./publish";
 import type { SitePage } from "./site-pages";
+import type { Timeless } from "./site-snapshot";
 
 /**
  * D1 reads for the artist's custom pages. Pure types and rules live in
  * src/lib/site-pages.ts so client components can use them.
  */
 
-const toPage = (row: schema.SitePageRow): SitePage => ({
+const toPage = (row: Timeless<schema.SitePageRow>): SitePage => ({
   id: row.id,
   slug: row.slug,
   title: row.title,
@@ -34,6 +36,11 @@ const toPage = (row: schema.SitePageRow): SitePage => ({
  */
 export const getNavPages = async (): Promise<SitePage[]> => {
   try {
+    const source = await getSiteSource();
+    if (source.kind === "live") {
+      return source.snapshot.pages.filter((page) => page.status === "published").map(toPage);
+    }
+
     const db = await getDb();
     const rows = await db
       .select()
@@ -68,6 +75,12 @@ export const getSitePageById = async (id: string): Promise<SitePage | undefined>
 
 /** Public lookup: a draft page resolves to nothing, exactly as a draft piece does. */
 export const getPublishedSitePageBySlug = async (slug: string): Promise<SitePage | undefined> => {
+  const source = await getSiteSource();
+  if (source.kind === "live") {
+    const page = source.snapshot.pages.find((candidate) => candidate.slug === slug);
+    return page === undefined || page.status !== "published" ? undefined : toPage(page);
+  }
+
   const db = await getDb();
   const rows = await db
     .select()

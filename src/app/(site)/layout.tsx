@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { fadeScript } from "@/lib/fade-script";
 import { SiteFooter } from "@/components/site-footer";
@@ -5,6 +6,7 @@ import { getSiteSettings } from "@/lib/catalogue";
 import { fontMimeType, mergeFonts, resolveSiteFaces } from "@/lib/fonts";
 import { headerStyleFromSettings, headerTokenCss } from "@/lib/header-style";
 import { getSiteFonts } from "@/lib/site-settings";
+import { getPublishState, getSiteSource } from "@/lib/publish";
 
 /** Chrome for the public site. The admin deliberately does not get this. */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -107,6 +109,46 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         {children}
       </div>
       <SiteFooter />
+      <DraftMarker />
+    </div>
+  );
+}
+
+/**
+ * Tells the signed-in artist when the page she is looking at is not the page a
+ * visitor gets.
+ *
+ * She is served the draft on the real site so that "View site" shows what she
+ * is about to publish — the wall editor previews the walls, but nothing
+ * previews the header height, the typefaces or the About copy. The cost of
+ * that is a page which looks exactly like the live site and is not.
+ *
+ * So it reports the difference, not the mode. Shown whenever she is signed in,
+ * it would be a permanent fixture claiming the site is unpublished on a site
+ * that is fully published, and a marker that is always on says nothing. It
+ * costs her a snapshot build per page view and costs a visitor nothing, since
+ * only a request carrying her session gets this far.
+ *
+ * Fixed and out of the flow on purpose. A banner along the top would push the
+ * page down and change the spacing above the header, so she would be checking
+ * a layout no visitor will ever see — the one thing this must not do.
+ */
+async function DraftMarker() {
+  const source = await getSiteSource();
+  if (source.kind !== "draft" || source.reason !== "session") return null;
+
+  const { live } = await getPublishState();
+  if (live) return null;
+
+  return (
+    <div className="fixed bottom-3 left-3 z-50 print:hidden">
+      <Link
+        href="/admin"
+        className="border-line bg-paper text-graphite hover:border-ink flex items-center gap-1.5 border px-2.5 py-1.5 text-xs shadow-sm transition-colors"
+      >
+        <span aria-hidden className="bg-accent size-1.5 rounded-full" />
+        Unpublished changes — only you can see this
+      </Link>
     </div>
   );
 }

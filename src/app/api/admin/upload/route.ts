@@ -2,7 +2,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
-import { getDb } from "@/lib/catalogue";
+import { getDb } from "@/lib/db";
 import { hasValidSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";

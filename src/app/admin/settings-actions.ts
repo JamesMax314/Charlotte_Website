@@ -4,14 +4,15 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { requireSession } from "@/lib/auth";
-import { getDb, getSiteSettings } from "@/lib/catalogue";
+import { getSiteSettings } from "@/lib/catalogue";
+import { getDb } from "@/lib/db";
+import { releaseMedia } from "@/lib/publish";
 import { cssFamilyName, isKnownFontId, mergeFonts, newFontId, type FontFormat } from "@/lib/fonts";
 import { headerStyle, type HeaderStyle } from "@/lib/header-style";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 import { docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { normaliseSettings, type SettingsInput } from "@/lib/settings-input";
-import { derivativeKeys, isSafeKey } from "@/lib/storage";
-import { WIDTH_LADDER } from "@/image-loader";
+import { isSafeKey } from "@/lib/storage";
 
 /**
  * Site settings mutations.
@@ -31,11 +32,8 @@ const refresh = () => revalidatePath("/", "layout");
  * would destroy the object it had just written.
  */
 async function discardAsset(previous: string | null, next: string | null): Promise<void> {
-  if (!previous || previous === next || !isSafeKey(previous)) return;
-
-  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-  const { env } = await getCloudflareContext({ async: true });
-  await env.MEDIA.delete([previous, ...derivativeKeys(previous, WIDTH_LADDER)]);
+  if (!previous || previous === next) return;
+  await releaseMedia([previous]);
 }
 
 /** The mark, in the header and the browser tab. Null clears it back to the drawn SVG. */
@@ -200,12 +198,7 @@ export async function deleteSiteFont(id: string): Promise<void> {
 
   await db.delete(schema.siteFonts).where(eq(schema.siteFonts.id, id));
 
-  const key = rows[0]?.storageKey;
-  if (key && isSafeKey(key)) {
-    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const { env } = await getCloudflareContext({ async: true });
-    await env.MEDIA.delete(key);
-  }
+  await releaseMedia([rows[0]?.storageKey]);
 
   refresh();
 }

@@ -386,3 +386,50 @@ export type ArtworkImageRow = typeof artworkImages.$inferSelect;
 export type ListingRow = typeof listings.$inferSelect;
 export type SiteSettingsRow = typeof siteSettings.$inferSelect;
 export type SiteFontRow = typeof siteFonts.$inferSelect;
+
+/**
+ * A published version of the whole public site.
+ *
+ * The artist edits the tables above freely; none of it reaches a visitor until
+ * she presses "Make live", which serialises everything the public site reads
+ * into one row here. Public reads then come from the newest revision, so a
+ * half-finished rearrangement is never on show and a set of related changes
+ * goes out together rather than one save at a time.
+ *
+ * A whole snapshot rather than a flag per row because publishing has to be
+ * atomic: a flag per row is a write per row, and a dropped connection halfway
+ * through would leave the site showing half of one version and half of another.
+ *
+ * D1 caps a row at 2MB, which is the ceiling on the whole public site — see
+ * `SNAPSHOT_LIMIT_BYTES` in src/lib/site-snapshot.ts, which refuses to publish
+ * rather than write a row D1 will reject.
+ */
+export const siteRevisions = sqliteTable(
+  "site_revisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** SHA-256 of the canonicalised snapshot; what the "Live" badge compares. */
+    hash: text("hash").notNull(),
+    /** The serialised `SiteSnapshot` — see src/lib/site-snapshot.ts. */
+    snapshot: text("snapshot").notNull(),
+    publishedAt: integer("published_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("site_revisions_published_idx").on(t.publishedAt)],
+);
+
+/**
+ * R2 objects that a draft has finished with but the live site still needs.
+ *
+ * Deleting a piece removes its images from the bucket immediately, which was
+ * correct while the studio and the site were the same thing. Now the published
+ * revision can still reference them, so a delete would knock holes in a live
+ * page the artist had not touched. Keys still in the published snapshot are
+ * recorded here instead and swept on the next publish.
+ */
+export const pendingMediaDeletions = sqliteTable("pending_media_deletions", {
+  storageKey: text("storage_key").primaryKey(),
+});
+
+export type SiteRevisionRow = typeof siteRevisions.$inferSelect;

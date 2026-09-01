@@ -38,6 +38,13 @@ The product specification is `docs/project-brief.md`.
   artist's order — no search, no filters, and no client JavaScript on the index. A piece
   sells one thing: one product type in her own words, one Etsy link, one price.
 
+- **Nothing reaches a visitor until the artist says so.** Her saves are immediate
+  but private; "Make live" in the studio's top bar copies the whole public site — walls,
+  pages, shop, settings, fonts — into one revision that visitors are then served. The
+  button reads "Live" when the two are identical. Signed in, she is served her draft on
+  the real site, marked with a small pill, so "View site" shows what she is about to
+  publish.
+
 - **Everything lives in D1 and R2.** Artwork is in a private bucket, served only through
   `/media` on content-addressed keys, with a responsive width ladder written in the
   browser at upload — there is no image optimiser on Workers.
@@ -71,30 +78,91 @@ The product specification is `docs/project-brief.md`.
 
 ## Recent Phase Reference
 
-| Phase | Summary                                                                                                                                                                                                                                                                                               |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                                                  |
-| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                                                      |
-| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                                                            |
-| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop`                                        |
-| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                                                               |
-| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                                      |
-| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site               |
-| 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                                    |
-| 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                    |
-| 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
-| 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                              |
-| 11    | The top bar's height, its two type sizes and the space around the page moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders. Vertical rhythm moved out of the pages and into the layout                                |
-| 12    | Rich text in every box the artist types into — marks, faces, sizes and links within one box — stored as a sanitised document and rendered as React elements rather than as HTML                                                                                                                       |
-| 13    | The artist's Instagram at the right end of the top bar, drawn as a line glyph and sized in `em` so it tracks her nav type                                                                                                                                                                             |
-| 14    | About and Contact merged into one page: the contact words, address and button sit beneath the about copy, edited in the same settings box, and `/contact` 308s to the heading                                                                                                                         |
-| 15    | The wall makes room at its top. An editor-only band above the page takes work dropped or dragged into it, and the arrangement moves down by the overhang so the new element becomes the top. Grow only — a matching shrink would make dragging the topmost element down lurch the whole wall          |
+| Phase | Summary                                                                                                                                                                                                                                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                                                                     |
+| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                                                                         |
+| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                                                                               |
+| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop`                                                           |
+| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                                                                                  |
+| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                                                         |
+| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site                                  |
+| 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                                                       |
+| 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                                       |
+| 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor                    |
+| 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                                                 |
+| 11    | The top bar's height, its two type sizes and the space around the page moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders. Vertical rhythm moved out of the pages and into the layout                                                   |
+| 12    | Rich text in every box the artist types into — marks, faces, sizes and links within one box — stored as a sanitised document and rendered as React elements rather than as HTML                                                                                                                                          |
+| 13    | The artist's Instagram at the right end of the top bar, drawn as a line glyph and sized in `em` so it tracks her nav type                                                                                                                                                                                                |
+| 14    | About and Contact merged into one page: the contact words, address and button sit beneath the about copy, edited in the same settings box, and `/contact` 308s to the heading                                                                                                                                            |
+| 15    | The wall makes room at its top. An editor-only band above the page takes work dropped or dragged into it, and the arrangement moves down by the overhang so the new element becomes the top. Grow only — a matching shrink would make dragging the topmost element down lurch the whole wall                             |
+| 16    | Draft and live are two different sites. The studio writes a draft; "Make live" copies the whole public site into one revision row that visitors are served. The badge compares a content hash, the signed-in artist previews the draft on the real site, and R2 deletes defer while the live site still needs the object |
 
 ---
 
 ## Architectural Invariants
 
 Non-obvious decisions that the code alone does not explain.
+
+- **Publishing is a snapshot, not a flag per row.** "Make live" serialises everything
+  the public site reads into one `site_revisions` row, and visitors are served that row.
+  A published flag on each table would make publishing a write per row, so a dropped
+  connection halfway through would leave the site showing half of one version and half of
+  another — and the artist asked for this precisely so a set of related changes goes out
+  together. The cost is D1's 2MB row limit as a ceiling on the whole public site, which
+  `publishSite` checks rather than discovers: the raw D1 error names no cause.
+
+- **No revision means the site serves the draft.** Before the button has ever been
+  pressed there is nothing to serve, and an empty site would be a worse answer than the
+  one the artist last saved. It is also what makes this migration invisible on a database
+  that has not been published yet — including local development, where `pnpm seed` never
+  publishes. The same branch catches an unreadable revision, which is why
+  `parseSnapshot` returns null instead of throwing.
+
+- **The "Live" badge compares a content hash, never a dirty flag.** A flag has to be set
+  by every write — four action modules and two route handlers — and the failure when one
+  is forgotten is a badge that tells the artist her site is live when it is not. A hash
+  cannot drift out of step with the content because it is the content. It is why
+  `buildDraftSnapshot` orders every list down to `id`: a sort with ties would hash
+  differently each time D1 returned the rows the other way round, and the badge would
+  flicker at random.
+
+- **Timestamps are stripped on the way into a snapshot.** Nothing public reads
+  `created_at` or `updated_at`, and keeping them would put a value that changes on every
+  save into the hash — so the badge would report unpublished changes after a save that
+  altered nothing a visitor can see. They also do not survive the round trip: a
+  `timestamp_ms` column gives a Date going in and a string coming back.
+
+- **A snapshot over-includes on purpose; only drafts are filtered at build time.** Draft
+  artworks and draft portfolio items can reach no public surface, so they are left out.
+  Everything else — archived artworks, draft custom pages, wall text on a wall nobody can
+  reach — goes in and is filtered on the way out by the same rules the D1 path applies.
+  Over-including costs a few kilobytes in a row that is never served raw; under-including
+  silently removes content from the live site, and the cases are subtle. A piece on a
+  _draft_ custom page still answers at its own URL, so its page's elements are reachable
+  even though the wall it sits on is not — which a "publishable content only" build would
+  have quietly dropped.
+
+- **The signed-in artist is served her draft on the public site.** "View site" has to
+  show what she is about to publish, and the wall editor previews only the walls —
+  nothing else previews the header height, the typefaces or the About copy. The marker
+  that says so is fixed and out of the flow: a banner along the top would push the page
+  down and change the spacing above the header, so she would be checking a layout no
+  visitor will ever see.
+
+- **Deleting an image no longer deletes it from R2 straight away.** The published
+  revision can still reference the object, so an immediate delete knocks holes in live
+  pages the artist has not touched. `releaseMedia` records those keys instead and
+  `publishSite` sweeps them once the new revision no longer wants them. A key that is
+  still referenced stays pending, because keys are content-addressed and the same bytes
+  can be shared by two pieces — "she deleted the piece that uploaded it" does not mean the
+  object is unused. It is also where the width-ladder derivatives finally get cleaned up;
+  the portfolio and artwork deletes had only ever removed the base object.
+
+- **`getDb` lives in `src/lib/db.ts`, not in `catalogue.ts`.** The publish layer needs
+  the database, `catalogue` reads through `getSiteSource`, and `getSiteSource` lives in
+  the publish layer — a cycle that would only resolve by accident of module evaluation
+  order. A leaf module breaks it outright. Do not move it back.
 
 - **`--site-body` and `--site-display` exist because `@theme inline` substitutes a theme
   key's _value_ into the utility.** `.font-display` compiles to
@@ -280,7 +348,10 @@ Non-obvious decisions that the code alone does not explain.
   page's work on the home page. `scopeColumns` in `src/lib/portfolio.ts` is the only thing
   that writes the pair and `onWall` in `portfolio-queries.ts` the only thing that reads it,
   so the illegal both-set state has nowhere to come from. Do not reintroduce a bare
-  `parentId` parameter.
+  `parentId` parameter. Reading from a published revision needs the same rule against
+  objects rather than SQL, which is `isOnWall` — built out of `scopeOf` rather than
+  testing the two columns a second time, so there is still only one place that reads
+  the pair.
 
 - **A piece's back link follows the wall it is shown on, and the two surfaces differ.**
   `/work/<slug>` and the studio's piece editor are reached from whichever wall the piece
