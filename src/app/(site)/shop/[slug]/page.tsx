@@ -5,7 +5,7 @@ import { Container } from "@/components/container";
 import { ArtworkViewer } from "@/components/artwork-viewer";
 import { BuyPanel } from "@/components/buy-panel";
 import { getArtworkBySlug } from "@/lib/catalogue";
-import { primaryImage, productTypeLabel, soleListing } from "@/lib/artworks";
+import { primaryImage, soleListing } from "@/lib/artworks";
 import { SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -81,10 +81,10 @@ export default async function ArtworkPage({ params }: Props) {
           </h1>
 
           <dl className="text-graphite mt-4 space-y-1 text-sm">
-            {listing && (
+            {listing?.label && (
               <div className="flex gap-2">
                 <dt className="sr-only">Product type</dt>
-                <dd className="text-ink">{productTypeLabel(listing.kind)}</dd>
+                <dd className="text-ink">{listing.label}</dd>
               </div>
             )}
             <div className="flex gap-2">

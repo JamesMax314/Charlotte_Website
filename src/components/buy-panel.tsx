@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Artwork, Listing } from "@/lib/artworks";
-import { isBuyable, productTypeLabel, soleListing } from "@/lib/artworks";
+import { isBuyable, soleListing } from "@/lib/artworks";
 import { formatPrice } from "@/lib/format";
 
 function EditionNote({ listing }: { listing: Listing }) {
@@ -65,11 +65,10 @@ export function BuyPanel({ artwork }: { artwork: Artwork }) {
       >
         <span>Buy on Etsy</span>
         <span className="tabular-nums">{formatPrice(listing.pricePence)}</span>
-        <span className="sr-only"> — {productTypeLabel(listing.kind)} (opens in a new tab)</span>
+        <span className="sr-only"> — {listing.label} (opens in a new tab)</span>
       </a>
 
-      <div className="mt-2 flex items-baseline justify-between gap-4">
-        <span className="text-graphite text-xs">{listing.label}</span>
+      <div className="mt-2">
         <EditionNote listing={listing} />
       </div>
 

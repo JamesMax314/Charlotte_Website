@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Artwork } from "@/lib/artworks";
-import { isSoldOut, primaryImage, productTypeLabel, soleListing } from "@/lib/artworks";
+import { isSoldOut, primaryImage, soleListing } from "@/lib/artworks";
 import { formatPrice } from "@/lib/format";
 
 /**
@@ -58,9 +58,8 @@ export function ArtworkCard({
             <span className="shrink-0 text-sm tabular-nums">{formatPrice(listing.pricePence)}</span>
           )}
         </div>
-        <p className="text-graphite mt-0.5 text-xs">
-          {listing ? productTypeLabel(listing.kind) : artwork.medium}
-        </p>
+        {/* Her own words for what it is, falling back to the medium. */}
+        <p className="text-graphite mt-0.5 text-xs">{listing?.label || artwork.medium}</p>
       </Link>
     </article>
   );

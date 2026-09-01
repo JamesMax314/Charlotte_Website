@@ -64,6 +64,13 @@
       "when": 1788261752121,
       "tag": "0008_site-typefaces",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788265980136,
+      "tag": "0009_freeform-product-type",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,6 @@ import { getDb } from "@/lib/catalogue";
 import {
   isPlaceholderSlug,
   isValidEtsyUrl,
-  productTypeLabel,
   toSlug,
   type ArtworkDetails,
   type ArtworkStatus,
@@ -166,8 +165,7 @@ export async function saveArtworkDetails(
   } else {
     const values = {
       artworkId: id,
-      kind: details.kind,
-      label: details.label.trim() || productTypeLabel(details.kind),
+      label: details.label.trim(),
       etsyUrl,
       // Money is integer pence everywhere; round rather than trusting floats.
       pricePence: Math.round(pounds * 100),

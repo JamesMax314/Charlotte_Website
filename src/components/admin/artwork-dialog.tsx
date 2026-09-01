@@ -18,7 +18,6 @@ const detailsOf = (artwork: Artwork): ArtworkDetails => {
     title: artwork.title,
     description: artwork.description,
     status: artwork.status,
-    kind: listing?.kind ?? "print",
     label: listing?.label ?? "",
     price: toPounds(listing?.pricePence),
     etsyUrl: listing?.etsyUrl ?? "",
@@ -120,14 +119,12 @@ export function ArtworkDialog({
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-graphite text-xs">
             What it is
-            <select
-              value={details.kind}
-              onChange={(e) => set("kind", e.target.value as ArtworkDetails["kind"])}
+            <input
+              value={details.label}
+              onChange={(e) => set("label", e.target.value)}
+              placeholder="A3 giclée print"
               className={`${FIELD} mt-1`}
-            >
-              <option value="print">Print</option>
-              <option value="digital">Digital download</option>
-            </select>
+            />
           </label>
 
           <label className="text-graphite text-xs">
@@ -210,16 +207,6 @@ export function ArtworkDialog({
                 />
               </label>
             </div>
-
-            <label className="text-graphite text-xs">
-              Size or format
-              <input
-                value={details.label}
-                onChange={(e) => set("label", e.target.value)}
-                placeholder="A3 giclée print"
-                className={`${FIELD} mt-1`}
-              />
-            </label>
 
             <label className="text-graphite text-xs">
               Size of the original

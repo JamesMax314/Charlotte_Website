@@ -70,7 +70,7 @@ export const listings = sqliteTable(
     artworkId: text("artwork_id")
       .notNull()
       .references(() => artworks.id, { onDelete: "cascade" }),
-    kind: text("kind", { enum: ["print", "digital"] }).notNull(),
+    /** What she is selling, in her words: "A3 giclée print", "Digital download". */
     label: text("label").notNull(),
     etsyUrl: text("etsy_url").notNull(),
     /** Indicative only. Etsy is the source of truth (brief P-05). */

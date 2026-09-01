@@ -6,7 +6,6 @@
  */
 
 export type ArtworkStatus = "draft" | "published" | "archived";
-export type ListingKind = "print" | "digital";
 export type Availability = "available" | "sold_out";
 
 export interface ArtworkImage {
@@ -21,7 +20,7 @@ export interface ArtworkImage {
 
 export interface Listing {
   id: string;
-  kind: ListingKind;
+  /** What she is selling, in her words. Free text: she names her own formats. */
   label: string;
   etsyUrl: string;
   /** Indicative only — Etsy is the source of truth. Integer pence. */
@@ -71,22 +70,6 @@ export const isBuyable = (listing: Listing) => listing.availability === "availab
 export const isSoldOut = (artwork: Artwork) =>
   artwork.listings.length > 0 && artwork.listings.every((l) => !isBuyable(l));
 
-/**
- * The price a card should advertise.
- *
- * Prints are the headline product, so a cheap digital download must not set the
- * "from" price: advertising "From £12" beside a £65 print is true and misleading
- * at once. Falls back to whatever is buyable when there is no print.
- */
-export const headlinePricePence = (artwork: Artwork): number | null => {
-  const buyable = artwork.listings.filter(isBuyable);
-  if (buyable.length === 0) return null;
-
-  const prints = buyable.filter((l) => l.kind === "print");
-  const pool = prints.length > 0 ? prints : buyable;
-  return Math.min(...pool.map((l) => l.pricePence));
-};
-
 /** Etsy links must actually point at Etsy (brief A-08). */
 export const isValidEtsyUrl = (value: string): boolean => {
   try {
@@ -128,10 +111,6 @@ export const toSlug = (value: string): string =>
  */
 export const soleListing = (artwork: Artwork): Listing | undefined => artwork.listings[0];
 
-/** How a product type reads to a visitor. */
-export const productTypeLabel = (kind: ListingKind): string =>
-  kind === "print" ? "Print" : "Digital download";
-
 /**
  * Everything the store dialog edits, in one shape.
  *
@@ -143,7 +122,7 @@ export interface ArtworkDetails {
   title: string;
   description: string;
   status: ArtworkStatus;
-  kind: ListingKind;
+  /** The product type, as she types it. */
   label: string;
   price: string;
   etsyUrl: string;
