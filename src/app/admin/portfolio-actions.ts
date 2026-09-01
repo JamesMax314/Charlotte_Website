@@ -55,6 +55,7 @@ export async function updatePageSettings(patch: {
     ...(patch.gutter === undefined ? {} : { gutter: Math.min(Math.max(patch.gutter, 0), 20) }),
     ...(patch.snapEnabled === undefined ? {} : { snapEnabled: patch.snapEnabled }),
     ...(patch.showNamesOnHover === undefined ? {} : { showNamesOnHover: patch.showNamesOnHover }),
+    ...(patch.contentFadeIn === undefined ? {} : { contentFadeIn: patch.contentFadeIn }),
   };
   if (Object.keys(values).length === 0) return;
 
