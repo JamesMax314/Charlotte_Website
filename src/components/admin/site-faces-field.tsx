@@ -109,7 +109,7 @@ export function SiteFacesField({
         />
         <FaceSelect
           label="Body text"
-          hint="Everything else — your About, Contact and Privacy words."
+          hint="Everything else — your About and Privacy words."
           role="body"
           value={value.bodyFontId}
           fonts={fonts}

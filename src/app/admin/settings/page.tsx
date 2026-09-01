@@ -40,8 +40,7 @@ export default async function SettingsPage() {
     <Container className="pt-10 pb-20">
       <h1 className="font-display text-3xl tracking-tight">Settings</h1>
       <p className="text-graphite mt-1 mb-10 text-sm">
-        Your name and mark, where you link out to, and the words on your About, Contact and Privacy
-        pages.
+        Your name and mark, where you link out to, and the words on your About and Privacy pages.
       </p>
 
       <SettingsForm title="Your name and mark" hint="Shown together at the top of every page.">
@@ -126,7 +125,10 @@ export default async function SettingsPage() {
         </div>
       </SettingsSection>
 
-      <SettingsForm title="About page" hint="A blank line starts a new paragraph.">
+      <SettingsForm
+        title="About page"
+        hint="Your words, and the contact details that sit beneath them. A blank line starts a new paragraph."
+      >
         <AboutPhotoField
           photoKey={settings.aboutPhotoKey}
           width={settings.aboutPhotoWidth}
@@ -149,30 +151,38 @@ export default async function SettingsPage() {
           initial={copyDoc(settings.aboutRich, settings.aboutCopy, DEFAULT_ABOUT_COPY, registry)}
           fonts={registry}
         />
-      </SettingsForm>
 
-      <SettingsForm title="Contact page" hint="A blank line starts a new paragraph.">
-        <label className="flex max-w-lg flex-col gap-1.5">
-          <Label>Email address</Label>
-          <input
-            name="contactEmail"
-            type="email"
-            inputMode="email"
-            defaultValue={settings.contactEmail}
-            className={FIELD}
+        {/*
+          Contact is part of the About page now, so it is edited in the same
+          box and saved by the same button. `saveSettingsForm` reads only the
+          fields a form actually submitted, so moving these here needed nothing
+          on the action's side — but it does mean these two now save together
+          with the words above them.
+        */}
+        <div className="border-line mt-2 flex flex-col gap-4 border-t pt-6">
+          <h3 className="text-sm">Contact, shown below your words</h3>
+          <label className="flex max-w-lg flex-col gap-1.5">
+            <Label>Email address — leave empty for no button</Label>
+            <input
+              name="contactEmail"
+              type="email"
+              inputMode="email"
+              defaultValue={settings.contactEmail}
+              className={FIELD}
+            />
+          </label>
+          <RichCopyField
+            name="contactRich"
+            label="Your words about getting in touch"
+            initial={copyDoc(
+              settings.contactRich,
+              settings.contactCopy,
+              DEFAULT_CONTACT_COPY,
+              registry,
+            )}
+            fonts={registry}
           />
-        </label>
-        <RichCopyField
-          name="contactRich"
-          label="Your words"
-          initial={copyDoc(
-            settings.contactRich,
-            settings.contactCopy,
-            DEFAULT_CONTACT_COPY,
-            registry,
-          )}
-          fonts={registry}
-        />
+        </div>
       </SettingsForm>
 
       <SettingsForm

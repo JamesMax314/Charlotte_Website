@@ -32,7 +32,7 @@ import { useAction } from "./use-action";
  */
 
 /** The links the header always carries, in its order. */
-const FIXED_LINKS = ["About", "Contact", "Shop"];
+const FIXED_LINKS = ["About", "Shop"];
 
 function Slider({
   label,

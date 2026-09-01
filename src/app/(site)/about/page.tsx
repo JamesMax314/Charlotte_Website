@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Container } from "@/components/container";
+import { DrawnRule } from "@/components/drawn-rule";
 import { RichTextBlocks } from "@/components/rich-text";
 import { mergeFonts } from "@/lib/fonts";
 import { copyDoc } from "@/lib/rich-text";
 import { getSiteFonts } from "@/lib/site-settings";
 import { Mark } from "@/components/mark";
 import { getSiteSettings } from "@/lib/catalogue";
-import { DEFAULT_ABOUT_COPY } from "@/lib/default-copy";
+import { DEFAULT_ABOUT_COPY, DEFAULT_CONTACT_COPY } from "@/lib/default-copy";
 
 // The root layout's header and footer read site settings from D1, so this page
 // cannot be prerendered without baking in stale settings.
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "About the artist, and how the prints are made.",
+  description: "About the artist, how the prints are made, and how to get in touch.",
 };
 
 export default async function AboutPage() {
@@ -30,6 +31,12 @@ export default async function AboutPage() {
   const [fonts] = await Promise.all([getSiteFonts()]);
   const registry = mergeFonts(fonts);
   const body = copyDoc(settings.aboutRich, settings.aboutCopy, DEFAULT_ABOUT_COPY, registry);
+  const contact = copyDoc(
+    settings.contactRich,
+    settings.contactCopy,
+    DEFAULT_CONTACT_COPY,
+    registry,
+  );
 
   const photo =
     settings.aboutPhotoKey && settings.aboutPhotoWidth && settings.aboutPhotoHeight
@@ -73,6 +80,42 @@ export default async function AboutPage() {
           <div className="mt-6 space-y-5 leading-relaxed text-pretty">
             <RichTextBlocks doc={body} fonts={registry} className="whitespace-pre-line" />
           </div>
+
+          {/*
+            Contact lives beneath the about copy rather than on a page of its
+            own. The id is what keeps a link shared before the merge useful:
+            /contact now redirects here, and to this heading rather than to the
+            top of a page whose first screen is about something else. The
+            scroll margin clears the top bar, whose height the artist sets.
+          */}
+          <section id="contact" aria-labelledby="contact-heading" className="mt-14 scroll-mt-32">
+            <DrawnRule className="mb-10" />
+
+            <h2 id="contact-heading" className="font-display text-2xl tracking-tight sm:text-3xl">
+              Contact
+            </h2>
+
+            <div className="mt-6 space-y-5 leading-relaxed text-pretty">
+              <RichTextBlocks doc={contact} fonts={registry} className="whitespace-pre-line" />
+            </div>
+
+            {/* No address, no button: better than a mailto: that goes nowhere. */}
+            {settings.contactEmail && (
+              <a
+                href={`mailto:${settings.contactEmail}`}
+                className="bg-accent text-accent-ink hover:bg-ink hover:text-paper mt-8 inline-block px-5 py-3.5 text-sm transition-colors"
+              >
+                {settings.contactEmail}
+              </a>
+            )}
+
+            {settings.etsyShopUrl && (
+              <p className="text-graphite mt-8 text-sm leading-relaxed">
+                Questions about an order you have already placed are fastest through Etsy messages,
+                since that is where the order details live.
+              </p>
+            )}
+          </section>
         </div>
       </div>
     </Container>

@@ -54,7 +54,8 @@ The product specification is `docs/project-brief.md`.
   Instagram and Etsy links, the top bar's height and type sizes and the space it leaves
   around her work — with a working miniature of it — the highlight colour, uploaded fonts,
   and the copy for the
-  About, Contact and Privacy pages — with a photograph beside the About text. The mark is
+  About and Privacy pages — with a photograph beside the About text, and the contact words
+  and address that sit beneath it. The mark is
   both the circular badge in the header and the browser-tab icon, and she picks the body
   and heading typefaces the public site is set in.
 
@@ -83,6 +84,8 @@ The product specification is `docs/project-brief.md`.
 | 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                              |
 | 11    | The top bar's height, its two type sizes and the space around the page moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders. Vertical rhythm moved out of the pages and into the layout                                |
 | 12    | Rich text in every box the artist types into — marks, faces, sizes and links within one box — stored as a sanitised document and rendered as React elements rather than as HTML                                                                                                                       |
+| 13    | The artist's Instagram at the right end of the top bar, drawn as a line glyph and sized in `em` so it tracks her nav type                                                                                                                                                                             |
+| 14    | About and Contact merged into one page: the contact words, address and button sit beneath the about copy, edited in the same settings box, and `/contact` 308s to the heading                                                                                                                         |
 
 ---
 
