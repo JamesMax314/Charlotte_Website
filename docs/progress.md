@@ -18,10 +18,10 @@ The product specification is `docs/project-brief.md`.
 - **Pieces can have pages of their own**, built with the same wall editor. Elements placed
   on them are inert by construction and never link onward.
 
-- **The artist adds her own pages**, linked from the middle of the top bar. Each is the
-  same free-form wall as the home page — work placed on one is clickable and keeps a page
-  of its own — and the studio's top bar is the whole interface for them: drag a link to
-  move it, click it to edit the page, press + to add one.
+- **The artist adds her own pages**, linked from the middle of the top bar behind Home.
+  Each is the same free-form wall as the home page — work placed on one is clickable and
+  keeps a page of its own — and the studio's top bar is the whole interface for them: drag
+  a link to move it, click it to edit the page, press + to add one.
 
 - **Two separate collections.** The portfolio drives the home page and carries no prices;
   the store is `artworks` + `listings`, browsable at `/shop` and sold at `/shop/<slug>`.

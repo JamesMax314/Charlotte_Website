@@ -143,7 +143,23 @@ export function NavPages({ pages }: { pages: SitePage[] }) {
   }
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {/*
+        Home leads the bar here for the same reason it leads the site's: this
+        strip is meant to be a preview of the nav the artist is arranging, and
+        one that opened straight onto her custom pages would not be. It sits
+        outside the DndContext because it is not one of her pages — there is no
+        row to reorder, and it is always first.
+      */}
+      <Link
+        href="/admin/portfolio"
+        className={`hover:text-accent text-xs whitespace-nowrap transition-colors ${
+          pathname === "/admin/portfolio" ? "text-ink" : "text-graphite"
+        }`}
+      >
+        Home page
+      </Link>
+
       {/*
         An explicit id is required, not optional: dnd-kit derives its
         aria-describedby target from a module-level counter that starts at zero

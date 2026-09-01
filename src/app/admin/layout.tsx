@@ -36,12 +36,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Link href="/admin/portfolio" className="font-display text-sm tracking-tight">
                 Studio
               </Link>
-              <Link
-                href="/admin/portfolio"
-                className="text-graphite hover:text-accent text-xs transition-colors"
-              >
-                Home page
-              </Link>
+              {/*
+                No "Home page" here: it leads the middle nav now, where it
+                mirrors the site's own bar. Two links to the same wall a few
+                inches apart is the opposite of making it easy to find.
+              */}
               <Link
                 href="/admin"
                 className="text-graphite hover:text-accent text-xs transition-colors"

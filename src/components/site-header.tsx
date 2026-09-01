@@ -51,32 +51,39 @@ export async function SiteHeader() {
         </Link>
 
         {/*
-          The artist's own pages. The empty div is not decorative: without a
-          child in the middle column the fixed links below would fall into it
-          and sit in the centre of the bar rather than at its end.
+          Home and the artist's own pages — the gallery's own navigation, as
+          against the fixed links on the right.
 
-          Below `md` these drop to their own full-width row, because the brand
-          and the fixed links already fill a phone's width and a nav that has
-          grown to five pages would otherwise squeeze them to nothing.
+          Home leads it rather than relying on the mark alone: a wordmark is
+          only recognisable as the way back once you already know the site, and
+          with pages beside it there is a row of obvious links with a
+          conspicuous gap where the most-wanted one should be. It is always
+          rendered, which is also what keeps the middle grid column occupied so
+          the fixed links stay at the end of the bar.
+
+          Below `md` the whole nav drops to its own full-width row, because the
+          brand and the fixed links already fill a phone's width and a nav that
+          has grown to five pages would otherwise squeeze them to nothing.
         */}
-        {pages.length > 0 ? (
-          <nav
-            aria-label="Pages"
-            className="order-last w-full md:order-none md:w-auto md:justify-self-center"
-          >
-            <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-              {pages.map((page) => (
-                <li key={page.id}>
-                  <Link className="hover:text-accent transition-colors" href={`/${page.slug}`}>
-                    {navLabel(page)}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ) : (
-          <div className="hidden md:block" />
-        )}
+        <nav
+          aria-label="Pages"
+          className="order-last w-full md:order-none md:w-auto md:justify-self-center"
+        >
+          <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+            <li>
+              <Link className="hover:text-accent transition-colors" href="/">
+                Home
+              </Link>
+            </li>
+            {pages.map((page) => (
+              <li key={page.id}>
+                <Link className="hover:text-accent transition-colors" href={`/${page.slug}`}>
+                  {navLabel(page)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         <nav aria-label="Main" className="md:justify-self-end">
           <ul className="flex items-center gap-6 text-sm">
