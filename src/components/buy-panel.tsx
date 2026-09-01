@@ -45,10 +45,6 @@ export function BuyPanel({ artwork }: { artwork: Artwork }) {
           <Link className="hover:text-accent underline underline-offset-4" href="/shop">
             See what else is for sale
           </Link>
-          , or{" "}
-          <Link className="hover:text-accent underline underline-offset-4" href="/contact">
-            ask about a reprint
-          </Link>
           .
         </p>
       </div>
