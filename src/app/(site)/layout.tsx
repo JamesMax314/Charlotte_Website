@@ -1,4 +1,3 @@
-import ReactDOM from "react-dom";
 import { SiteHeader } from "@/components/site-header";
 import { fadeScript } from "@/lib/fade-script";
 import { SiteFooter } from "@/components/site-footer";
@@ -21,20 +20,10 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
     preload scanner never sees them — as a wall-text face that was a few words,
     but as the *body* face it is every page painting in the system sans and
     then reflowing when the bytes land.
-
-    crossOrigin is required even though /media is same-origin: without it the
-    preload is made in a different mode from the CSS-triggered fetch and the
-    font is downloaded twice.
   */
-  for (const id of [settings.bodyFontId, settings.headingFontId]) {
-    const font = uploaded.find((candidate) => candidate.id === id);
-    if (!font) continue;
-    ReactDOM.preload(`/media/${font.storageKey}`, {
-      as: "font",
-      type: fontMimeType(font.format),
-      crossOrigin: "anonymous",
-    });
-  }
+  const chosenUploads = [settings.headingFontId, settings.bodyFontId]
+    .map((id) => uploaded.find((font) => font.id === id))
+    .filter((font) => font !== undefined);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -57,6 +46,29 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         The @font-face rules stay in the root layout: the wall editor's toolbar
         previews need them too, and the root layout already wraps this one.
       */}
+      {/*
+        Rendered as elements rather than through `ReactDOM.preload`. That helper
+        is called while this nested layout renders, by which point the shell has
+        already flushed, so React can only record it as a hint in the flight
+        stream — the browser then learns about the font from the bundle instead
+        of from the parser, which is the whole thing the preload was for. React
+        hoists a <link> into the head wherever it is rendered, so this lands in
+        the initial HTML.
+
+        crossOrigin is required even though /media is same-origin: without it
+        the preload is made in a different mode from the CSS-triggered fetch and
+        the font is downloaded twice.
+      */}
+      {chosenUploads.map((font) => (
+        <link
+          key={font.id}
+          rel="preload"
+          as="font"
+          type={fontMimeType(font.format)}
+          href={`/media/${font.storageKey}`}
+          crossOrigin="anonymous"
+        />
+      ))}
       <style
         data-site-faces=""
         dangerouslySetInnerHTML={{
