@@ -117,3 +117,17 @@ export const toSlug = (value: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+
+/**
+ * The one listing a shop piece carries.
+ *
+ * The store sells a single thing per piece: one product type, one Etsy link,
+ * one price. That is a decision about the admin, not about the schema — the
+ * `listings` table still holds many rows per artwork, so sizes and formats can
+ * come back without a migration. Anything beyond the first is simply not shown.
+ */
+export const soleListing = (artwork: Artwork): Listing | undefined => artwork.listings[0];
+
+/** How a product type reads to a visitor. */
+export const productTypeLabel = (kind: ListingKind): string =>
+  kind === "print" ? "Print" : "Digital download";

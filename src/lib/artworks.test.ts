@@ -3,6 +3,8 @@ import {
   headlinePricePence,
   isPlaceholderSlug,
   primaryImage,
+  productTypeLabel,
+  soleListing,
   isInGallery,
   isPubliclyRoutable,
   isSoldOut,
@@ -154,5 +156,24 @@ describe("toSlug", () => {
 
   it("trims punctuation from the ends", () => {
     expect(toSlug("  Swimmers!  ")).toBe("swimmers");
+  });
+});
+
+describe("soleListing", () => {
+  it("is undefined before the artist has added the Etsy details", () => {
+    expect(soleListing(artwork([]))).toBeUndefined();
+  });
+
+  it("takes the first listing, ignoring any left over from the multi-size editor", () => {
+    const first = listing({ id: "l1", pricePence: 4500 });
+    const stale = listing({ id: "l2", pricePence: 9900 });
+    expect(soleListing(artwork([first, stale]))).toBe(first);
+  });
+});
+
+describe("productTypeLabel", () => {
+  it("spells out a digital download rather than saying 'digital'", () => {
+    expect(productTypeLabel("digital")).toBe("Digital download");
+    expect(productTypeLabel("print")).toBe("Print");
   });
 });
