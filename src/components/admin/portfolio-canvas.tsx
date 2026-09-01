@@ -30,6 +30,7 @@ import {
   updateWallText,
 } from "@/app/admin/portfolio-actions";
 import { TextToolbar } from "./text-toolbar";
+import { useAction } from "./use-action";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { FloatingLayer } from "./floating-layer";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -132,21 +133,7 @@ export function PortfolioCanvas({
   const fileRef = useRef<HTMLInputElement>(null);
   const dropPointRef = useRef<{ x: number; y: number } | null>(null);
   const [adding, setAdding] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  /**
-   * Server actions were fired with `void`, which throws away rejections: a
-   * failed delete or save looked exactly like a successful one. Route them
-   * through here so failures reach the artist instead of vanishing.
-   */
-  const run = (work: Promise<unknown>, what: string) => {
-    setActionError(null);
-    void work.catch((cause) => {
-      const detail = cause instanceof Error ? cause.message : String(cause);
-      setActionError(`${what} failed: ${detail}`);
-      console.error(`[wall] ${what} failed`, cause);
-    });
-  };
+  const { run, error: actionError } = useAction();
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
@@ -182,7 +169,7 @@ export function PortfolioCanvas({
 
   function patchText(id: string, patch: Parameters<typeof updateWallText>[1]) {
     setTexts((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-    void updateWallText(id, patch);
+    run(updateWallText(id, patch), "Saving the text");
   }
 
   const begin = (
@@ -341,14 +328,20 @@ export function PortfolioCanvas({
       setSaving(true);
       const done = () => setSaving(false);
       if (drag.kind === "item") {
-        void savePortfolioLayout(drag.id, {
-          x: drag.latest.x,
-          y: drag.latest.y,
-          width: drag.latest.width,
-          z: drag.z,
-        }).finally(done);
+        run(
+          savePortfolioLayout(drag.id, {
+            x: drag.latest.x,
+            y: drag.latest.y,
+            width: drag.latest.width,
+            z: drag.z,
+          }).finally(done),
+          "Saving the layout",
+        );
       } else {
-        void saveWallTextLayout(drag.id, { ...drag.latest, z: drag.z }).finally(done);
+        run(
+          saveWallTextLayout(drag.id, { ...drag.latest, z: drag.z }).finally(done),
+          "Saving the layout",
+        );
       }
     };
 
@@ -428,7 +421,7 @@ export function PortfolioCanvas({
         {
           label: "Add text",
           icon: Icons.text,
-          onSelect: () => void createWallText(at, parentId),
+          onSelect: () => run(createWallText(at, parentId), "Adding the text"),
         },
       ],
     });
@@ -485,7 +478,7 @@ export function PortfolioCanvas({
           onSelect: () => {
             setTexts((c) => c.filter((t) => t.id !== text.id));
             if (selectedTextId === text.id) setSelectedTextId(null);
-            void deleteWallText(text.id);
+            run(deleteWallText(text.id), "Deleting the text");
           },
         },
       ],
@@ -712,7 +705,7 @@ export function PortfolioCanvas({
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) void addImageFromFile(file);
+          if (file) run(addImageFromFile(file), "Adding the image");
         }}
       />
 
@@ -767,7 +760,7 @@ export function PortfolioCanvas({
               setTexts((c) => c.filter((t) => t.id !== formatTarget.id));
               if (selectedTextId === formatTarget.id) setSelectedTextId(null);
               setFormatting(null);
-              void deleteWallText(formatTarget.id);
+              run(deleteWallText(formatTarget.id), "Deleting the text");
             }}
           />
         </FloatingLayer>
