@@ -26,7 +26,7 @@ export default async function ContactPage() {
 
         <a
           href={`mailto:${settings.contactEmail}`}
-          className="bg-accent text-paper hover:bg-ink mt-8 inline-block px-5 py-3.5 text-sm transition-colors"
+          className="bg-accent text-accent-ink hover:bg-ink hover:text-paper mt-8 inline-block px-5 py-3.5 text-sm transition-colors"
         >
           {settings.contactEmail}
         </a>

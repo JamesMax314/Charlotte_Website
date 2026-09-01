@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Caveat, Fraunces, IBM_Plex_Mono, Inter, Space_Grotesk } from "next/font/google";
 import { getSiteSettings } from "@/lib/catalogue";
+import { DEFAULT_ACCENT, judgeAccent, normaliseHex } from "@/lib/colour";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -77,13 +78,37 @@ export async function generateMetadata(): Promise<Metadata> {
  * so a real mismatch anywhere in the tree is still reported.
  */
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const settings = await getSiteSettings();
+
+  /*
+    The artist's highlight, and the foreground derived from it.
+
+    Validated here as well as on write: the value is interpolated into a
+    stylesheet, so it is checked at both ends rather than trusted because the
+    other end checked it. Same defence in depth as the wall's text colours.
+  */
+  const accent = normaliseHex(settings.accentColour) ?? DEFAULT_ACCENT;
+  const siteStyle = `:root{--accent:${accent};--accent-ink:${judgeAccent(accent).ink}}`;
+
   return (
     <html
       lang="en-GB"
       suppressHydrationWarning
       className={`${fraunces.variable} ${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} ${caveat.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {/*
+          Server-rendered ahead of any content, so the colour is right on the
+          first paint — the same reasoning as the site layout's inline fade
+          script, and unlike anything applied from an effect.
+
+          It lives in the root layout rather than the site layout because the
+          admin uses these tokens too, and the artist has to see her colour
+          applied while she is choosing it.
+        */}
+        <style dangerouslySetInnerHTML={{ __html: siteStyle }} />
+        {children}
+      </body>
     </html>
   );
 }

@@ -119,7 +119,7 @@ function ListingForm({
         <button
           type="submit"
           disabled={pending}
-          className="bg-accent text-paper hover:bg-ink px-4 py-2 text-sm transition-colors disabled:opacity-60"
+          className="bg-accent text-accent-ink hover:bg-ink hover:text-paper px-4 py-2 text-sm transition-colors disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save"}
         </button>

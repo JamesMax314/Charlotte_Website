@@ -187,7 +187,7 @@ export function ImageDialog({
             type="button"
             onClick={() => onSave({ name, information, clickable })}
             disabled={busy !== null}
-            className="bg-accent text-paper hover:bg-ink px-5 py-2 text-sm transition-colors disabled:opacity-60"
+            className="bg-accent text-accent-ink hover:bg-ink hover:text-paper px-5 py-2 text-sm transition-colors disabled:opacity-60"
           >
             Save
           </button>
