@@ -51,7 +51,12 @@ function PageLink({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? "z-10 opacity-70" : ""}
+      /*
+        `flex` blockifies the anchor inside. Left inline it is only as tall as
+        the glyphs, so it sits half a pixel off the Illustration link beside
+        it — which is a direct flex child and therefore already blockified.
+      */
+      className={`flex ${isDragging ? "z-10 opacity-70" : ""}`}
     >
       {/*
         The link is its own drag handle: a separate grip in a bar this size
