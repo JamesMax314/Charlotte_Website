@@ -7,6 +7,9 @@ import {
   isInteractive,
   isLikelyAboveFold,
   lcpCandidateId,
+  HOME_WALL,
+  scopeColumns,
+  scopeOf,
   showsHoverName,
   type PortfolioItem,
   type WallText,
@@ -23,6 +26,7 @@ const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
   width: 30,
   z: 0,
   parentId: null,
+  pageId: null,
   clickable: true,
   images: [],
   ...over,
@@ -114,6 +118,7 @@ const text = (over: Partial<WallText>): WallText => ({
   colour: "#101010",
   font: "sans",
   parentId: null,
+  pageId: null,
   ...over,
 });
 
@@ -161,6 +166,49 @@ describe("isInteractive", () => {
   // Elements on a piece's page compose that page; they are not links onward.
   it("is false for an element on a piece's own page, even if marked clickable", () => {
     expect(isInteractive(item({ clickable: true, parentId: "parent" }))).toBe(false);
+  });
+
+  /**
+   * The distinction the whole custom-page feature rests on. A custom page is a
+   * wall, not a piece's page, so work shown there behaves as it does at home —
+   * clickable, with a page of its own. Test both together: a rule written
+   * against "is this row scoped to something" rather than "is it a child"
+   * passes the one above and fails this.
+   */
+  it("is true for a piece on one of the artist's own pages", () => {
+    expect(isInteractive(item({ clickable: true, parentId: null, pageId: "page" }))).toBe(true);
+  });
+});
+
+describe("scopeColumns", () => {
+  /**
+   * A row belongs to exactly one wall. Both columns set would put it on two,
+   * and every read filters on the pair — so the leak would be a custom page's
+   * work appearing on the home page rather than an error.
+   */
+  it("never sets both columns at once", () => {
+    for (const scope of [
+      HOME_WALL,
+      { kind: "page", id: "p" },
+      { kind: "piece", id: "i" },
+    ] as const) {
+      const columns = scopeColumns(scope);
+      expect(columns.parentId === null || columns.pageId === null).toBe(true);
+    }
+  });
+
+  it("puts the home wall on the pair of nulls", () => {
+    expect(scopeColumns(HOME_WALL)).toEqual({ parentId: null, pageId: null });
+  });
+
+  it("round-trips through scopeOf, so a stored row reports the wall it was written to", () => {
+    for (const scope of [
+      HOME_WALL,
+      { kind: "page", id: "p" },
+      { kind: "piece", id: "i" },
+    ] as const) {
+      expect(scopeOf(scopeColumns(scope))).toEqual(scope);
+    }
   });
 });
 

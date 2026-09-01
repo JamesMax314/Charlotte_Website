@@ -1,33 +1,36 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
 import { PageSettingsPanel } from "@/components/admin/page-settings";
-import { getAllPortfolioItems, getPortfolioItemById, getWallTexts } from "@/lib/portfolio-queries";
+import { SitePageForm } from "@/components/admin/site-page-form";
+import { getAllPortfolioItems, getWallTexts } from "@/lib/portfolio-queries";
+import { getSitePageById } from "@/lib/site-pages-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { mergeFonts } from "@/lib/fonts";
+import type { WallScope } from "@/lib/portfolio";
+import { navLabel } from "@/lib/site-pages";
 import { getSiteFonts } from "@/lib/site-settings";
 import { requireSession } from "@/lib/auth";
-import type { WallScope } from "@/lib/portfolio";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ id: string }> };
 
 /**
- * A piece's own page, edited with the same wall as the home page.
+ * One of the artist's own pages, composed with the same wall as the home page.
  *
- * Elements added here are inert on the site: they compose this page rather
- * than linking anywhere further.
+ * The scope is `page`, not `piece`, and that is the whole difference: work
+ * placed here is clickable and gets a page of its own, exactly as it does at
+ * home. Only a piece's own page makes its contents inert.
  */
-export default async function PortfolioItemPageEditor({ params }: Props) {
+export default async function SitePageEditor({ params }: Props) {
   await requireSession();
   const { id } = await params;
 
-  const item = await getPortfolioItemById(id);
-  if (!item) notFound();
+  const page = await getSitePageById(id);
+  if (!page) notFound();
 
-  const scope: WallScope = { kind: "piece", id };
+  const scope: WallScope = { kind: "page", id };
   const [items, texts, settings, fonts] = await Promise.all([
     getAllPortfolioItems(scope),
     getWallTexts(scope),
@@ -37,20 +40,15 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
 
   return (
     <Container className="pt-10 pb-20">
-      <Link
-        href="/admin/portfolio"
-        className="text-graphite hover:text-accent mb-6 inline-block text-sm"
-      >
-        ← Home page
-      </Link>
-
       <div className="mb-8">
-        <h1 className="font-display text-3xl tracking-tight">{item.name || "Untitled piece"}</h1>
+        <h1 className="font-display text-3xl tracking-tight">{navLabel(page)}</h1>
         <p className="text-graphite mt-1 text-sm">
-          This piece&rsquo;s own page. Right-click to add images and text — anything you put here is
-          part of the page, and never links anywhere.
+          One of your own pages. Right-click the wall to add images and text — or press and hold on
+          a tablet. Drag its name in the bar above to move it along the top of the site.
         </p>
       </div>
+
+      <SitePageForm page={page} />
 
       <PageSettingsPanel
         settings={{
@@ -71,6 +69,11 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
         scope={scope}
         fonts={mergeFonts(fonts)}
       />
+
+      <p className="text-graphite mt-4 max-w-2xl text-xs">
+        As on the home page, this arrangement is what visitors see on a computer. On a phone the
+        pieces stack in reading order — top to bottom, then left to right.
+      </p>
     </Container>
   );
 }

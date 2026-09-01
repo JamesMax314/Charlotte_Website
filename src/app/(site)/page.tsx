@@ -1,6 +1,6 @@
 import { Container } from "@/components/container";
 import { PortfolioWall } from "@/components/portfolio-wall";
-import { getPublishedPortfolio, getWallTexts } from "@/lib/portfolio-queries";
+import { getPublishedWall, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [items, texts, settings, fonts] = await Promise.all([
-    getPublishedPortfolio(),
+    getPublishedWall(),
     getWallTexts(),
     getSiteSettings(),
     getSiteFonts(),

@@ -6,6 +6,43 @@
  * build. Queries live in src/lib/portfolio-queries.ts.
  */
 
+/**
+ * Which wall a piece or a text box sits on.
+ *
+ * There are three, and a row belongs to exactly one: the home page, a custom
+ * page the artist added to the top bar, or a single piece's own page. The
+ * database says this with two nullable columns — `parent_id` and `page_id` —
+ * and a row with both set would belong to two walls at once. A union is the
+ * only reason that state cannot be written: `scopeColumns` is the one place
+ * the pair is produced, and every read goes through the matching clause in
+ * src/lib/portfolio-queries.ts.
+ *
+ * The distinction is not merely bookkeeping. A piece on a custom page has no
+ * parent, so `isInteractive` treats it exactly as a home-wall piece: it is
+ * clickable and it gets a page of its own. A piece on *another piece's* page
+ * does not, and must not.
+ */
+export type WallScope =
+  { kind: "home" } | { kind: "page"; id: string } | { kind: "piece"; id: string };
+
+export const HOME_WALL: WallScope = { kind: "home" };
+
+/** The `parent_id` / `page_id` pair a scope writes. Never built by hand. */
+export const scopeColumns = (
+  scope: WallScope,
+): { parentId: string | null; pageId: string | null } => ({
+  parentId: scope.kind === "piece" ? scope.id : null,
+  pageId: scope.kind === "page" ? scope.id : null,
+});
+
+/** The scope a row already stored is on. The inverse of `scopeColumns`. */
+export const scopeOf = (row: { parentId: string | null; pageId: string | null }): WallScope =>
+  row.parentId !== null
+    ? { kind: "piece", id: row.parentId }
+    : row.pageId !== null
+      ? { kind: "page", id: row.pageId }
+      : HOME_WALL;
+
 export interface PortfolioImage {
   id: string;
   src: string;
@@ -29,6 +66,8 @@ export interface PortfolioItem {
   z: number;
   /** NULL for the home wall; set for an element on that piece's own page. */
   parentId: string | null;
+  /** NULL for the home wall; set for a piece on that custom page. */
+  pageId: string | null;
   clickable: boolean;
   images: PortfolioImage[];
 }
@@ -102,7 +141,9 @@ export const eagerIds = (items: PortfolioItem[]): Set<string> => {
  * Whether a visitor can click through to a piece's own page.
  *
  * Elements placed on a piece's page are always inert: they are part of that
- * page's composition, not links to further pages.
+ * page's composition, not links to further pages. A custom page is not a
+ * piece's page — it is a wall of its own — so `pageId` is deliberately absent
+ * from this test and work shown there behaves exactly as it does at home.
  */
 export const isInteractive = (item: PortfolioItem): boolean =>
   item.clickable && item.parentId === null;
@@ -151,6 +192,8 @@ export interface WallText {
   font: string;
   /** NULL for the home wall; set for an element on that piece's own page. */
   parentId: string | null;
+  /** NULL for the home wall; set for a text box on that custom page. */
+  pageId: string | null;
 }
 
 /**

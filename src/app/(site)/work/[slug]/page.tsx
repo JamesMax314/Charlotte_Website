@@ -3,16 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { PortfolioWall } from "@/components/portfolio-wall";
-import {
-  getPortfolioItemBySlug,
-  getPublishedChildren,
-  getWallTexts,
-} from "@/lib/portfolio-queries";
+import { getPortfolioItemBySlug, getPublishedWall, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
 import { SITE_URL } from "@/lib/site";
+import type { WallScope } from "@/lib/portfolio";
 
 // Reads D1 at request time; see docs/progress.md.
 export const dynamic = "force-dynamic";
@@ -45,9 +42,12 @@ export default async function PortfolioItemPage({ params }: Props) {
   const item = await getPortfolioItemBySlug(slug);
   if (!item) notFound();
 
+  // Everything on this piece's own wall — inert by construction, because the
+  // scope is `piece` rather than `home` or `page`.
+  const scope: WallScope = { kind: "piece", id: item.id };
   const [children, texts, settings, fonts] = await Promise.all([
-    getPublishedChildren(item.id),
-    getWallTexts(item.id),
+    getPublishedWall(scope),
+    getWallTexts(scope),
     getSiteSettings(),
     getSiteFonts(),
   ]);

@@ -1,13 +1,38 @@
 import "server-only";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./catalogue";
-import type { PortfolioImage, PortfolioItem, WallText } from "./portfolio";
+import {
+  HOME_WALL,
+  type PortfolioImage,
+  type PortfolioItem,
+  type WallScope,
+  type WallText,
+} from "./portfolio";
 
 /**
  * D1 reads for the portfolio. Pure types and layout maths live in
  * src/lib/portfolio.ts so client components can use them.
  */
+
+/**
+ * The clause that puts a read on one wall, and the only one there is.
+ *
+ * Both content tables carry `parent_id` and `page_id`, and the home wall is
+ * the pair of nulls — so a read that filters on one column and forgets the
+ * other does not fail, it quietly leaks a custom page's work onto the home
+ * page. Every query below goes through here; nothing hand-rolls the pair.
+ */
+const onWall = (
+  table: typeof schema.portfolioItems | typeof schema.wallTexts,
+  scope: WallScope,
+): SQL | undefined => {
+  if (scope.kind === "piece") return eq(table.parentId, scope.id);
+  return and(
+    isNull(table.parentId),
+    scope.kind === "page" ? eq(table.pageId, scope.id) : isNull(table.pageId),
+  );
+};
 
 const toImage = (row: schema.PortfolioImageRow): PortfolioImage => ({
   id: row.id,
@@ -40,6 +65,7 @@ async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]
     information: row.information,
     status: row.status,
     parentId: row.parentId,
+    pageId: row.pageId,
     clickable: row.clickable,
     x: row.x,
     y: row.y,
@@ -49,51 +75,33 @@ async function hydrate(rows: schema.PortfolioItemRow[]): Promise<PortfolioItem[]
   }));
 }
 
-/** The home wall: top-level pieces only. */
-export const getPublishedPortfolio = async (): Promise<PortfolioItem[]> => {
+/**
+ * The published content of one wall — the home page, a custom page, or a
+ * piece's own page.
+ *
+ * One function for all three, because they differ only in the scope: the home
+ * wall and a custom page's wall are the same feature pointed at a different
+ * set of rows.
+ */
+export const getPublishedWall = async (scope: WallScope = HOME_WALL): Promise<PortfolioItem[]> => {
   const db = await getDb();
   const rows = await db
     .select()
     .from(schema.portfolioItems)
-    .where(
-      and(eq(schema.portfolioItems.status, "published"), isNull(schema.portfolioItems.parentId)),
-    )
+    .where(and(eq(schema.portfolioItems.status, "published"), onWall(schema.portfolioItems, scope)))
     .orderBy(asc(schema.portfolioItems.z));
   return hydrate(rows);
 };
 
-/**
- * Admin needs drafts too. `parentId` selects which wall: null is the home page,
- * an id is that piece's own page.
- */
+/** Admin needs drafts too, on whichever wall she is editing. */
 export const getAllPortfolioItems = async (
-  parentId: string | null = null,
+  scope: WallScope = HOME_WALL,
 ): Promise<PortfolioItem[]> => {
   const db = await getDb();
   const rows = await db
     .select()
     .from(schema.portfolioItems)
-    .where(
-      parentId === null
-        ? isNull(schema.portfolioItems.parentId)
-        : eq(schema.portfolioItems.parentId, parentId),
-    )
-    .orderBy(asc(schema.portfolioItems.z));
-  return hydrate(rows);
-};
-
-/** Published elements of a piece's own page. */
-export const getPublishedChildren = async (parentId: string): Promise<PortfolioItem[]> => {
-  const db = await getDb();
-  const rows = await db
-    .select()
-    .from(schema.portfolioItems)
-    .where(
-      and(
-        eq(schema.portfolioItems.status, "published"),
-        eq(schema.portfolioItems.parentId, parentId),
-      ),
-    )
+    .where(onWall(schema.portfolioItems, scope))
     .orderBy(asc(schema.portfolioItems.z));
   return hydrate(rows);
 };
@@ -117,10 +125,37 @@ export const getPortfolioItemBySlug = async (slug: string): Promise<PortfolioIte
     .limit(1);
   // Children have no page of their own, and a piece that is not clickable has
   // its page hidden rather than deleted — both must 404 rather than resolve.
+  // A piece on a custom page is not a child and does resolve: `page_id` says
+  // where it is shown, not whether it has a page.
   if (rows.length === 0) return undefined;
   const row = rows[0];
   if (row.status === "draft" || row.parentId !== null || !row.clickable) return undefined;
   return (await hydrate(rows))[0];
+};
+
+/**
+ * Every `/work/<slug>` the sitemap should carry.
+ *
+ * Pieces shown on a custom page have pages of their own like any other, so
+ * they belong here — but not while that custom page is still a draft, which is
+ * what the join tests. A piece is never advertised through a page the artist
+ * has not published.
+ */
+export const getRoutableWorkSlugs = async (): Promise<string[]> => {
+  const db = await getDb();
+  const rows = await db
+    .select({ slug: schema.portfolioItems.slug })
+    .from(schema.portfolioItems)
+    .leftJoin(schema.sitePages, eq(schema.portfolioItems.pageId, schema.sitePages.id))
+    .where(
+      and(
+        eq(schema.portfolioItems.status, "published"),
+        eq(schema.portfolioItems.clickable, true),
+        isNull(schema.portfolioItems.parentId),
+        or(isNull(schema.portfolioItems.pageId), eq(schema.sitePages.status, "published")),
+      ),
+    );
+  return rows.map((r) => r.slug);
 };
 
 const toText = (row: schema.WallTextRow): WallText => ({
@@ -139,18 +174,15 @@ const toText = (row: schema.WallTextRow): WallText => ({
   colour: row.colour,
   font: row.font,
   parentId: row.parentId,
+  pageId: row.pageId,
 });
 
-export const getWallTexts = async (parentId: string | null = null): Promise<WallText[]> => {
+export const getWallTexts = async (scope: WallScope = HOME_WALL): Promise<WallText[]> => {
   const db = await getDb();
   const rows = await db
     .select()
     .from(schema.wallTexts)
-    .where(
-      parentId === null
-        ? isNull(schema.wallTexts.parentId)
-        : eq(schema.wallTexts.parentId, parentId),
-    )
+    .where(onWall(schema.wallTexts, scope))
     .orderBy(asc(schema.wallTexts.z));
   return rows.map(toText);
 };

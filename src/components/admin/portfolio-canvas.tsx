@@ -7,8 +7,10 @@ import {
   aspectOf,
   canvasHeightRatio,
   coverImage,
+  HOME_WALL,
   textStyle,
   type PortfolioItem,
+  type WallScope,
   type WallText,
 } from "@/lib/portfolio";
 import {
@@ -89,7 +91,7 @@ export function PortfolioCanvas({
   texts: initialTexts,
   snapEnabled,
   gutter,
-  parentId = null,
+  scope = HOME_WALL,
   fonts = BUILT_IN_FONTS,
 }: {
   items: PortfolioItem[];
@@ -100,11 +102,15 @@ export function PortfolioCanvas({
   /** Built-ins plus the artist's uploads, for the canvas and the toolbar alike. */
   fonts?: FontOption[];
   /**
-   * Which wall this is. Null is the home page; an id is that piece's own page,
-   * where elements are inert and never link anywhere.
+   * Which wall this is: the home page, one of the artist's custom pages, or a
+   * single piece's own page. Only the last makes its elements inert, which is
+   * why this is a scope and not a parent id.
    */
-  parentId?: string | null;
+  scope?: WallScope;
 }) {
+  // A custom page's wall behaves exactly as the home wall does; only a piece's
+  // page turns its contents into inert composition.
+  const linksOnward = scope.kind !== "piece";
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState(initialItems);
@@ -320,7 +326,7 @@ export function PortfolioCanvas({
           const piece = items.find((i) => i.id === drag.id);
           // A clickable piece has a page of its own; anything else has only
           // its details.
-          if (piece && piece.clickable && parentId === null) {
+          if (piece && piece.clickable && linksOnward) {
             router.push(`/admin/portfolio/${drag.id}`);
           } else if (piece) {
             openDetails(piece);
@@ -380,11 +386,11 @@ export function PortfolioCanvas({
     const at = dropPointRef.current ?? { x: 4, y: 4 };
     setAdding(true);
     try {
-      const id = await createPortfolioItemDraft(at, parentId);
+      const id = await createPortfolioItemDraft(at, scope);
       const uploaded = await uploadImage(file, { field: "portfolioItemId", parentId: id });
       setDialog({
         id,
-        initial: { name: "", information: "", clickable: parentId === null },
+        initial: { name: "", information: "", clickable: linksOnward },
         imageSrc: uploaded.src,
         isNew: true,
       });
@@ -425,7 +431,7 @@ export function PortfolioCanvas({
         {
           label: "Add text",
           icon: Icons.text,
-          onSelect: () => run(createWallText(at, parentId), "Adding the text"),
+          onSelect: () => run(createWallText(at, scope), "Adding the text"),
         },
       ],
     });
@@ -441,7 +447,7 @@ export function PortfolioCanvas({
           icon: Icons.pencil,
           onSelect: () => openDetails(item),
         },
-        ...(item.clickable && parentId === null
+        ...(item.clickable && linksOnward
           ? [
               {
                 label: "Open its page",
@@ -732,7 +738,7 @@ export function PortfolioCanvas({
           initial={dialog.initial}
           imageSrc={dialog.imageSrc}
           // Elements on a piece's own page never link anywhere.
-          allowClickable={parentId === null}
+          allowClickable={linksOnward}
           onCancel={() => {
             // Cancelling a brand new image removes the draft and its objects;
             // cancelling an edit simply closes.

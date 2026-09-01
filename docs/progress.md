@@ -18,6 +18,11 @@ The product specification is `docs/project-brief.md`.
 - **Pieces can have pages of their own**, built with the same wall editor. Elements placed
   on them are inert by construction and never link onward.
 
+- **The artist adds her own pages**, linked from the middle of the top bar. Each is the
+  same free-form wall as the home page — work placed on one is clickable and keeps a page
+  of its own — and the studio's top bar is the whole interface for them: drag a link to
+  move it, click it to edit the page, press + to add one.
+
 - **Two separate collections.** The portfolio drives the home page and carries no prices;
   the store is `artworks` + `listings`, browsable at `/shop` and sold at `/shop/<slug>`.
   They share the upload endpoint and image pipeline and nothing else.
@@ -68,6 +73,7 @@ The product specification is `docs/project-brief.md`.
 | 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                                    |
 | 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                    |
 | 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
+| 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                              |
 
 ---
 
@@ -193,6 +199,42 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **A wall is a `WallScope`, never a parent id.** There are three — home, one of the
+  artist's custom pages, and a single piece's own page — and the database says which with
+  two nullable columns, `parent_id` and `page_id`, where home is the pair of nulls. A read
+  that filters one column and forgets the other does not fail; it silently shows a custom
+  page's work on the home page. `scopeColumns` in `src/lib/portfolio.ts` is the only thing
+  that writes the pair and `onWall` in `portfolio-queries.ts` the only thing that reads it,
+  so the illegal both-set state has nowhere to come from. Do not reintroduce a bare
+  `parentId` parameter.
+
+- **A custom page is a wall, not a piece's page, and `isInteractive` must keep ignoring
+  `pageId`.** Work shown on one behaves exactly as it does at home: clickable, with a page
+  of its own. Only `parent_id` makes an element inert. Widening the test to "is this row
+  scoped to anything" would pass the existing child test and quietly strip every custom
+  page's work of its link — which is why `portfolio.test.ts` asserts both cases together.
+
+- **Custom pages live at the top level, so `RESERVED_PAGE_SLUGS` is load-bearing.** Next
+  resolves `/about` to the static route before it reaches `[pageSlug]`, so a page allowed
+  to take that name is not a conflict the artist would ever see — it is a page she can
+  edit and can never visit. A reserved name is treated as a clash and gets a number, and
+  the slug field shows her what was actually saved. That dynamic segment also catches
+  every unmatched one-segment URL and calls `notFound()`, which lands where it always did.
+
+- **`getNavPages` swallows its errors; `getAllSitePages` does not.** The first runs in the
+  header of every public page, so a deploy that skipped `db:migrate` would take the whole
+  site down rather than the feature — it degrades to the nav the site had before. The
+  studio's read is deliberately unguarded, because an empty bar would invite the artist to
+  build her pages a second time. As with `getSiteSettings`, the `console.error` is the
+  only signal that anything is wrong.
+
+- **Drizzle drops `ON DELETE CASCADE` from `ALTER TABLE ... ADD COLUMN`.** Both `page_id`
+  columns were generated without it and the clause was restored by hand in
+  `migrations/0010_site-pages.sql`. Without it, deleting a page leaves its wall content
+  behind pointing at a row that no longer exists — invisible, because every wall read
+  requires a scope that now matches nothing. Regenerate that migration and you must put
+  the clause back.
 
 - **`parent_id` is what scopes a wall.** NULL is the home page; an id is that piece's own
   page. Every read of `portfolio_items` or `wall_texts` must filter on it, or elements

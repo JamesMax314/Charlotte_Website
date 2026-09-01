@@ -86,6 +86,40 @@ export const listings = sqliteTable(
 );
 
 /**
+ * Extra pages the artist adds herself, linked from the middle of the top bar.
+ *
+ * A page is only its identity: the title, the URL and where it sits in the
+ * nav. Its content is portfolio items and wall texts carrying `page_id`, so a
+ * custom page is composed with exactly the wall the home page uses — and a
+ * piece placed on one is a real piece, clickable, with a page of its own.
+ */
+export const sitePages = sqliteTable(
+  "site_pages",
+  {
+    id: text("id").primaryKey(),
+    slug: text("slug").notNull(),
+    /** Doubles as the nav label and the browser title. */
+    title: text("title").notNull(),
+    /** Draft keeps it out of the nav and 404s its URL; the artist still sees it. */
+    status: text("status", { enum: ["draft", "published"] })
+      .notNull()
+      .default("draft"),
+    /** Left to right along the top bar. Set by dragging the links. */
+    navOrder: integer("nav_order").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("site_pages_slug_idx").on(t.slug),
+    index("site_pages_nav_idx").on(t.status, t.navOrder),
+  ],
+);
+
+/**
  * The portfolio — what the home page shows.
  *
  * Deliberately separate from `artworks`, which is the store. Portfolio pieces
@@ -111,6 +145,13 @@ export const portfolioItems = sqliteTable(
     parentId: text("parent_id").references((): AnySQLiteColumn => portfolioItems.id, {
       onDelete: "cascade",
     }),
+
+    /**
+     * NULL means the home wall. Set means this sits on that custom page's
+     * wall. Never set at the same time as `parent_id` — see `WallScope` in
+     * src/lib/portfolio.ts, which is the only thing allowed to write the pair.
+     */
+    pageId: text("page_id").references(() => sitePages.id, { onDelete: "cascade" }),
 
     /**
      * Interactive on the site, and has a page of its own. Defaults true so
@@ -142,6 +183,7 @@ export const portfolioItems = sqliteTable(
     uniqueIndex("portfolio_items_slug_idx").on(t.slug),
     index("portfolio_items_status_idx").on(t.status),
     index("portfolio_items_parent_idx").on(t.parentId, t.z),
+    index("portfolio_items_page_idx").on(t.pageId, t.z),
   ],
 );
 
@@ -180,6 +222,8 @@ export const wallTexts = sqliteTable("wall_texts", {
 
   /** NULL means the home wall; set means that piece's own page. */
   parentId: text("parent_id").references(() => portfolioItems.id, { onDelete: "cascade" }),
+  /** NULL means the home wall; set means that custom page's wall. */
+  pageId: text("page_id").references(() => sitePages.id, { onDelete: "cascade" }),
 
   x: real("x").notNull().default(4),
   y: real("y").notNull().default(4),
@@ -211,6 +255,7 @@ export const wallTexts = sqliteTable("wall_texts", {
 });
 
 export type WallTextRow = typeof wallTexts.$inferSelect;
+export type SitePageRow = typeof sitePages.$inferSelect;
 export type PortfolioItemRow = typeof portfolioItems.$inferSelect;
 export type PortfolioImageRow = typeof portfolioImages.$inferSelect;
 

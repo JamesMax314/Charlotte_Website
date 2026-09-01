@@ -7,6 +7,7 @@ import { getDb } from "@/lib/catalogue";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { requireSession } from "@/lib/auth";
+import { HOME_WALL, scopeColumns, type WallScope } from "@/lib/portfolio";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 
 /**
@@ -72,7 +73,7 @@ export async function updatePageSettings(patch: {
  */
 export async function createPortfolioItemDraft(
   at?: { x: number; y: number },
-  parentId: string | null = null,
+  scope: WallScope = HOME_WALL,
 ): Promise<string> {
   await requireSession();
   const db = await getDb();
@@ -86,9 +87,10 @@ export async function createPortfolioItemDraft(
     id,
     slug: await uniqueSlug("", undefined, id),
     name: "",
-    parentId,
-    // Elements on a piece's own page never link anywhere.
-    clickable: parentId === null,
+    ...scopeColumns(scope),
+    // Elements on a piece's own page never link anywhere. A custom page is a
+    // wall, not a piece's page, so work shown there is clickable as at home.
+    clickable: scope.kind !== "piece",
     status: "draft",
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
     y: at ? Math.max(at.y, 0) : 4,
@@ -261,7 +263,7 @@ async function nextZ(): Promise<number> {
 /** Placed where the artist opened the menu, not in a fixed corner. */
 export async function createWallText(
   at?: { x: number; y: number },
-  parentId: string | null = null,
+  scope: WallScope = HOME_WALL,
 ): Promise<void> {
   await requireSession();
   const db = await getDb();
@@ -271,7 +273,7 @@ export async function createWallText(
     content: "New text",
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
     y: at ? Math.max(at.y, 0) : 4,
-    parentId,
+    ...scopeColumns(scope),
     width: 40,
     height: 8,
     z: await nextZ(),
