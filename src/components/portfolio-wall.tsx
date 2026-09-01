@@ -7,6 +7,8 @@ import {
   headingTextId,
   inReadingOrder,
   isInteractive,
+  isLikelyAboveFold,
+  lcpCandidateId,
   showsHoverName,
   textStyle,
   type PortfolioItem,
@@ -25,10 +27,14 @@ import {
 function Tile({
   item,
   priority,
+  eager,
   showName,
 }: {
   item: PortfolioItem;
+  /** The likely LCP image: preloaded and fetched at high priority. */
   priority?: boolean;
+  /** Above the fold, so not lazily loaded, but not worth preloading either. */
+  eager?: boolean;
   showName: boolean;
 }) {
   const cover = coverImage(item);
@@ -45,6 +51,8 @@ function Tile({
         width={cover.width}
         height={cover.height}
         priority={priority}
+        // next/image rejects both at once — priority already implies eager.
+        {...(priority ? {} : { loading: eager ? ("eager" as const) : ("lazy" as const) })}
         sizes="(min-width: 768px) 50vw, 90vw"
         className="h-auto w-full"
       />
@@ -120,6 +128,15 @@ export function PortfolioWall({
   const ratio = canvasHeightRatio(shown, texts);
   const headingId = headingTextId(texts);
 
+  /*
+    Lazily loading an image that is already on screen is always wrong: the
+    browser will not fetch it until layout proves it is needed, which delays
+    the Largest Contentful Paint. One piece is preloaded and the rest of the
+    first screenful merely opts out of lazy loading, so they do not all compete
+    for bandwidth.
+  */
+  const lcpId = lcpCandidateId(shown);
+
   // The mobile stack interleaves text and pieces in reading order, so a
   // heading written above a piece still reads above it on a phone.
   const stacked = [
@@ -135,7 +152,7 @@ export function PortfolioWall({
   return (
     <>
       <div className="flex flex-col gap-10 md:hidden" style={{ containerType: "inline-size" }}>
-        {stacked.map((entry, i) =>
+        {stacked.map((entry) =>
           entry.kind === "text" ? (
             <TextBlock
               key={entry.text.id}
@@ -145,7 +162,12 @@ export function PortfolioWall({
             />
           ) : (
             <MaybeFade key={entry.item.id} on={fadeIn}>
-              <Tile item={entry.item} priority={i === 0} showName={showNamesOnHover} />
+              <Tile
+                item={entry.item}
+                priority={entry.item.id === lcpId}
+                eager={isLikelyAboveFold(entry.item)}
+                showName={showNamesOnHover}
+              />
             </MaybeFade>
           ),
         )}
@@ -177,7 +199,7 @@ export function PortfolioWall({
           </div>
         ))}
 
-        {shown.map((item, i) => (
+        {shown.map((item) => (
           <div
             key={item.id}
             className="absolute"
@@ -190,7 +212,12 @@ export function PortfolioWall({
             }}
           >
             <MaybeFade on={fadeIn}>
-              <Tile item={item} priority={i === 0} showName={showNamesOnHover} />
+              <Tile
+                item={item}
+                priority={item.id === lcpId}
+                eager={isLikelyAboveFold(item)}
+                showName={showNamesOnHover}
+              />
             </MaybeFade>
           </div>
         ))}

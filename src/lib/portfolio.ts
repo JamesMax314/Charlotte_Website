@@ -34,6 +34,44 @@ export interface PortfolioItem {
 }
 
 /**
+ * Roughly where the fold sits, in canvas-width percent.
+ *
+ * An estimate, and necessarily so: the server cannot know the viewport. The
+ * canvas is 90vw, so on a 1280x900 screen the fold lands near 78 and on a
+ * 1920x1080 near 62. Sixty-five is a middle value — it errs slightly towards
+ * treating fewer pieces as above the fold, so the cost of being wrong is a
+ * lazily loaded image rather than a needless eager one.
+ */
+export const ESTIMATED_FOLD = 65;
+
+export const isLikelyAboveFold = (item: PortfolioItem, fold = ESTIMATED_FOLD): boolean =>
+  item.y < fold;
+
+/** Rendered area, in canvas-width percent squared. */
+const renderedArea = (item: PortfolioItem): number => item.width * item.width * aspectOf(item);
+
+/**
+ * The piece most likely to be the Largest Contentful Paint.
+ *
+ * Next.js warns when the LCP image is lazily loaded, because the browser
+ * cannot begin fetching it until layout proves it is needed. Picking by index
+ * was wrong twice over: the array is ordered by layer, not position, and the
+ * first layer is rarely the biggest thing on screen.
+ *
+ * Falls back to the largest piece overall when nothing is above the fold, so
+ * there is always something to prioritise.
+ */
+export const lcpCandidateId = (items: PortfolioItem[]): string | null => {
+  const withCovers = items.filter((item) => coverImage(item));
+  if (withCovers.length === 0) return null;
+
+  const aboveFold = withCovers.filter((item) => isLikelyAboveFold(item));
+  const pool = aboveFold.length > 0 ? aboveFold : withCovers;
+
+  return pool.reduce((best, item) => (renderedArea(item) > renderedArea(best) ? item : best)).id;
+};
+
+/**
  * Whether a visitor can click through to a piece's own page.
  *
  * Elements placed on a piece's page are always inert: they are part of that

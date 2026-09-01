@@ -201,6 +201,19 @@ Non-obvious decisions that the code alone does not explain.
   the document is still parsing, ahead of the wall. With scripting off the class is never
   added and the page simply renders.
 
+- **Loading priority is chosen by size and position, never by array index.** The wall's
+  array is ordered by layer, so `priority={i === 0}` prioritised whichever piece happened
+  to sit at the back. `lcpCandidateId` picks the largest piece above the fold; the rest of
+  the first screenful merely opts out of lazy loading, so they do not all compete for
+  bandwidth by being preloaded. Lazily loading an image already on screen always delays
+  the Largest Contentful Paint.
+
+- **The fade defers the LCP, by design.** An element at `opacity: 0` is not contentful, so
+  the metric is recorded when a piece reveals rather than when it loads — and the
+  _later_-revealing piece can become the LCP rather than the largest. Worth remembering if
+  the LCP budget in the brief ever comes under pressure: turning the fade off is the
+  lever.
+
 - **`<html>` carries `suppressHydrationWarning`, and must keep it.** The inline script
   adds `js-fade` to that element before React hydrates, so the client class list will
   never match what the server sent — that divergence is the mechanism, not a fault. The
