@@ -138,6 +138,24 @@ describe("the fade script", () => {
     expect(wall.pieces[0]).toHaveClass("is-settled");
   });
 
+  it("reveals pieces mounted later, as a client-side navigation does", () => {
+    /*
+      Going to a piece's page and back replaces the wall with fresh elements in
+      a document where js-fade is still set. A reveal that has retired — or one
+      that only ever ran on load — leaves them hidden with nothing left to show
+      them, which is an empty home page.
+    */
+    const first = buildWall(2);
+    run();
+    settleEverything();
+    expect(first.pieces[0]).toHaveClass("is-visible");
+
+    const second = buildWall(2);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS + TICK);
+
+    expect(second.pieces[0]).toHaveClass("is-visible");
+  });
+
   it("does not dump the rest of the wall in once the net's deadline passes", () => {
     // The net must distinguish "the reveal never started" from "the visitor has
     // not scrolled yet". Revealing on the deadline would flatten the feature

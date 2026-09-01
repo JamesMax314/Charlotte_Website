@@ -263,10 +263,18 @@ Non-obvious decisions that the code alone does not explain.
   which costs the metric the brief puts a budget on. `eagerIds` returns both, which is one
   piece as often as two — and never the first-screenful fan-out that flooded a phone.
 
-- **The reveal stops measuring once every piece is revealed.** `getBoundingClientRect`
-  forces a synchronous layout, and the poll would otherwise do that twice a second for the
-  life of the page. It must test that nothing is left _and_ that a pass has run — stopping
-  on the pass alone tears the listeners down before the visitor has scrolled anywhere.
+- **The reveal never retires, and its listeners must outlive the page it started on.**
+  Skipping the measurement when nothing is pending is free and correct — `querySelectorAll`
+  costs nothing, `getBoundingClientRect` forces a synchronous layout — but tearing the
+  listeners and the poll down is not. A client-side navigation mounts fresh targets into a
+  document where `js-fade` is still set, so a retired reveal leaves them hidden with nothing
+  left to show them: going into a piece's page and back rendered an empty home page.
+
+- **`FadeIn` carries `suppressHydrationWarning`, for the same reason `<html>` does.** The
+  script reveals by adding classes to that element, and on a phone it has usually finished
+  long before the bundle arrives to hydrate — so the class list React finds can never be
+  the one it sent. The divergence is the mechanism, not a fault. It covers that element
+  alone, so a genuine mismatch anywhere else is still reported.
 
 - **`images.deviceSizes` must stay identical to `WIDTH_LADDER`.** Next builds the srcset
   from `deviceSizes`, and `src/image-loader.ts` then rounds each width up to a rung that

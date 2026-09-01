@@ -25,7 +25,7 @@ import {
  * before any module exists to import.
  */
 export const fadeScript = `(function(){
-var d=document,h=d.documentElement,frame=0,opened=0,timer=0;
+var d=document,h=d.documentElement,frame=0,opened=0;
 try{
 h.classList.add('js-fade');
 function reveal(el,ms){setTimeout(function(){el.classList.add('is-visible');
@@ -34,12 +34,15 @@ function reveal(el,ms){setTimeout(function(){el.classList.add('is-visible');
 setTimeout(function(){el.classList.add('is-settled')},${SETTLE_MS})},ms)}
 function pass(){frame=0;
 var t=d.querySelectorAll('.fade-target:not(.is-visible)'),vh=innerHeight||1;
-/* Nothing left to reveal: stop measuring. getBoundingClientRect forces a
-   synchronous layout, and doing that twice a second forever is a cost a phone
-   pays in battery for no remaining benefit. */
-if(opened&&!t.length){removeEventListener('scroll',schedule);
-removeEventListener('resize',schedule);removeEventListener('load',schedule,true);
-clearInterval(timer);return}
+/* Nothing pending: return before measuring anything. querySelectorAll costs
+   nothing, but getBoundingClientRect forces a synchronous layout, so the poll
+   is only expensive while there is actually something left to reveal.
+
+   It must not tear the listeners down. A client-side navigation mounts fresh
+   targets into a document where js-fade is still set, so a reveal that has
+   retired leaves the new page hidden with nothing left to show it — going back
+   to the home page rendered an empty wall. */
+if(!t.length)return;
 for(var i=0;i<t.length;i++){var r=t[i].getBoundingClientRect();
 /* Height floored at a pixel: a piece measured before its image loads is
    zero-high, and bottom>top then rejects anything at the top of the page. */
@@ -54,7 +57,7 @@ addEventListener('resize',schedule,{passive:true});
 /* Images arriving reflow what is beneath them without firing a scroll event.
    Capture, because load on an image does not bubble. */
 addEventListener('load',schedule,true);
-timer=setInterval(schedule,${POLL_INTERVAL_MS})}
+setInterval(schedule,${POLL_INTERVAL_MS})}
 if(d.readyState!=='loading')go();else d.addEventListener('DOMContentLoaded',go);
 /* The safety net tests whether a pass ever ran, not whether anything is
    visible. Asking the latter disabled it the moment the opening pass started
