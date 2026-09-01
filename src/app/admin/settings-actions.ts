@@ -1,0 +1,189 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
+import * as schema from "@/db/schema";
+import { requireSession } from "@/lib/auth";
+import { getDb, getSiteSettings } from "@/lib/catalogue";
+import { cssFamilyName, newFontId, type FontFormat } from "@/lib/fonts";
+import { upsertSiteSettings } from "@/lib/site-settings";
+import { normaliseSettings, type SettingsInput } from "@/lib/settings-input";
+import { derivativeKeys, isSafeKey } from "@/lib/storage";
+import { WIDTH_LADDER } from "@/image-loader";
+
+/**
+ * Site settings mutations.
+ *
+ * As everywhere else in the admin, every entry point gates itself: actions are
+ * routed independently of layouts, so the layout's session check protects
+ * pages only.
+ */
+
+const refresh = () => revalidatePath("/", "layout");
+
+/**
+ * Removes an asset and the ladder rungs beside it.
+ *
+ * Guarded on the key actually changing, because keys are content-addressed:
+ * re-uploading identical bytes yields the same key, and an unguarded delete
+ * would destroy the object it had just written.
+ */
+async function discardAsset(previous: string | null, next: string | null): Promise<void> {
+  if (!previous || previous === next || !isSafeKey(previous)) return;
+
+  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+  const { env } = await getCloudflareContext({ async: true });
+  await env.MEDIA.delete([previous, ...derivativeKeys(previous, WIDTH_LADDER)]);
+}
+
+/** The mark, in the header and the browser tab. Null clears it back to the drawn SVG. */
+export async function setFavicon(key: string | null): Promise<void> {
+  await requireSession();
+  if (key !== null && !isSafeKey(key)) throw new Error("That mark could not be stored.");
+
+  const current = await getSiteSettings();
+  await upsertSiteSettings({ faviconKey: key });
+  await discardAsset(current.faviconKey, key);
+  refresh();
+}
+
+export interface AboutPhoto {
+  key: string;
+  width: number;
+  height: number;
+  lqip: string;
+}
+
+/** The photograph beside the About copy. Null removes it. */
+export async function setAboutPhoto(photo: AboutPhoto | null): Promise<void> {
+  await requireSession();
+  if (photo !== null && !isSafeKey(photo.key)) {
+    throw new Error("That photograph could not be stored.");
+  }
+
+  const current = await getSiteSettings();
+  await upsertSiteSettings({
+    aboutPhotoKey: photo?.key ?? null,
+    aboutPhotoWidth: photo?.width ?? null,
+    aboutPhotoHeight: photo?.height ?? null,
+    aboutPhotoLqip: photo?.lqip ?? null,
+    // A removed photo takes its description with it; a new one starts blank so
+    // the artist is prompted rather than inheriting a description of a
+    // different picture.
+    aboutPhotoAlt: "",
+  });
+  await discardAsset(current.aboutPhotoKey, photo?.key ?? null);
+  refresh();
+}
+
+/**
+ * The highlight colour.
+ *
+ * Separate from `updateSiteSettings` because it saves on its own rhythm — the
+ * whole admin repaints with it, so it commits as the artist leaves the picker
+ * rather than behind the section's Save button.
+ */
+export async function setAccentColour(hex: string): Promise<void> {
+  await requireSession();
+
+  const { values, rejected } = normaliseSettings({ accentColour: hex });
+  if (rejected.length > 0) throw new Error("That is not a colour.");
+
+  await upsertSiteSettings(values);
+  refresh();
+}
+
+/** Adds an uploaded font to the list offered for wall text. */
+export async function addSiteFont(input: {
+  label: string;
+  storageKey: string;
+  format: FontFormat;
+}): Promise<void> {
+  await requireSession();
+  if (!isSafeKey(input.storageKey)) throw new Error("That font could not be stored.");
+
+  const db = await getDb();
+  await db.insert(schema.siteFonts).values({
+    id: newFontId(),
+    label: cssFamilyName(input.label),
+    family: cssFamilyName(input.label),
+    storageKey: input.storageKey,
+    format: input.format,
+  });
+
+  refresh();
+}
+
+/**
+ * Removes an uploaded font.
+ *
+ * Deliberately leaves `wall_texts` alone. A text box keeps the id it was given
+ * and `resolveFontFamily` falls back to Inter — the exact case that fallback
+ * was written for. Sweeping the table would be a migration that could not be
+ * undone if the artist re-uploaded the same face.
+ */
+export async function deleteSiteFont(id: string): Promise<void> {
+  await requireSession();
+
+  const db = await getDb();
+  const rows = await db
+    .select({ storageKey: schema.siteFonts.storageKey })
+    .from(schema.siteFonts)
+    .where(eq(schema.siteFonts.id, id))
+    .limit(1);
+
+  await db.delete(schema.siteFonts).where(eq(schema.siteFonts.id, id));
+
+  const key = rows[0]?.storageKey;
+  if (key && isSafeKey(key)) {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = await getCloudflareContext({ async: true });
+    await env.MEDIA.delete(key);
+  }
+
+  refresh();
+}
+
+export interface SettingsFormState {
+  status: "idle" | "saved" | "error";
+  /** Field labels the artist typed that could not be stored. */
+  rejected: string[];
+}
+
+const FIELDS = [
+  "siteName",
+  "instagramUrl",
+  "etsyShopUrl",
+  "contactEmail",
+  "aboutCopy",
+  "aboutPhotoAlt",
+  "contactCopy",
+  "privacyCopy",
+] as const;
+
+/**
+ * The form-shaped entry point, shared by every section with a Save button.
+ *
+ * Reads only the fields a form actually submitted, so each section saves its
+ * own without clearing the others. Returns what it rejected rather than
+ * dropping it silently: that is right for a colour picker, which cannot
+ * produce an invalid value, and wrong for an address the artist typed.
+ */
+export async function saveSettingsForm(
+  _previous: SettingsFormState,
+  form: FormData,
+): Promise<SettingsFormState> {
+  await requireSession();
+
+  const patch: SettingsInput = {};
+  for (const field of FIELDS) {
+    const value = form.get(field);
+    if (typeof value === "string") patch[field] = value;
+  }
+
+  const { values, rejected } = normaliseSettings(patch);
+  await upsertSiteSettings(values);
+  refresh();
+
+  return { status: rejected.length > 0 ? "error" : "saved", rejected };
+}
