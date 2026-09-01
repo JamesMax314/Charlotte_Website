@@ -142,17 +142,55 @@ export function RichTextEditor({
     onChange(doc);
   }, [fonts, onChange]);
 
-  /** Keeps focus in the text while a control is pressed, so the selection survives. */
-  const keepSelection = (event: React.MouseEvent) => event.preventDefault();
+  /*
+    The last selection that was inside this box.
+
+    A toolbar cannot simply `preventDefault` its way out of losing the
+    selection: that works for a button, and it stops a <select> from opening
+    its list, a colour input from opening its picker, and a text input from
+    taking a caret at all — which is how the typeface, size, colour and link
+    controls all came to do nothing when clicked. So the selection is tracked
+    as it moves and put back before a command runs.
+  */
+  const savedRange = useRef<Range | null>(null);
+
+  useEffect(() => {
+    const remember = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      if (ref.current?.contains(range.commonAncestorContainer)) {
+        savedRange.current = range.cloneRange();
+      }
+    };
+    document.addEventListener("selectionchange", remember);
+    return () => document.removeEventListener("selectionchange", remember);
+  }, []);
+
+  /** Puts the caret back where the artist left it, before acting on it. */
+  const restoreSelection = () => {
+    const el = ref.current;
+    const range = savedRange.current;
+    const selection = window.getSelection();
+    if (!el || !selection) return;
+
+    el.focus();
+    // A stale range can point at nodes a reseed has replaced; using it would
+    // throw and take the whole toolbar down with it.
+    if (range && el.contains(range.commonAncestorContainer)) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
 
   const command = (name: string, arg?: string) => {
-    ref.current?.focus();
+    restoreSelection();
     document.execCommand(name, false, arg);
     read();
   };
 
   const span = (mark: SpanMark) => {
-    ref.current?.focus();
+    restoreSelection();
     applySpanMark(mark);
     read();
   };
@@ -169,7 +207,6 @@ export function RichTextEditor({
     <div className="flex flex-col">
       {toolbar && (
         <div
-          onMouseDown={keepSelection}
           className="border-line bg-paper-sunk/60 flex flex-wrap items-center gap-1 border border-b-0 p-1.5"
           role="toolbar"
           aria-label={`Formatting for ${ariaLabel}`}
