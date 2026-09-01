@@ -26,9 +26,10 @@ The product specification is `docs/project-brief.md`.
   `/media` on content-addressed keys, with a responsive width ladder written in the
   browser at upload — there is no image optimiser on Workers.
 
-- **The admin.** Passphrase sign-in; a Home page editor with page settings, right-click
-  menus, an image details dialog and text formatting at the pointer; a per-piece page
-  editor; and the older store editor for artworks and Etsy listings.
+- **The admin.** Passphrase sign-in; a Home page editor with page settings — gap,
+  snapping, hover names and an optional content fade-in — plus right-click menus, an
+  image details dialog and text formatting at the pointer; a per-piece page editor; and
+  the older store editor for artworks and Etsy listings.
 
 - **Content is real, copy is not.** `pnpm seed` prefers the artist's work in `tmp_art/`
   (gitignored) and falls back to generated placeholders. All wording is placeholder and
@@ -51,6 +52,7 @@ The product specification is `docs/project-brief.md`.
 | 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                               |
 | 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                     |
 | 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop` |
+| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                        |
 
 ---
 
