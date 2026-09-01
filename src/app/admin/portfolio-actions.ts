@@ -5,8 +5,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/catalogue";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
-import { isKnownFontId } from "@/lib/fonts";
+import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { requireSession } from "@/lib/auth";
+import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 
 /**
  * Portfolio mutations — the home page wall.
@@ -47,7 +48,6 @@ export async function updatePageSettings(patch: {
   contentFadeIn?: boolean;
 }): Promise<void> {
   await requireSession();
-  const db = await getDb();
 
   const values = {
     ...(patch.gutterEnabled === undefined ? {} : { gutterEnabled: patch.gutterEnabled }),
@@ -55,20 +55,9 @@ export async function updatePageSettings(patch: {
     ...(patch.gutter === undefined ? {} : { gutter: Math.min(Math.max(patch.gutter, 0), 20) }),
     ...(patch.snapEnabled === undefined ? {} : { snapEnabled: patch.snapEnabled }),
     ...(patch.showNamesOnHover === undefined ? {} : { showNamesOnHover: patch.showNamesOnHover }),
+    ...(patch.contentFadeIn === undefined ? {} : { contentFadeIn: patch.contentFadeIn }),
   };
-  if (Object.keys(values).length === 0) return;
-
-  const existing = await db
-    .select({ id: schema.siteSettings.id })
-    .from(schema.siteSettings)
-    .where(eq(schema.siteSettings.id, 1));
-
-  if (existing.length === 0) {
-    await db.insert(schema.siteSettings).values({ id: 1, ...values });
-  } else {
-    await db.update(schema.siteSettings).set(values).where(eq(schema.siteSettings.id, 1));
-  }
-
+  await upsertSiteSettings(values);
   refresh();
 }
 
@@ -309,6 +298,15 @@ export async function updateWallText(
   await requireSession();
   const db = await getDb();
 
+  /*
+    The registry now includes the artist's uploads, so the guard has to consult
+    the database. Only when a font is actually being set: this same action
+    carries bold, italic, size and colour from every toolbar click, and an
+    unconditional read would put a query behind all of them.
+  */
+  const fontIsKnown =
+    patch.font !== undefined && isKnownFontId(patch.font, mergeFonts(await getSiteFonts()));
+
   const values = {
     ...(patch.content === undefined ? {} : { content: patch.content }),
     // Guard rails so a stray value cannot make text invisible or fill the wall.
@@ -323,8 +321,8 @@ export async function updateWallText(
     ...(patch.colour === undefined || !/^#[0-9a-f]{6}$/i.test(patch.colour)
       ? {}
       : { colour: patch.colour }),
-    // Only a key the registry knows. Widen this when uploaded fonts arrive.
-    ...(patch.font === undefined || !isKnownFontId(patch.font) ? {} : { font: patch.font }),
+    // Only a key the registry knows — an unknown one is dropped, never stored.
+    ...(fontIsKnown && patch.font !== undefined ? { font: patch.font } : {}),
     updatedAt: new Date(),
   };
 

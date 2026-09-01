@@ -236,9 +236,52 @@ export const siteSettings = sqliteTable("site_settings", {
   etsyShopUrl: text("etsy_shop_url").notNull().default(""),
   contactEmail: text("contact_email").notNull().default(""),
   instagramUrl: text("instagram_url").notNull().default(""),
+
+  /** Identity. The mark is an uploaded raster; empty falls back to the drawn SVG. */
+  siteName: text("site_name").notNull().default(""),
+  faviconKey: text("favicon_key"),
+
+  /** The one colour the artist controls. Validated as a six-digit hex on write. */
+  accentColour: text("accent_colour").notNull().default("#9a5b33"),
+
+  /*
+    Copy for the three static pages, as typed into a plain textarea: a blank
+    line starts a paragraph. Empty means "she has not written anything yet",
+    and the page falls back to the prose it shipped with — see
+    src/lib/default-copy.ts for why that is not the reader's job.
+  */
+  aboutCopy: text("about_copy").notNull().default(""),
+  aboutPhotoKey: text("about_photo_key"),
+  aboutPhotoAlt: text("about_photo_alt").notNull().default(""),
+  /** next/image needs intrinsic dimensions, as every other image table stores them. */
+  aboutPhotoWidth: integer("about_photo_width"),
+  aboutPhotoHeight: integer("about_photo_height"),
+  aboutPhotoLqip: text("about_photo_lqip"),
+  contactCopy: text("contact_copy").notNull().default(""),
+  privacyCopy: text("privacy_copy").notNull().default(""),
+});
+
+/**
+ * Fonts the artist has uploaded, offered alongside the built-in faces.
+ *
+ * Rows rather than a JSON column on site_settings: each font needs a stable id
+ * for `wall_texts.font` to point at, and an individual delete.
+ */
+export const siteFonts = sqliteTable("site_fonts", {
+  /** Server-generated and prefixed, so an upload cannot claim a built-in's key. */
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  /** The sanitised CSS family name, without quotes. */
+  family: text("family").notNull(),
+  storageKey: text("storage_key").notNull(),
+  format: text("format", { enum: ["woff2", "woff", "truetype", "opentype"] }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
 });
 
 export type ArtworkRow = typeof artworks.$inferSelect;
 export type ArtworkImageRow = typeof artworkImages.$inferSelect;
 export type ListingRow = typeof listings.$inferSelect;
 export type SiteSettingsRow = typeof siteSettings.$inferSelect;
+export type SiteFontRow = typeof siteFonts.$inferSelect;

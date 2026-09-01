@@ -33,6 +33,10 @@ export async function GET(_request: Request, context: { params: Promise<{ key: s
   headers.set("content-type", object.httpMetadata?.contentType ?? "application/octet-stream");
   headers.set("etag", object.httpEtag);
   headers.set("cache-control", "public, max-age=31536000, immutable");
+  // The bucket now holds fonts and the site mark as well as artwork, all served
+  // same-origin. Pin the declared type so nothing can be sniffed into something
+  // the browser would execute.
+  headers.set("x-content-type-options", "nosniff");
 
   // Buffered rather than streamed: R2 stream bodies do not survive OpenNext's
   // dev binding proxy. Uploads are downscaled client-side, so objects are small.

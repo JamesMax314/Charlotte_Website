@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TextAlign, WallText } from "@/lib/portfolio";
+import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 
 type Patch = Partial<
@@ -18,8 +19,15 @@ const ALIGNMENTS: { value: TextAlign; label: string; glyph: string }[] = [
   { value: "right", label: "Align right", glyph: "◨" },
 ];
 
-/** A few sensible starting points; any hex can still be typed. */
-const SWATCHES = ["#101010", "#6d6a66", "#9a5b33", "#fbfbf9", "#2140d6"];
+/**
+ * A few sensible starting points; any hex can still be typed.
+ *
+ * Taken from the tokens rather than copied as literals, so they cannot drift
+ * from the palette. The accent is the shipped default rather than the artist's
+ * current highlight: a swatch that moved when she changed her highlight would
+ * silently restyle nothing, since a text colour is stored per box.
+ */
+const SWATCHES = [INK, "#6d6a66", DEFAULT_ACCENT, PAPER, "#2140d6"];
 
 function ColourControl({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
   const [open, setOpen] = useState(false);

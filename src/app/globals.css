@@ -20,6 +20,14 @@
   --graphite: #6d6a66;
   --line: #dedcd6;
   --accent: #9a5b33;
+  /*
+    The readable foreground for a surface painted in --accent.
+
+    Derived rather than fixed, because the artist chooses the accent: a light
+    one needs ink on it, a dark one needs paper. The root layout overrides both
+    properties together — see src/lib/colour.ts for the derivation.
+  */
+  --accent-ink: #fbfbf9;
 }
 
 @theme inline {
@@ -29,6 +37,7 @@
   --color-graphite: var(--graphite);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
 
   --font-display: var(--font-fraunces);
   --font-sans: var(--font-inter);
@@ -48,7 +57,7 @@ html {
 
 ::selection {
   background: var(--accent);
-  color: var(--paper);
+  color: var(--accent-ink);
 }
 
 /* WCAG 2.2 AA: focus must stay visible, including over dark imagery. */

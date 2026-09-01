@@ -55,3 +55,102 @@ export const resolveFontFamily = (id: string, fonts: FontOption[] = BUILT_IN_FON
 /** True when a key can be stored — the guard used before writing to the database. */
 export const isKnownFontId = (id: string, fonts: FontOption[] = BUILT_IN_FONTS): boolean =>
   fonts.some((font) => font.id === id);
+
+// ------------------------------------------------------------- uploaded fonts
+
+export type FontFormat = "woff2" | "woff" | "truetype" | "opentype";
+
+export interface UploadedFont {
+  /** Server-generated, always prefixed. See `newFontId`. */
+  id: string;
+  label: string;
+  /** The sanitised family name, without quotes. */
+  family: string;
+  storageKey: string;
+  format: FontFormat;
+}
+
+const FORMATS: Record<string, FontFormat> = {
+  woff2: "woff2",
+  woff: "woff",
+  ttf: "truetype",
+  otf: "opentype",
+};
+
+export const FONT_EXTENSIONS = Object.keys(FORMATS);
+
+/**
+ * The @font-face format for a filename, or null if it is not a font.
+ *
+ * Fonts are gated on the extension rather than `file.type`, because browsers
+ * report a font upload as `font/woff2`, `application/font-woff2`,
+ * `application/octet-stream` or `""` depending on the operating system. The
+ * image routes can trust the mime type; this one cannot.
+ */
+export const fontFormatFor = (filename: string): FontFormat | null => {
+  const dot = filename.lastIndexOf(".");
+  if (dot === -1) return null;
+  return FORMATS[filename.slice(dot + 1).toLowerCase()] ?? null;
+};
+
+/** The file extension to store a format under. */
+export const extensionForFormat = (format: FontFormat): string =>
+  Object.keys(FORMATS).find((key) => FORMATS[key] === format) ?? "woff2";
+
+/**
+ * A family name safe to place inside a quoted CSS string.
+ *
+ * The name is interpolated into an @font-face rule that ships in every page's
+ * `<style>`, so a label of `Bad"; } body { display: none }` would otherwise
+ * break out of the rule and inject arbitrary CSS site-wide.
+ */
+export const cssFamilyName = (label: string): string => {
+  const cleaned = label
+    .replace(/[^\p{L}\p{N} _-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+  return cleaned === "" ? "Uploaded font" : cleaned;
+};
+
+/**
+ * A stable id for a newly uploaded font.
+ *
+ * Always prefixed and never derived from the filename: a font uploaded as
+ * `sans.woff2` must not be able to claim the id `sans` and silently shadow
+ * Inter for every text box already using it.
+ */
+export const newFontId = (): string => `font-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
+
+/** An uploaded font as the registry sees it — a complete stack, like the built-ins. */
+export const uploadedFontOption = (font: UploadedFont): FontOption => ({
+  id: font.id,
+  label: font.label,
+  family: `"${font.family}", ui-sans-serif, sans-serif`,
+});
+
+/** The list every consumer takes: built-ins first, then whatever the artist added. */
+export const mergeFonts = (uploaded: UploadedFont[]): FontOption[] => [
+  ...BUILT_IN_FONTS,
+  ...uploaded.map(uploadedFontOption),
+];
+
+/**
+ * The @font-face rules for the uploaded fonts.
+ *
+ * Emitted once in the root layout's inline `<style>`, alongside the highlight
+ * colour, so the public wall, the admin canvas and the toolbar's per-option
+ * previews all resolve from one declaration. A face is only fetched when
+ * something on the page actually uses it.
+ *
+ * The seam for a global site face later: this list and `mergeFonts` are both
+ * independent of the wall, so a `siteFontId` setting would set `--font-sans`
+ * from the same data in the same `<style>` without touching either.
+ */
+export const fontFaceCss = (fonts: UploadedFont[]): string =>
+  fonts
+    .map(
+      (font) =>
+        `@font-face{font-family:"${font.family}";src:url("/media/${font.storageKey}") format("${font.format}");font-display:swap;}`,
+    )
+    .join("");

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { updatePageSettings } from "@/app/admin/portfolio-actions";
+import { useAction } from "./use-action";
 
 export interface PageSettings {
   gutterEnabled: boolean;
@@ -47,14 +48,11 @@ function Toggle({
  */
 export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
   const [value, setValue] = useState(settings);
-  const [pending, startTransition] = useTransition();
+  const { run, pending, error } = useAction();
 
   function apply(patch: Partial<PageSettings>) {
-    const next = { ...value, ...patch };
-    setValue(next);
-    startTransition(() => {
-      void updatePageSettings(patch);
-    });
+    setValue({ ...value, ...patch });
+    run(updatePageSettings(patch), "Saving the page settings");
   }
 
   return (
@@ -65,6 +63,12 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
           {pending ? "Saving…" : ""}
         </span>
       </div>
+
+      {error && (
+        <p role="alert" className="mb-4 text-xs text-red-700">
+          {error}
+        </p>
+      )}
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-2">

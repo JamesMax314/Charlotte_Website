@@ -114,7 +114,7 @@ export default async function EditArtworkPage({ params }: Props) {
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="submit"
-            className="bg-accent text-paper hover:bg-ink px-5 py-3 text-sm transition-colors"
+            className="bg-accent text-accent-ink hover:bg-ink hover:text-paper px-5 py-3 text-sm transition-colors"
           >
             Save
           </button>

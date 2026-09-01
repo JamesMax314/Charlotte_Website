@@ -3,6 +3,7 @@ import { Container } from "./container";
 import { DrawnRule } from "./drawn-rule";
 import { Mark } from "./mark";
 import { getSiteSettings } from "@/lib/catalogue";
+import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 
 export async function SiteFooter() {
   const settings = await getSiteSettings();
@@ -24,34 +25,41 @@ export async function SiteFooter() {
 
         <nav aria-label="Footer">
           <ul className="text-graphite flex flex-col gap-2 text-sm sm:items-end">
-            <li>
-              <a
-                className="hover:text-accent transition-colors"
-                href={settings.etsyShopUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Etsy shop
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-            </li>
-            <li>
-              <a
-                className="hover:text-accent transition-colors"
-                href={settings.instagramUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Instagram
-                <span className="sr-only"> (opens in a new tab)</span>
-              </a>
-            </li>
+            {/* Hidden rather than pointed nowhere when the artist has not set one. */}
+            {settings.etsyShopUrl && (
+              <li>
+                <a
+                  className="hover:text-accent transition-colors"
+                  href={settings.etsyShopUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Etsy shop
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              </li>
+            )}
+            {settings.instagramUrl && (
+              <li>
+                <a
+                  className="hover:text-accent transition-colors"
+                  href={settings.instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Instagram
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              </li>
+            )}
             <li>
               <Link className="hover:text-accent transition-colors" href="/privacy">
                 Privacy
               </Link>
             </li>
-            <li className="pt-2">© {new Date().getFullYear()} Charlotte Wilkinson</li>
+            <li className="pt-2">
+              © {new Date().getFullYear()} {settings.siteName || DEFAULT_SITE_NAME}
+            </li>
           </ul>
         </nav>
       </Container>

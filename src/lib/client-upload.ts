@@ -89,3 +89,66 @@ export async function uploadImage(
 
   return { id: result.id, src: result.src, width, height };
 }
+
+// ---------------------------------------------------------------- site assets
+
+export interface UploadedAsset {
+  key: string;
+  src: string;
+}
+
+const postAsset = async (body: FormData): Promise<Record<string, unknown>> => {
+  const response = await fetch("/api/admin/upload/asset", { method: "POST", body });
+  const result = (await response.json()) as Record<string, unknown> & { error?: string };
+  if (!response.ok || typeof result.key !== "string") {
+    throw new Error(result.error ?? "Upload failed.");
+  }
+  return result;
+};
+
+/**
+ * The About photograph: downscaled and laddered like any other photograph.
+ *
+ * It renders at roughly a third of a wide viewport and needs a srcset and a
+ * blur placeholder, so it goes through the same pipeline as the artwork.
+ */
+export async function uploadSiteImage(
+  file: File,
+): Promise<UploadedAsset & { width: number; height: number; lqip: string }> {
+  const { master, variants, width, height, lqip } = await prepareImage(file);
+  if (!master) throw new Error("Could not read that image.");
+
+  const name = file.name.replace(/\.\w+$/, ".jpg");
+  const body = new FormData();
+  body.set("kind", "aboutPhoto");
+  body.set("file", new File([master], name, { type: "image/jpeg" }));
+  for (const [size, blob] of variants) {
+    body.set(`variant-${size}`, new File([blob], name, { type: "image/jpeg" }));
+  }
+
+  const result = await postAsset(body);
+  return { key: result.key as string, src: result.src as string, width, height, lqip };
+}
+
+/**
+ * A file uploaded as-is: the mark, or a font.
+ *
+ * Deliberately does not touch `prepareImage`. `createImageBitmap` is undefined
+ * for a font file, and the JPEG re-encode would strip the transparency a mark
+ * depends on and scale it to 2400px.
+ */
+export async function uploadSiteFile(
+  file: File,
+  kind: "favicon" | "font",
+): Promise<UploadedAsset & { format?: string }> {
+  const body = new FormData();
+  body.set("kind", kind);
+  body.set("file", file);
+
+  const result = await postAsset(body);
+  return {
+    key: result.key as string,
+    src: result.src as string,
+    ...(typeof result.format === "string" ? { format: result.format } : {}),
+  };
+}

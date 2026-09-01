@@ -37,6 +37,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               >
                 Store
               </Link>
+              <Link
+                href="/admin/settings"
+                className="text-graphite hover:text-accent text-xs transition-colors"
+              >
+                Settings
+              </Link>
               <Link href="/" className="text-graphite hover:text-accent text-xs transition-colors">
                 View site
               </Link>
