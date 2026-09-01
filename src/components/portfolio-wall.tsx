@@ -7,7 +7,6 @@ import {
   headingTextId,
   inReadingOrder,
   isInteractive,
-  isLikelyAboveFold,
   lcpCandidateId,
   showsHoverName,
   textStyle,
@@ -34,14 +33,11 @@ type WallVars = React.CSSProperties & Record<`--${string}`, string | number>;
 function Tile({
   item,
   priority,
-  eager,
   showName,
 }: {
   item: PortfolioItem;
   /** The likely LCP image: preloaded and fetched at high priority. */
   priority?: boolean;
-  /** Above the fold, so not lazily loaded, but not worth preloading either. */
-  eager?: boolean;
   showName: boolean;
 }) {
   const cover = coverImage(item);
@@ -59,8 +55,17 @@ function Tile({
         height={cover.height}
         priority={priority}
         // next/image rejects both at once — priority already implies eager.
-        {...(priority ? {} : { loading: eager ? ("eager" as const) : ("lazy" as const) })}
-        sizes="(min-width: 768px) 50vw, 90vw"
+        {...(priority ? {} : { loading: "lazy" as const })}
+        /*
+          The mobile figure is deliberately smaller than the slot the image
+          actually fills. At 90vw a 3x phone asks for ~1050px, and the ladder in
+          image-loader.ts rounds that up to 1600 — eight of which decode to
+          roughly 60MB of bitmap, past what a phone will hold. It evicts them
+          and refetches, which is the artwork flickering as you scroll. At 60vw
+          both 2x and 3x land on the 800 rung: a quarter of the memory, and
+          still over twice the density of the slot.
+        */
+        sizes="(min-width: 768px) 50vw, 60vw"
         className="h-auto w-full"
       />
 
@@ -140,11 +145,18 @@ export function PortfolioWall({
   const headingId = headingTextId(texts);
 
   /*
-    Lazily loading an image that is already on screen is always wrong: the
-    browser will not fetch it until layout proves it is needed, which delays
-    the Largest Contentful Paint. One piece is preloaded and the rest of the
-    first screenful merely opts out of lazy loading, so they do not all compete
-    for bandwidth.
+    One piece is preloaded; everything else is lazy.
+
+    The rest of the first screenful used to opt out of lazy loading too, chosen
+    by `y` — a coordinate on the desktop arrangement. Below `md` that layout
+    does not exist: the same pieces are a stack in reading order, so the ones
+    marked eager were mostly far down a phone's page and fetched at full size
+    anyway. Eight 1600px JPEGs decoded at once is more memory than a phone will
+    hold, so it evicted and refetched them in a loop.
+
+    Lazy costs nothing on a desktop, because `loading="lazy"` does not defer an
+    image that is already in the viewport — it only defers the ones a visitor
+    cannot see yet, which is exactly the behaviour the tall layout needs.
   */
   const lcpId = lcpCandidateId(shown);
 
@@ -193,12 +205,7 @@ export function PortfolioWall({
 
       {shown.map((item) => (
         <WallElement key={item.id} fade={fadeIn} style={place(item)}>
-          <Tile
-            item={item}
-            priority={item.id === lcpId}
-            eager={isLikelyAboveFold(item)}
-            showName={showNamesOnHover}
-          />
+          <Tile item={item} priority={item.id === lcpId} showName={showNamesOnHover} />
         </WallElement>
       ))}
     </div>

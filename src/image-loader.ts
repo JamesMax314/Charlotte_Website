@@ -9,6 +9,11 @@
  * The /media route falls back to the base object when a derivative is absent, so
  * images uploaded before the ladder existed still resolve.
  */
+/**
+ * The widths written at upload. `images.deviceSizes` in next.config.ts must
+ * match this exactly, or the browser picks a width that does not exist and the
+ * rounding here silently doubles it.
+ */
 export const WIDTH_LADDER = [400, 800, 1600, 2400] as const;
 
 export default function mediaLoader({ src, width }: { src: string; width: number }): string {
