@@ -15,6 +15,11 @@ The product specification is `docs/project-brief.md`.
   arrangement scales with the viewport, and below `md` it gives way to a stack in reading
   order. Edges snap to one another with an optional gutter.
 
+- **Text is rich text, everywhere she types it.** Wall boxes and the About,
+  Contact and Privacy copy all take bold, italic, underline, colour, face, size and links
+  within a single box, with the controls along the top of the box. It is stored as a
+  document, not as HTML — see the invariants.
+
 - **Pieces can have pages of their own**, built with the same wall editor. Elements placed
   on them are inert by construction and never link onward.
 
@@ -77,6 +82,7 @@ The product specification is `docs/project-brief.md`.
 | 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
 | 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                              |
 | 11    | The top bar's height, its two type sizes and the space around the page moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders. Vertical rhythm moved out of the pages and into the layout                                |
+| 12    | Rich text in every box the artist types into — marks, faces, sizes and links within one box — stored as a sanitised document and rendered as React elements rather than as HTML                                                                                                                       |
 
 ---
 
@@ -202,6 +208,42 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **Rich text is stored as a document and rendered as elements, never as HTML.** The
+  obvious shape — keep a string of HTML, render it with `dangerouslySetInnerHTML` — puts a
+  script-injection surface behind an admin password and a sanitiser that has to stay right
+  forever. `src/lib/rich-text.ts` holds paragraphs of runs, `src/components/rich-text.tsx`
+  turns runs into elements, and there is no path from stored text to executable markup at
+  all. Do not add an HTML column or a `dangerouslySetInnerHTML` to this path.
+
+- **`docFromElement` is where a paste stops, and it works by not looking.** It walks the
+  contenteditable DOM reading only the marks it recognises, so a paste carrying a script,
+  an `onerror`, or an iframe contributes its text and nothing else — not because those are
+  stripped, but because nothing ever reads them. The one field that can still carry
+  something executable is `href`, which is why `safeHref` has a protocol allowlist and why
+  a protocol-relative `//evil.com` is rejected: it reads as relative and is not.
+
+- **Every rich document is sanitised on read as well as on write.** A row can predate a
+  rule or be edited by hand with wrangler, and the server action re-sanitises because it
+  is a public endpoint — the editor's output is a suggestion, not a guarantee.
+
+- **Each rich column has a plain-text mirror, written from the same document.** `content`
+  on `wall_texts` and `about_copy`/`contact_copy`/`privacy_copy` on the settings row are
+  not legacy: the wall picks its `<h1>` by comparing text, metadata and OG cards need
+  words without marks, and a `rich` column that fails to parse degrades to the mirror
+  rather than to a blank page. Write one without the other and they drift silently.
+
+- **The editor is uncontrolled, and `execCommand` is a deliberate choice.** React
+  re-rendering the children of a contenteditable moves the caret to the start on every
+  keystroke, so the document is written into the DOM once and read back, never diffed —
+  which is what the `emitted` ref guards. And "apply to what I type next, without
+  altering what is already there" is exactly `execCommand`'s collapsed-selection
+  behaviour; reimplementing it means owning caret restoration through every render.
+
+- **A trailing `<br>` in a block is filler, not a line the artist typed.** Every empty
+  block carries one so it can hold a caret, and Chrome appends one after a final line.
+  Counted as a break, a single blank line round-trips into two and the wall grows a gap
+  every time it is saved.
 
 - **The site layout owns the vertical space around the page; no page sets its own.**
   Every page used to carry its own `pt-*`/`pb-*` — between `pt-10` and `sm:pt-24` — and the

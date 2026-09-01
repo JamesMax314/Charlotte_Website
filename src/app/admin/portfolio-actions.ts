@@ -6,6 +6,7 @@ import * as schema from "@/db/schema";
 import { getDb } from "@/lib/catalogue";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
+import { docFromPlain, docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { requireSession } from "@/lib/auth";
 import { HOME_WALL, scopeColumns, type WallScope } from "@/lib/portfolio";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
@@ -268,9 +269,11 @@ export async function createWallText(
   await requireSession();
   const db = await getDb();
 
+  const seed = docFromPlain("New text");
   await db.insert(schema.wallTexts).values({
     id: crypto.randomUUID(),
-    content: "New text",
+    content: docToPlain(seed),
+    rich: serialiseDoc(seed),
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
     y: at ? Math.max(at.y, 0) : 4,
     ...scopeColumns(scope),
@@ -287,7 +290,8 @@ export async function createWallText(
 export async function updateWallText(
   id: string,
   patch: {
-    content?: string;
+    /** The rich document, as the editor produced it. */
+    rich?: unknown;
     fontSize?: number;
     align?: "left" | "center" | "right";
     bold?: boolean;
@@ -309,8 +313,19 @@ export async function updateWallText(
   const fontIsKnown =
     patch.font !== undefined && isKnownFontId(patch.font, mergeFonts(await getSiteFonts()));
 
+  /*
+    Sanitised here as well as in the browser, because a server action is a
+    public endpoint: the editor's output is a suggestion, not a guarantee.
+    `content` is written from the same document so the plain mirror can never
+    drift from the marks it mirrors.
+  */
+  const doc =
+    patch.rich === undefined
+      ? undefined
+      : sanitiseDoc(patch.rich, mergeFonts(await getSiteFonts()));
+
   const values = {
-    ...(patch.content === undefined ? {} : { content: patch.content }),
+    ...(doc === undefined ? {} : { rich: serialiseDoc(doc), content: docToPlain(doc) }),
     // Guard rails so a stray value cannot make text invisible or fill the wall.
     ...(patch.fontSize === undefined
       ? {}

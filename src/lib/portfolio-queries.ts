@@ -2,6 +2,9 @@ import "server-only";
 import { and, asc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./catalogue";
+import { mergeFonts, type FontOption } from "./fonts";
+import { parseDoc } from "./rich-text";
+import { getSiteFonts } from "./site-settings";
 import {
   HOME_WALL,
   type PortfolioImage,
@@ -158,9 +161,12 @@ export const getRoutableWorkSlugs = async (): Promise<string[]> => {
   return rows.map((r) => r.slug);
 };
 
-const toText = (row: schema.WallTextRow): WallText => ({
+const toText = (row: schema.WallTextRow, fonts: FontOption[]): WallText => ({
   id: row.id,
   content: row.content,
+  // Sanitised on the way out as well as in: a row can predate a rule, or have
+  // been edited by hand.
+  rich: parseDoc(row.rich, row.content, fonts),
   x: row.x,
   y: row.y,
   width: row.width,
@@ -179,10 +185,18 @@ const toText = (row: schema.WallTextRow): WallText => ({
 
 export const getWallTexts = async (scope: WallScope = HOME_WALL): Promise<WallText[]> => {
   const db = await getDb();
+  /*
+    The registry is needed to judge each run's font id, and the uploads live in
+    their own table. Read once per call and passed down rather than held in a
+    module variable: the isolate is shared between concurrent requests, so a
+    module-level registry set just before an await is a race — one whose only
+    symptom would be a run quietly losing its face.
+  */
+  const fonts = mergeFonts(await getSiteFonts());
   const rows = await db
     .select()
     .from(schema.wallTexts)
     .where(onWall(schema.wallTexts, scope))
     .orderBy(asc(schema.wallTexts.z));
-  return rows.map(toText);
+  return rows.map((row) => toText(row, fonts));
 };

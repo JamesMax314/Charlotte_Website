@@ -92,6 +92,13 @@
       "when": 1788273000090,
       "tag": "0012_content-space",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788274826439,
+      "tag": "0013_rich-text",
+      "breakpoints": true
     }
   ]
 }

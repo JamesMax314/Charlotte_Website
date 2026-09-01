@@ -218,7 +218,21 @@ export const portfolioImages = sqliteTable(
  */
 export const wallTexts = sqliteTable("wall_texts", {
   id: text("id").primaryKey(),
+  /**
+   * The plain-text mirror of `rich`, kept in step on every write.
+   *
+   * Not legacy: the wall picks its `<h1>` by comparing text, metadata needs
+   * words without marks, and a `rich` column that fails to parse degrades to
+   * this rather than to a blank page.
+   */
   content: text("content").notNull().default(""),
+  /**
+   * The rich document, as JSON — see src/lib/rich-text.ts.
+   *
+   * Null for every row written before rich text existed, which is why
+   * `parseDoc` takes the plain mirror as its fallback rather than throwing.
+   */
+  rich: text("rich"),
 
   /** NULL means the home wall; set means that piece's own page. */
   parentId: text("parent_id").references(() => portfolioItems.id, { onDelete: "cascade" }),
@@ -334,6 +348,10 @@ export const siteSettings = sqliteTable("site_settings", {
     src/lib/default-copy.ts for why that is not the reader's job.
   */
   aboutCopy: text("about_copy").notNull().default(""),
+  /** Rich versions of the three, with the plain columns above as their mirrors. */
+  aboutRich: text("about_rich"),
+  contactRich: text("contact_rich"),
+  privacyRich: text("privacy_rich"),
   aboutPhotoKey: text("about_photo_key"),
   aboutPhotoAlt: text("about_photo_alt").notNull().default(""),
   /** next/image needs intrinsic dimensions, as every other image table stores them. */

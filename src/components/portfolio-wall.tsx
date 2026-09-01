@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { FadeIn } from "./fade-in";
+import { RichTextInline } from "./rich-text";
 import {
   canvasHeightRatio,
   coverImage,
@@ -210,7 +211,7 @@ export function PortfolioWall({
                 } as WallVars
               }
             >
-              {text.content}
+              <RichTextInline doc={text.rich} fonts={fonts} />
             </Tag>
           </div>
         );

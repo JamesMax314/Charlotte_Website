@@ -13,6 +13,7 @@ import {
   type WallScope,
   type WallText,
 } from "@/lib/portfolio";
+import type { RichDoc } from "@/lib/rich-text";
 import {
   collectGuides,
   rectOf,
@@ -32,6 +33,8 @@ import {
   updateWallText,
 } from "@/app/admin/portfolio-actions";
 import { TextToolbar } from "./text-toolbar";
+import { RichTextEditor } from "./rich-text-editor";
+import { RichTextInline } from "@/components/rich-text";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { useAction } from "./use-action";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
@@ -177,8 +180,18 @@ export function PortfolioCanvas({
 
   const formatTarget = formatting ? (texts.find((t) => t.id === formatting.id) ?? null) : null;
 
+  /*
+    The optimistic copy applies the patch as typed; the action re-sanitises it
+    server-side. `rich` is `unknown` on the action's signature because it comes
+    off the wire, but locally it is always a document the editor just produced.
+  */
   function patchText(id: string, patch: Parameters<typeof updateWallText>[1]) {
-    setTexts((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    const { rich, ...rest } = patch;
+    const local: Partial<WallText> = {
+      ...rest,
+      ...(rich === undefined ? {} : { rich: rich as RichDoc }),
+    };
+    setTexts((current) => current.map((t) => (t.id === id ? { ...t, ...local } : t)));
     run(updateWallText(id, patch), "Saving the text");
   }
 
@@ -575,14 +588,25 @@ export function PortfolioCanvas({
                 }`}
               >
                 {selected ? (
-                  <textarea
-                    autoFocus
-                    value={text.content}
-                    onChange={(e) => patchText(text.id, { content: e.target.value })}
+                  /*
+                    The formatting controls sit along the top of the box, which
+                    is what the brief asks for and what makes "apply to what I
+                    type next" legible: the artist can see the marks she has
+                    armed while the caret is still where she left it.
+                  */
+                  <div
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="h-full w-full resize-none bg-transparent p-1 leading-snug outline-none"
-                    style={textStyle(text, { fonts })}
-                  />
+                    className="h-full w-full overflow-auto"
+                  >
+                    <RichTextEditor
+                      value={text.rich}
+                      onChange={(rich) => patchText(text.id, { rich })}
+                      fonts={fonts}
+                      ariaLabel="this text box"
+                      className="w-full bg-transparent p-1 leading-snug"
+                      style={textStyle(text, { fonts })}
+                    />
+                  </div>
                 ) : (
                   <p
                     onPointerDown={(e) => {
@@ -597,7 +621,7 @@ export function PortfolioCanvas({
                     className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap"
                     style={textStyle(text, { fonts })}
                   >
-                    {text.content}
+                    <RichTextInline doc={text.rich} fonts={fonts} />
                   </p>
                 )}
               </div>

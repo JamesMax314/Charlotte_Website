@@ -1,0 +1,192 @@
+/**
+ * The bridge between a `contenteditable` element and the rich-text model.
+ *
+ * This is where pasted markup stops. `docFromElement` walks the DOM and reads
+ * only the marks it recognises, so a paste carrying `<script>`, an `onclick`,
+ * an iframe or a styled table contributes its text and nothing else — not
+ * because those things are stripped, but because nothing ever looks at them.
+ *
+ * Marks are written to `data-*` attributes as well as to real styles: the
+ * style is what the artist sees while editing, the data attribute is what is
+ * read back. Reading the model out of computed styles would mean parsing
+ * whatever the browser decided `font-family` was, and round-tripping a font id
+ * through a CSS stack is a guess. This way it is exact.
+ */
+
+import { resolveFontFamily, type FontOption } from "./fonts";
+import { mergeRuns, sanitiseDoc, type RichDoc, type RichRun } from "./rich-text";
+
+const MARK_ATTR = {
+  colour: "data-rt-colour",
+  font: "data-rt-font",
+  size: "data-rt-size",
+} as const;
+
+/** Builds the element for one run, innermost mark first. */
+function runToNode(run: RichRun, fonts: FontOption[]): Node {
+  let node: Node = document.createTextNode(run.text);
+
+  if (run.colour !== undefined || run.font !== undefined || run.size !== undefined) {
+    const span = document.createElement("span");
+    if (run.colour !== undefined) {
+      span.setAttribute(MARK_ATTR.colour, run.colour);
+      span.style.color = run.colour;
+    }
+    if (run.font !== undefined) {
+      span.setAttribute(MARK_ATTR.font, run.font);
+      span.style.fontFamily = resolveFontFamily(run.font, fonts);
+    }
+    if (run.size !== undefined) {
+      span.setAttribute(MARK_ATTR.size, String(run.size));
+      span.style.fontSize = `${run.size}em`;
+    }
+    span.appendChild(node);
+    node = span;
+  }
+
+  for (const [mark, tag] of [
+    ["underline", "u"],
+    ["italic", "em"],
+    ["bold", "strong"],
+  ] as const) {
+    if (run[mark]) {
+      const el = document.createElement(tag);
+      el.appendChild(node);
+      node = el;
+    }
+  }
+
+  if (run.href !== undefined) {
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", run.href);
+    anchor.appendChild(node);
+    node = anchor;
+  }
+
+  return node;
+}
+
+/** One paragraph per block, which is the shape `contenteditable` maintains. */
+export function paragraphToNode(runs: RichRun[], fonts: FontOption[]): HTMLElement {
+  const block = document.createElement("div");
+  if (runs.length === 0) {
+    // An empty block collapses to nothing and cannot hold a caret; the <br>
+    // is what makes a blank line editable rather than merely stored.
+    block.appendChild(document.createElement("br"));
+    return block;
+  }
+  for (const run of runs) block.appendChild(runToNode(run, fonts));
+  return block;
+}
+
+/** Replaces an element's children with the document, for seeding the editor. */
+export function applyDocToElement(el: HTMLElement, doc: RichDoc, fonts: FontOption[]): void {
+  el.replaceChildren(
+    ...(doc.length === 0
+      ? [paragraphToNode([], fonts)]
+      : doc.map((paragraph) => paragraphToNode(paragraph, fonts))),
+  );
+}
+
+/** The marks an element contributes to everything inside it. */
+function marksOf(el: HTMLElement, inherited: Omit<RichRun, "text">): Omit<RichRun, "text"> {
+  const marks = { ...inherited };
+  const tag = el.tagName.toLowerCase();
+
+  // Both the semantic tag and the one execCommand happens to emit.
+  if (tag === "strong" || tag === "b") marks.bold = true;
+  if (tag === "em" || tag === "i") marks.italic = true;
+  if (tag === "u" || tag === "ins") marks.underline = true;
+
+  if (tag === "a") {
+    const href = el.getAttribute("href");
+    // Left as a raw string: sanitiseDoc is the single place a scheme is judged.
+    if (href) marks.href = href;
+  }
+
+  const colour = el.getAttribute(MARK_ATTR.colour);
+  if (colour) marks.colour = colour;
+  const font = el.getAttribute(MARK_ATTR.font);
+  if (font) marks.font = font;
+  const size = el.getAttribute(MARK_ATTR.size);
+  if (size) marks.size = Number(size);
+
+  return marks;
+}
+
+/** Elements whose text is not text — a paste can drag any of these in. */
+const IGNORED = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "IFRAME", "OBJECT"]);
+
+function collectRuns(node: Node, inherited: Omit<RichRun, "text">, out: RichRun[]): void {
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      const text = child.textContent ?? "";
+      if (text !== "") out.push({ ...inherited, text });
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+
+    const el = child as HTMLElement;
+    if (IGNORED.has(el.tagName)) continue;
+    if (el.tagName === "BR") {
+      // A <br> inside a block is a line the artist typed with shift+Enter. It
+      // is not a paragraph, so it becomes one — the model has no other way to
+      // say "line break", and treating it as a paragraph is closer than losing
+      // it entirely.
+      out.push({ text: "\n" });
+      continue;
+    }
+    collectRuns(el, marksOf(el, inherited), out);
+  }
+}
+
+/** Blocks that `contenteditable` and pasted markup use to mean "new line". */
+const BLOCK = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE)$/;
+
+/**
+ * Reads a `contenteditable` element back into a document.
+ *
+ * Always finishes through `sanitiseDoc`, so this function is free to be
+ * generous about what it collects: the marks are judged in exactly one place,
+ * and an href picked up from a pasted anchor is checked there like any other.
+ */
+export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichDoc {
+  const paragraphs: RichRun[][] = [];
+
+  const pushBlock = (node: Node) => {
+    const runs: RichRun[] = [];
+    collectRuns(node, {}, runs);
+
+    /*
+      A trailing <br> is the browser's filler, not a line the artist typed.
+      Every empty block carries one so it can hold a caret, and Chrome appends
+      one after a final line too — counted as a break, a single blank line
+      round-trips into two and the wall grows a gap every time it is saved.
+    */
+    while (runs.length > 0 && runs[runs.length - 1].text === "\n") runs.pop();
+
+    // A run holding "\n" came from a <br>; split it into further paragraphs.
+    let current: RichRun[] = [];
+    for (const run of runs) {
+      if (run.text === "\n") {
+        paragraphs.push(current);
+        current = [];
+      } else current.push(run);
+    }
+    paragraphs.push(current);
+  };
+
+  // Loose text directly inside the root — what a fresh empty editor holds —
+  // is one paragraph; block children are one each.
+  const blocks = Array.from(el.childNodes).filter(
+    (n) => n.nodeType === Node.ELEMENT_NODE && BLOCK.test((n as HTMLElement).tagName),
+  );
+
+  if (blocks.length === 0) pushBlock(el);
+  else for (const block of blocks) pushBlock(block);
+
+  return sanitiseDoc(
+    paragraphs.map((runs) => mergeRuns(runs)),
+    fonts,
+  );
+}

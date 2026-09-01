@@ -119,6 +119,7 @@ const text = (over: Partial<WallText>): WallText => ({
   font: "sans",
   parentId: null,
   pageId: null,
+  rich: [],
   ...over,
 });
 

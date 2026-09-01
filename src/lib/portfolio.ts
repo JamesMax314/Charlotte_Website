@@ -163,6 +163,7 @@ export const showsHoverName = (item: PortfolioItem, showNames: boolean): boolean
 export const coverImage = (item: PortfolioItem): PortfolioImage | undefined => item.images[0];
 
 import { resolveFontFamily, type FontOption } from "./fonts";
+import type { RichDoc } from "./rich-text";
 
 export type TextAlign = "left" | "center" | "right";
 
@@ -176,7 +177,10 @@ export type TextAlign = "left" | "center" | "right";
  */
 export interface WallText {
   id: string;
+  /** The plain-text mirror: the heading choice and metadata read this. */
   content: string;
+  /** The rich document. Parsed and sanitised on read — see src/lib/rich-text.ts. */
+  rich: RichDoc;
   x: number;
   y: number;
   width: number;

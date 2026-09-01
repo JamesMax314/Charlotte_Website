@@ -158,6 +158,11 @@ const SETTINGS_FALLBACK = {
   // Only reached when D1 is unavailable. A stored empty string spreads *over*
   // these, so the pages fall back themselves — see src/lib/default-copy.ts.
   aboutCopy: DEFAULT_ABOUT_COPY,
+  // Null everywhere she has not written a rich version yet, which is every
+  // row until she next saves — the plain columns above are the fallback.
+  aboutRich: null as string | null,
+  contactRich: null as string | null,
+  privacyRich: null as string | null,
   aboutPhotoKey: null as string | null,
   aboutPhotoAlt: "",
   aboutPhotoWidth: null as number | null,

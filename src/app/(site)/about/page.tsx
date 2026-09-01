@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Container } from "@/components/container";
+import { RichTextBlocks } from "@/components/rich-text";
+import { mergeFonts } from "@/lib/fonts";
+import { copyDoc } from "@/lib/rich-text";
+import { getSiteFonts } from "@/lib/site-settings";
 import { Mark } from "@/components/mark";
 import { getSiteSettings } from "@/lib/catalogue";
-import { toParagraphs } from "@/lib/copy";
 import { DEFAULT_ABOUT_COPY } from "@/lib/default-copy";
 
 // The root layout's header and footer read site settings from D1, so this page
@@ -24,8 +27,9 @@ export default async function AboutPage() {
     here means a stray "select all, delete" leaves the page readable rather
     than reduced to the single word "About".
   */
-  const written = toParagraphs(settings.aboutCopy);
-  const body = written.length > 0 ? written : toParagraphs(DEFAULT_ABOUT_COPY);
+  const [fonts] = await Promise.all([getSiteFonts()]);
+  const registry = mergeFonts(fonts);
+  const body = copyDoc(settings.aboutRich, settings.aboutCopy, DEFAULT_ABOUT_COPY, registry);
 
   const photo =
     settings.aboutPhotoKey && settings.aboutPhotoWidth && settings.aboutPhotoHeight
@@ -67,13 +71,7 @@ export default async function AboutPage() {
           <h1 className="font-display text-4xl tracking-tight sm:text-5xl">About</h1>
 
           <div className="mt-6 space-y-5 leading-relaxed text-pretty">
-            {body.map((paragraph, i) => (
-              // Pre-line, not pre-wrap: a blank line starts a paragraph, and a
-              // single newline stays inside one.
-              <p key={i} className="whitespace-pre-line">
-                {paragraph}
-              </p>
-            ))}
+            <RichTextBlocks doc={body} fonts={registry} className="whitespace-pre-line" />
           </div>
         </div>
       </div>

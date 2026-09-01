@@ -4,6 +4,7 @@ import { AboutPhotoField } from "@/components/admin/about-photo-field";
 import { AccentField } from "@/components/admin/accent-field";
 import { FaviconField } from "@/components/admin/favicon-field";
 import { HeaderStyleField } from "@/components/admin/header-style-field";
+import { RichCopyField } from "@/components/admin/rich-copy-field";
 import { FontsField } from "@/components/admin/fonts-field";
 import { SiteFacesField } from "@/components/admin/site-faces-field";
 import { SettingsForm } from "@/components/admin/settings-form";
@@ -14,6 +15,7 @@ import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_ABOUT_COPY, DEFAULT_CONTACT_COPY, DEFAULT_PRIVACY_COPY } from "@/lib/default-copy";
 import { mergeFonts, resolveSiteFaces } from "@/lib/fonts";
 import { headerStyleFromSettings } from "@/lib/header-style";
+import { copyDoc } from "@/lib/rich-text";
 import { navLabel } from "@/lib/site-pages";
 import { getAllSitePages } from "@/lib/site-pages-queries";
 import { getSiteFonts } from "@/lib/site-settings";
@@ -141,16 +143,12 @@ export default async function SettingsPage() {
             />
           </label>
         )}
-        <label className="flex flex-col gap-1.5">
-          <Label>Your words</Label>
-          <textarea
-            name="aboutCopy"
-            rows={10}
-            defaultValue={settings.aboutCopy}
-            placeholder={DEFAULT_ABOUT_COPY}
-            className={`${FIELD} leading-relaxed`}
-          />
-        </label>
+        <RichCopyField
+          name="aboutRich"
+          label="Your words"
+          initial={copyDoc(settings.aboutRich, settings.aboutCopy, DEFAULT_ABOUT_COPY, registry)}
+          fonts={registry}
+        />
       </SettingsForm>
 
       <SettingsForm title="Contact page" hint="A blank line starts a new paragraph.">
@@ -164,32 +162,34 @@ export default async function SettingsPage() {
             className={FIELD}
           />
         </label>
-        <label className="flex flex-col gap-1.5">
-          <Label>Your words</Label>
-          <textarea
-            name="contactCopy"
-            rows={6}
-            defaultValue={settings.contactCopy}
-            placeholder={DEFAULT_CONTACT_COPY}
-            className={`${FIELD} leading-relaxed`}
-          />
-        </label>
+        <RichCopyField
+          name="contactRich"
+          label="Your words"
+          initial={copyDoc(
+            settings.contactRich,
+            settings.contactCopy,
+            DEFAULT_CONTACT_COPY,
+            registry,
+          )}
+          fonts={registry}
+        />
       </SettingsForm>
 
       <SettingsForm
         title="Privacy page"
         hint="What the site collects, which is almost nothing. A blank line starts a new paragraph."
       >
-        <label className="flex flex-col gap-1.5">
-          <Label>Your words</Label>
-          <textarea
-            name="privacyCopy"
-            rows={10}
-            defaultValue={settings.privacyCopy}
-            placeholder={DEFAULT_PRIVACY_COPY}
-            className={`${FIELD} leading-relaxed`}
-          />
-        </label>
+        <RichCopyField
+          name="privacyRich"
+          label="Your words"
+          initial={copyDoc(
+            settings.privacyRich,
+            settings.privacyCopy,
+            DEFAULT_PRIVACY_COPY,
+            registry,
+          )}
+          fonts={registry}
+        />
       </SettingsForm>
 
       <p className="text-graphite max-w-prose text-xs">

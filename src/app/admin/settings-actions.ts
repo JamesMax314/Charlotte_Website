@@ -8,6 +8,7 @@ import { getDb, getSiteSettings } from "@/lib/catalogue";
 import { cssFamilyName, isKnownFontId, mergeFonts, newFontId, type FontFormat } from "@/lib/fonts";
 import { headerStyle, type HeaderStyle } from "@/lib/header-style";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
+import { docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { normaliseSettings, type SettingsInput } from "@/lib/settings-input";
 import { derivativeKeys, isSafeKey } from "@/lib/storage";
 import { WIDTH_LADDER } from "@/image-loader";
@@ -247,7 +248,38 @@ export async function saveSettingsForm(
   }
 
   const { values, rejected } = normaliseSettings(patch);
-  await upsertSiteSettings(values);
+
+  /*
+    The three page-copy fields arrive as rich documents in a hidden input. Each
+    writes its JSON column and its plain mirror from the same document, so the
+    two can never disagree — the mirror is what the page falls back to if the
+    JSON ever fails to parse, and what search engines and OG cards read.
+
+    Sanitised here rather than trusted from the browser: a server action is a
+    public endpoint, and the editor's output is a suggestion.
+  */
+  const fonts = mergeFonts(await getSiteFonts());
+  const richPairs = [
+    ["aboutRich", "aboutCopy"],
+    ["contactRich", "contactCopy"],
+    ["privacyRich", "privacyCopy"],
+  ] as const;
+
+  const richValues: Record<string, string> = {};
+  for (const [richField, plainField] of richPairs) {
+    const raw = form.get(richField);
+    if (typeof raw !== "string") continue;
+    let doc;
+    try {
+      doc = sanitiseDoc(JSON.parse(raw), fonts);
+    } catch {
+      continue;
+    }
+    richValues[richField] = serialiseDoc(doc);
+    richValues[plainField] = docToPlain(doc);
+  }
+
+  await upsertSiteSettings({ ...values, ...richValues });
   refresh();
 
   return { status: rejected.length > 0 ? "error" : "saved", rejected };
