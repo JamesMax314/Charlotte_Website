@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./db";
@@ -61,6 +62,8 @@ export const getSiteFonts = cache(async (): Promise<UploadedFont[]> => {
       format: row.format,
     }));
   } catch (cause) {
+    // Never swallow Next's own control-flow errors — see the invariant.
+    unstable_rethrow(cause);
     console.error("[settings] could not read uploaded fonts", cause);
     return [];
   }

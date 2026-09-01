@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { asc, desc, eq, inArray, ne, notInArray } from "drizzle-orm";
 import * as schema from "@/db/schema";
@@ -164,6 +165,8 @@ export const getPublishedRevision = cache(async (): Promise<PublishedRevision | 
       snapshot,
     };
   } catch (cause) {
+    // Never swallow Next's own control-flow errors — see the invariant.
+    unstable_rethrow(cause);
     console.error("[publish] could not read the published site; serving the draft", cause);
     return null;
   }

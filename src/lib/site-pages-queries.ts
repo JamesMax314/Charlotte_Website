@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_rethrow } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./db";
@@ -49,6 +50,8 @@ export const getNavPages = async (): Promise<SitePage[]> => {
       .orderBy(asc(schema.sitePages.navOrder));
     return rows.map(toPage);
   } catch (cause) {
+    // Never swallow Next's own control-flow errors — see the invariant.
+    unstable_rethrow(cause);
     console.error("[site] Reading the custom pages failed; the nav will be empty", cause);
     return [];
   }

@@ -100,12 +100,24 @@ The product specification is `docs/project-brief.md`.
 | 16    | Draft and live are two different sites. The studio writes a draft; "Make live" copies the whole public site into one revision row that visitors are served. The badge compares a content hash, the signed-in artist previews the draft on the real site, and R2 deletes defer while the live site still needs the object |
 | 17    | Reverted Phase 15. The editor's band above the wall is gone and elements clamp to zero again — dropping or dragging above the top no longer pushes the arrangement down. `WALL_HEADROOM` is kept; it named a number the wall already had                                                                                 |
 | 18    | The real domain, charlottewilkinsonart.co.uk, is the committed default for canonicals, the sitemap and OG cards, and `robots.txt` allows indexing only on that host — so the workers.dev origin the site answers on is never indexed alongside it                                                                        |
+| 19    | Deployed to Cloudflare on the artist's own account: two R2 buckets, a D1 database in WEUR, all migrations, both secrets, and the apex bound as a custom domain in `wrangler.jsonc`. Guarded reads now rethrow Next's control-flow errors, which the session check had started swallowing                                 |
 
 ---
 
 ## Architectural Invariants
 
 Non-obvious decisions that the code alone does not explain.
+
+- **A catch-all around a read must call `unstable_rethrow` first.** Next signals
+  "this route cannot be static" by _throwing_ `DYNAMIC_SERVER_USAGE` out of `cookies()`,
+  so the moment `getSiteSource` began consulting the session, every guarded read on the
+  root layout's path started catching that signal and returning its fallback instead.
+  The build did not fail: `/contact` and `/_not-found` were emitted as static pages with
+  the _default_ site name, accent and typefaces baked in, and would have served those
+  forever. Only the log line gave it away, and it read like a database problem. The
+  guards in `getSiteSettings`, `getSiteFonts`, `getNavPages` and `getPublishedRevision`
+  still degrade gracefully for real failures — they just let the framework's own errors
+  through first.
 
 - **Publishing is a snapshot, not a flag per row.** "Make live" serialises everything
   the public site reads into one `site_revisions` row, and visitors are served that row.

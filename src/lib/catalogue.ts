@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { asc, eq, inArray, ne } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./db";
@@ -235,6 +236,8 @@ export const getSiteSettings = cache(async () => {
     const rows = await db.select().from(schema.siteSettings).where(eq(schema.siteSettings.id, 1));
     return rows.length === 0 ? SETTINGS_FALLBACK : { ...SETTINGS_FALLBACK, ...rows[0] };
   } catch (cause) {
+    // Never swallow Next's own control-flow errors — see the invariant.
+    unstable_rethrow(cause);
     console.error("[settings] falling back to defaults", cause);
     return SETTINGS_FALLBACK;
   }
