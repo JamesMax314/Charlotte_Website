@@ -52,11 +52,21 @@ export const metadata: Metadata = {
 /**
  * Document shell only. The public site and the admin have separate chrome —
  * see (site)/layout.tsx and admin/layout.tsx.
+ *
+ * `suppressHydrationWarning` on <html> is deliberate. The site layout's inline
+ * script adds `js-fade` to this element while the document is still parsing, so
+ * by the time React hydrates the class list no longer matches what the server
+ * sent. That mismatch is the mechanism, not a bug: it is what hides the wall
+ * before its first paint instead of after.
+ *
+ * The attribute covers this element only — it does not extend to descendants,
+ * so a real mismatch anywhere in the tree is still reported.
  */
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en-GB"
+      suppressHydrationWarning
       className={`${fraunces.variable} ${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} ${caveat.variable}`}
     >
       <body>{children}</body>

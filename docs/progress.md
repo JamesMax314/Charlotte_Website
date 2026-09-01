@@ -201,6 +201,12 @@ Non-obvious decisions that the code alone does not explain.
   the document is still parsing, ahead of the wall. With scripting off the class is never
   added and the page simply renders.
 
+- **`<html>` carries `suppressHydrationWarning`, and must keep it.** The inline script
+  adds `js-fade` to that element before React hydrates, so the client class list will
+  never match what the server sent — that divergence is the mechanism, not a fault. The
+  attribute covers only that element, so a genuine mismatch anywhere else is still
+  reported.
+
 - **That inline script carries a five-second failsafe**, which removes `.js-fade` if no
   piece has been revealed by then — the signal that hydration never happened. Without it,
   a bundle that failed to load would leave the gallery permanently blank. Note it also
