@@ -19,8 +19,12 @@ The product specification is `docs/project-brief.md`.
   on them are inert by construction and never link onward.
 
 - **Two separate collections.** The portfolio drives the home page and carries no prices;
-  the store is `artworks` + `listings` at `/shop/<slug>`. They share the upload endpoint
-  and image pipeline and nothing else.
+  the store is `artworks` + `listings`, browsable at `/shop` and sold at `/shop/<slug>`.
+  They share the upload endpoint and image pipeline and nothing else.
+
+- **The shop is a catalogue, not a wall.** Uniform 3:4 tiles with a centre crop, filtered
+  in the browser by search, product type and a price range. A piece sells one thing: one
+  type, one Etsy link, one price.
 
 - **Everything lives in D1 and R2.** Artwork is in a private bucket, served only through
   `/media` on content-addressed keys, with a responsive width ladder written in the
@@ -28,8 +32,9 @@ The product specification is `docs/project-brief.md`.
 
 - **The admin.** Passphrase sign-in; a Home page editor with page settings — gap,
   snapping, hover names and an optional content fade-in — plus right-click menus, an
-  image details dialog and text formatting at the pointer; a per-piece page editor; and
-  the older store editor for artworks and Etsy listings.
+  image details dialog and text formatting at the pointer; a per-piece page editor; and a
+  store grid where a piece is added and edited in a dialog over the arrangement, with
+  right-click for sold out, draft, archive and delete.
 
 - **Content is real, copy is not.** `pnpm seed` prefers the artist's work in `tmp_art/`
   (gitignored) and falls back to generated placeholders. All wording is placeholder and
@@ -41,8 +46,8 @@ The product specification is `docs/project-brief.md`.
   both the circular badge in the header and the browser-tab icon, and she picks the body
   and heading typefaces the public site is set in.
 
-- **Not yet built:** a store index page, link-health cron, outbound click tracking,
-  contact form delivery. The custom 404 does not render — see the invariants below.
+- **Not yet built:** link-health cron, outbound click tracking, contact form delivery.
+  The custom 404 does not render — see the invariants below.
 
 - **Not yet deployed.** Needs a Cloudflare account, two R2 buckets, a D1 database and two
   secrets. See _Deploying for the first time_ below.
@@ -62,6 +67,7 @@ The product specification is `docs/project-brief.md`.
 | 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site |
 | 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                      |
 | 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                      |
+| 9     | The store reworked to docs/store.md: a `/shop` index with search, type and price filters; 3:4 cards; arrows on the product gallery; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor            |
 
 ---
 
@@ -164,6 +170,19 @@ Non-obvious decisions that the code alone does not explain.
   admin layout's session check protects pages only. Every action and route handler calls
   `requireSession()` / `hasValidSession()` itself. Removing one of those calls exposes it
   with no visible symptom.
+
+- **One listing per piece is a decision about the admin, not the schema.** The dialog
+  edits a single product type, link and price, and `soleListing` is where that is named;
+  the `listings` table still holds many rows per artwork, so sizes and formats can come
+  back without a migration. Anything beyond the first is left in place and simply not
+  offered. An empty Etsy link is how a piece is shown but not sold — saving deletes the
+  listing rather than leaving a button pointing nowhere.
+
+- **The store grid uses a menu button where the wall uses long-press.** Both need a
+  context menu on a tablet, but the grid also needs drag-to-reorder, and dnd-kit's
+  `TouchSensor` claims the hold at 180ms to start the drag — so a 500ms long-press would
+  be fighting the reorder for the same gesture. The wall has no such conflict because its
+  drag begins immediately. Right-click still works on a desktop.
 
 - **Portfolio and store are separate collections.** `portfolio_items` drives the home
   page and has no price; `artworks` + `listings` are the store. They share the upload

@@ -110,6 +110,9 @@ const statements = [
   "DELETE FROM listings;",
   "DELETE FROM artwork_images;",
   "DELETE FROM artworks;",
+  // Before portfolio_items: wall_texts reference it, and SQLite refuses the
+  // delete while a text box on a piece's page still points at the row.
+  "DELETE FROM wall_texts;",
   "DELETE FROM portfolio_images;",
   "DELETE FROM portfolio_items;",
   "DELETE FROM site_settings;",
@@ -186,10 +189,16 @@ files.forEach((file, index) => {
     `INSERT INTO portfolio_items (id, slug, name, information, status, x, y, width, z, created_at, updated_at) VALUES (${q(portfolioId)}, ${q(slug)}, ${q(title)}, ${q(meta.description ?? "")}, 'published', ${place.x}, ${place.y}, ${place.width}, ${index + 1}, ${now}, ${now});`,
     `INSERT INTO portfolio_images (id, item_id, storage_key, alt, width, height, lqip, sort_order) VALUES (${q(portfolioId + "-img")}, ${q(portfolioId)}, ${q(key)}, ${q(meta.description ?? title)}, ${width}, ${height}, NULL, 0);`,
   );
+  const kind = index % 3 === 2 ? "digital" : "print";
+  const pricePence = kind === "digital" ? 1200 + index * 300 : 3500 + index * 1200;
+  const label = kind === "digital" ? "High-resolution download" : "A3 giclée print";
+
   statements.push(
     `INSERT INTO artworks (id, slug, title, year, medium, dimensions_note, description, status, sort_order, is_featured, created_at, updated_at) VALUES (${q(id)}, ${q(slug)}, ${q(title)}, 2026, ${q(meta.medium ?? "Illustration")}, ${q(meta.note ?? null)}, ${q(meta.description ?? "")}, 'published', ${index + 1}, ${meta.featured ? 1 : 0}, ${now}, ${now});`,
     `INSERT INTO artwork_images (id, artwork_id, storage_key, alt, width, height, lqip, sort_order) VALUES (${q(id + "-img")}, ${q(id)}, ${q(key)}, ${q(meta.description ?? title)}, ${width}, ${height}, NULL, 0);`,
-    `INSERT INTO listings (id, artwork_id, kind, label, etsy_url, price_pence, availability, edition_size, edition_remaining, sort_order) VALUES (${q(id + "-l0")}, ${q(id)}, 'print', 'A3 giclée print', ${q(`${ETSY}?listing=${1400 + index}`)}, 4500, 'available', 40, ${30 - index}, 0);`,
+    // Prices, formats and one sold-out piece vary across the set so the shop's
+    // filters have something to bite on locally.
+    `INSERT INTO listings (id, artwork_id, kind, label, etsy_url, price_pence, availability, edition_size, edition_remaining, sort_order) VALUES (${q(id + "-l0")}, ${q(id)}, ${q(kind)}, ${q(label)}, ${q(`${ETSY}?listing=${1400 + index}`)}, ${pricePence}, ${q(index === 2 ? "sold_out" : "available")}, ${kind === "print" ? 40 : "NULL"}, ${kind === "print" ? 30 - index : "NULL"}, 0);`,
   );
 });
 
