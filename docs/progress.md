@@ -224,9 +224,7 @@ Non-obvious decisions that the code alone does not explain.
 
 - **That inline script carries a five-second failsafe**, which removes `.js-fade` if no
   piece has been revealed by then — the signal that hydration never happened. Without it,
-  a bundle that failed to load would leave the gallery permanently blank. Note it also
-  makes Chrome's `--virtual-time-budget` hang, so screenshots of the site must use real
-  time.
+  a bundle that failed to load would leave the gallery permanently blank.
 
 - **Superseded: the fade-in never hides content in server markup.** `.fade-target` is applied by
   `src/components/fade-in.tsx` after it mounts, never rendered by the server. Markup that
@@ -241,11 +239,11 @@ Non-obvious decisions that the code alone does not explain.
   Fixing it means deciding whether the 404 should carry the site header and footer, which
   a root-level `app/not-found.tsx` would not get for free.
 
-- **Known debt: the wall renders its contents twice**, once for the mobile stack and once
-  for the desktop canvas, with CSS hiding one. That doubles the HTML and produces two
-  `<h1>` elements in the source. Lazy loading spares the duplicate image requests for all
-  but the priority image. Fixing it means one DOM tree switched by CSS custom properties
-  and `order`, which is a worthwhile follow-up rather than a quick change.
+- **The wall renders once; CSS decides the layout.** Position, size and reading order
+  arrive as custom properties on a single set of elements, and the breakpoint only changes
+  how they are used. Rendering a stack and an arrangement separately cost double the HTML,
+  put two `<h1>` elements in the source and made the browser fetch the priority image
+  twice. Adding a second tree back would undo all of that.
 
 - **Snap guides record which edge may reach them.** Without that, any edge could reach
   any guide: with a gap set, a piece's trailing edge still latched onto a neighbour's

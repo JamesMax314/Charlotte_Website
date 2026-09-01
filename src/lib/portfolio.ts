@@ -148,24 +148,23 @@ export const headingTextId = (texts: WallText[]): string | null => {
 };
 
 /**
- * Type styles for a text box.
+ * Type styles for a text box, other than its size.
  *
- * Sizes are given in `cqw` — percentages of the containing canvas — which is
- * what keeps type in proportion as the wall scales, exactly like the pieces.
- * The canvas must therefore declare `container-type: inline-size`.
- *
- * `clamped` is for the mobile stack, where the container is a narrow phone
- * rather than the wall: raw cqw there would render body copy at about six
- * pixels.
+ * Sizes are `cqw` — percentages of the containing canvas — which keeps type in
+ * proportion as the wall scales, exactly like the pieces. The container must
+ * therefore declare `container-type: inline-size`.
  */
 export const textStyle = (
   text: WallText,
-  { clamped = false, fonts }: { clamped?: boolean; fonts?: FontOption[] } = {},
+  { includeFontSize = true, fonts }: { includeFontSize?: boolean; fonts?: FontOption[] } = {},
 ): React.CSSProperties => ({
-  // Shared by the editor canvas and the public wall, so the two cannot render
-  // the same text box differently.
+  // `fonts` stays an argument for when the artist can upload her own: callers
+  // will pass the built-in list merged with hers. See src/lib/fonts.ts.
   fontFamily: resolveFontFamily(text.font, fonts),
-  fontSize: clamped ? `clamp(0.95rem, ${text.fontSize}cqw, 2.5rem)` : `${text.fontSize}cqw`,
+  // Omitted on the public wall, where a stylesheet sets the size from a custom
+  // property so one element can be sized differently per breakpoint. The
+  // editor canvas is desktop-only and takes the concrete value.
+  ...(includeFontSize ? { fontSize: `${text.fontSize}cqw` } : {}),
   textAlign: text.align,
   fontWeight: text.bold ? 700 : 400,
   fontStyle: text.italic ? "italic" : "normal",

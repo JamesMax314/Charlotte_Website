@@ -18,11 +18,18 @@ import {
 /**
  * The home page wall.
  *
- * Positions are percentages of the canvas width (see the schema), so the whole
- * arrangement scales proportionally with the viewport. Below `md` the
- * arrangement is abandoned for a reading-order stack — a layout composed at
- * desktop proportions cannot survive being squeezed to a phone.
+ * Rendered once. Position, size and reading order arrive as custom properties
+ * and the stylesheet decides what to do with them: a stack on a phone, the
+ * artist's arrangement above `md`. A layout composed at desktop proportions
+ * cannot survive being squeezed to a phone, but rendering it twice cost double
+ * the HTML, two <h1> elements and a duplicated priority image.
+ *
+ * Positions are percentages of the canvas width (see the schema), so the
+ * arrangement scales proportionally with the viewport.
  */
+
+/** Custom properties are not in React's CSSProperties type. */
+type WallVars = React.CSSProperties & Record<`--${string}`, string | number>;
 
 function Tile({
   item,
@@ -88,25 +95,29 @@ function Tile({
   );
 }
 
-/** Wraps a piece only when the artist has asked for the fade. */
-function MaybeFade({ on, children }: { on: boolean; children: React.ReactNode }) {
-  return on ? <FadeIn>{children}</FadeIn> : <>{children}</>;
-}
-
-function TextBlock({
-  text,
-  clamped,
-  heading,
+/**
+ * One positioned element on the wall.
+ *
+ * The fade, when on, is applied to this element rather than a wrapper: an
+ * extra div between the wall and its children would break the positioning.
+ */
+function WallElement({
+  fade,
+  style,
+  children,
 }: {
-  text: WallText;
-  clamped?: boolean;
-  heading?: boolean;
+  fade: boolean;
+  style: WallVars;
+  children: React.ReactNode;
 }) {
-  const Tag = heading ? "h1" : "p";
-  return (
-    <Tag className="leading-snug whitespace-pre-wrap" style={textStyle(text, { clamped })}>
-      {text.content}
-    </Tag>
+  return fade ? (
+    <FadeIn className="wall-item" style={style}>
+      {children}
+    </FadeIn>
+  ) : (
+    <div className="wall-item" style={style}>
+      {children}
+    </div>
   );
 }
 
@@ -137,91 +148,59 @@ export function PortfolioWall({
   */
   const lcpId = lcpCandidateId(shown);
 
-  // The mobile stack interleaves text and pieces in reading order, so a
-  // heading written above a piece still reads above it on a phone.
-  const stacked = [
-    ...texts.map((t) => ({ kind: "text" as const, y: t.y, x: t.x, text: t })),
-    ...inReadingOrder(shown).map((item) => ({
-      kind: "item" as const,
-      y: item.y,
-      x: item.x,
-      item,
-    })),
-  ].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
+  /*
+    Reading order for the stacked layout, top to bottom then left to right, so
+    a heading written above a piece still reads above it on a phone. Emitted as
+    a CSS `order` rather than a second render of the same content.
+  */
+  const order = new Map<string, number>(
+    [
+      ...texts.map((t) => ({ id: t.id, x: t.x, y: t.y })),
+      ...inReadingOrder(shown).map((i) => ({ id: i.id, x: i.x, y: i.y })),
+    ]
+      .sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y))
+      .map((entry, index) => [entry.id, index]),
+  );
+
+  const place = (el: { id: string; x: number; y: number; width: number; z: number }): WallVars => ({
+    "--x": el.x,
+    "--top": (el.y / ratio) * 100,
+    "--w": el.width,
+    "--z": el.z,
+    "--order": order.get(el.id) ?? 0,
+  });
 
   return (
-    <>
-      <div className="flex flex-col gap-10 md:hidden" style={{ containerType: "inline-size" }}>
-        {stacked.map((entry) =>
-          entry.kind === "text" ? (
-            <TextBlock
-              key={entry.text.id}
-              text={entry.text}
-              clamped
-              heading={entry.text.id === headingId}
-            />
-          ) : (
-            <MaybeFade key={entry.item.id} on={fadeIn}>
-              <Tile
-                item={entry.item}
-                priority={entry.item.id === lcpId}
-                eager={isLikelyAboveFold(entry.item)}
-                showName={showNamesOnHover}
-              />
-            </MaybeFade>
-          ),
-        )}
-      </div>
-
-      {/*
-        Clipped, matching the editor canvas. Without this a piece bled past the
-        edge would give the whole page a horizontal scrollbar, and the artist
-        would see something different from what she arranged.
-      */}
-      <div
-        className="relative hidden overflow-hidden md:block"
-        // container-type lets text sizes resolve in cqw, so type scales with
-        // the wall rather than jumping between breakpoints.
-        style={{ aspectRatio: `100 / ${ratio}`, containerType: "inline-size" }}
-      >
-        {texts.map((text) => (
-          <div
-            key={text.id}
-            className="absolute"
-            style={{
-              left: `${text.x}%`,
-              top: `${(text.y / ratio) * 100}%`,
-              width: `${text.width}%`,
-              zIndex: text.z,
-            }}
-          >
-            <TextBlock text={text} heading={text.id === headingId} />
+    <div className="wall" style={{ "--ratio": ratio } as WallVars}>
+      {texts.map((text) => {
+        const Tag = text.id === headingId ? "h1" : "p";
+        return (
+          <div key={text.id} className="wall-item" style={place(text)}>
+            <Tag
+              className="wall-text leading-snug whitespace-pre-wrap"
+              style={
+                {
+                  ...textStyle(text, { includeFontSize: false }),
+                  "--fs": text.fontSize,
+                } as WallVars
+              }
+            >
+              {text.content}
+            </Tag>
           </div>
-        ))}
+        );
+      })}
 
-        {shown.map((item) => (
-          <div
-            key={item.id}
-            className="absolute"
-            style={{
-              left: `${item.x}%`,
-              // y is a percentage of width, so convert it to a share of height.
-              top: `${(item.y / ratio) * 100}%`,
-              width: `${item.width}%`,
-              zIndex: item.z,
-            }}
-          >
-            <MaybeFade on={fadeIn}>
-              <Tile
-                item={item}
-                priority={item.id === lcpId}
-                eager={isLikelyAboveFold(item)}
-                showName={showNamesOnHover}
-              />
-            </MaybeFade>
-          </div>
-        ))}
-      </div>
-    </>
+      {shown.map((item) => (
+        <WallElement key={item.id} fade={fadeIn} style={place(item)}>
+          <Tile
+            item={item}
+            priority={item.id === lcpId}
+            eager={isLikelyAboveFold(item)}
+            showName={showNamesOnHover}
+          />
+        </WallElement>
+      ))}
+    </div>
   );
 }

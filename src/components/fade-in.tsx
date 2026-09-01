@@ -15,7 +15,19 @@ import { isOnScreenAtLoad, revealDelay } from "@/lib/reveal";
  * parsing. Hiding from this component instead meant the content painted once,
  * vanished, then faded — a visible flicker.
  */
-export function FadeIn({ children }: { children: React.ReactNode }) {
+export function FadeIn({
+  children,
+  className = "",
+  style,
+}: {
+  children: React.ReactNode;
+  /**
+   * Applied to this element rather than a wrapper. The wall positions its
+   * children directly, so an extra div between them would break the layout.
+   */
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -65,7 +77,7 @@ export function FadeIn({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div ref={ref} className="fade-target">
+    <div ref={ref} className={`fade-target ${className}`.trim()} style={style}>
       {children}
     </div>
   );

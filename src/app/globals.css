@@ -58,6 +58,64 @@ html {
 }
 
 /*
+  The wall renders once, and CSS decides how it is laid out.
+
+  It used to render twice — a stack for phones and an arrangement for wider
+  screens, with one hidden — which doubled the HTML, put two <h1> elements in
+  the source and made the browser fetch the priority image twice. Position,
+  size and order now arrive as custom properties on a single set of elements,
+  and the breakpoint only changes how those properties are used.
+*/
+.wall {
+  /* Text sizes resolve against this, so type scales with the wall. */
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.wall-item {
+  /* Reading order: top to bottom, then left to right. Computed on the server
+     from the arrangement, so the artist never maintains a second ordering. */
+  order: var(--order, 0);
+}
+
+/*
+  Clamped, because the container here is a phone rather than the wall: raw cqw
+  would render body copy at about six pixels.
+*/
+.wall-text {
+  font-size: clamp(0.95rem, calc(var(--fs) * 1cqw), 2.5rem);
+}
+
+@media (min-width: 768px) {
+  .wall {
+    display: block;
+    position: relative;
+    /*
+      Clipped, matching the editor canvas. Without this a piece bled past the
+      edge would give the page a horizontal scrollbar and stop matching what
+      the artist arranged.
+    */
+    overflow: hidden;
+    aspect-ratio: 100 / var(--ratio);
+  }
+
+  .wall-item {
+    position: absolute;
+    left: calc(var(--x) * 1%);
+    /* y is a percentage of width; the server converts it to a share of height. */
+    top: calc(var(--top) * 1%);
+    width: calc(var(--w) * 1%);
+    z-index: var(--z);
+  }
+
+  .wall-text {
+    font-size: calc(var(--fs) * 1cqw);
+  }
+}
+
+/*
   The fade is opt-in from the browser, not from the server.
 
   Markup arrives visible. A tiny inline script at the top of the site layout
