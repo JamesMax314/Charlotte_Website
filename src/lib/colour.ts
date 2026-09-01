@@ -24,7 +24,8 @@ export const normaliseHex = (input: string): string | null => {
   const trimmed = input.trim();
 
   const short = SHORT.exec(trimmed);
-  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`.toLowerCase();
+  if (short)
+    return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`.toLowerCase();
 
   const long = LONG.exec(trimmed);
   return long ? `#${long[1]}`.toLowerCase() : null;

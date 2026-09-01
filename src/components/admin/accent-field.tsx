@@ -8,7 +8,8 @@ import { FIELD } from "./styles";
 
 const WARNING: Record<"ok" | "faint" | "invisible", string | null> = {
   ok: null,
-  faint: "This colour is faint against the paper background, so links and the focus outline will be hard to see. Buttons will still read.",
+  faint:
+    "This colour is faint against the paper background, so links and the focus outline will be hard to see. Buttons will still read.",
   invisible:
     "This colour nearly disappears against the paper background, so links and the focus outline will be very hard to see. Buttons will still read.",
 };

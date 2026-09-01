@@ -35,9 +35,13 @@ The product specification is `docs/project-brief.md`.
   (gitignored) and falls back to generated placeholders. All wording is placeholder and
   asserts no client relationships.
 
-- **Not yet built:** a store index page, About and Contact editing in the admin, uploaded
-  fonts, link-health cron, outbound click tracking, contact form delivery. The custom 404
-  does not render — see the invariants below.
+- **A settings page the artist owns.** `/admin/settings` carries her name and mark, her
+  Instagram and Etsy links, the highlight colour, uploaded fonts, and the copy for the
+  About, Contact and Privacy pages — with a photograph beside the About text. The mark is
+  both the circular badge in the header and the browser-tab icon.
+
+- **Not yet built:** a store index page, link-health cron, outbound click tracking,
+  contact form delivery. The custom 404 does not render — see the invariants below.
 
 - **Not yet deployed.** Needs a Cloudflare account, two R2 buckets, a D1 database and two
   secrets. See _Deploying for the first time_ below.
@@ -55,12 +59,38 @@ The product specification is `docs/project-brief.md`.
 | 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                                                 |
 | 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                        |
 | 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site |
+| 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                      |
 
 ---
 
 ## Architectural Invariants
 
 Non-obvious decisions that the code alone does not explain.
+
+- **The root layout reads D1 now, and `getSiteSettings` must keep its try/catch.** It
+  needs the site name, the mark, the highlight colour and the uploaded fonts, so every
+  page depends on that read — `/admin/login` included, which is why the catch is what
+  keeps sign-in reachable when the database is broken. It is also why a missed migration
+  is invisible: the catch swallows `no such column`, and the site renders perfectly at
+  every default while silently ignoring the artist's settings. The `console.error` inside
+  it is the only signal there is. The read costs no extra query because the function is
+  memoised with `cache()`; before that the home page ran it three times.
+
+- **The accent's foreground is derived, so every `bg-accent` button also needs
+  `hover:text-paper`.** `--accent-ink` is whichever of paper or ink contrasts better with
+  the artist's highlight, which is what makes an unreadable button unreachable. But all
+  those buttons switch to `hover:bg-ink`, so with a light highlight the derived
+  foreground _is_ ink — and without the override the label vanishes exactly when the
+  pointer reaches it. This does not reproduce with the default brown.
+
+- **A favicon skips the width ladder, and must render `unoptimized`.** The client
+  pipeline re-encodes to JPEG, destroying the transparency a mark needs, and scales to
+  2400px — so the mark is stored exactly as uploaded. That means no `-400` derivative
+  exists, and without `unoptimized` the loader asks for one anyway: `/media` misses,
+  falls through to its base-key branch, and reads R2 twice on the header of every page
+  while looking entirely correct. `src/app/icon.svg` also had to move to `public/`,
+  because file-based metadata always beats `metadata.icons` and the setting was ignored
+  while it sat there.
 
 - **`pnpm.packageExtensions` declares `esbuild` for `@opennextjs/cloudflare`.** The
   adapter imports esbuild without declaring it as a dependency. Under pnpm's isolated

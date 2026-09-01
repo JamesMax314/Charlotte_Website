@@ -120,8 +120,7 @@ export const cssFamilyName = (label: string): string => {
  * `sans.woff2` must not be able to claim the id `sans` and silently shadow
  * Inter for every text box already using it.
  */
-export const newFontId = (): string =>
-  `font-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
+export const newFontId = (): string => `font-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
 
 /** An uploaded font as the registry sees it — a complete stack, like the built-ins. */
 export const uploadedFontOption = (font: UploadedFont): FontOption => ({

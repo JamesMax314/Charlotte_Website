@@ -101,9 +101,7 @@ export function FaviconField({ faviconKey }: { faviconKey: string | null }) {
         }}
       />
 
-      {note && (
-        <p className="text-graphite basis-full text-xs">{note}</p>
-      )}
+      {note && <p className="text-graphite basis-full text-xs">{note}</p>}
       {error && (
         <p role="alert" className="basis-full text-xs text-red-700">
           {error}

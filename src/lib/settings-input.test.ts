@@ -3,9 +3,7 @@ import { MAX_COPY, normaliseSettings, safeEmail, safeExternalUrl } from "./setti
 
 describe("safeExternalUrl", () => {
   it("accepts http and https", () => {
-    expect(safeExternalUrl("https://www.instagram.com/her")).toBe(
-      "https://www.instagram.com/her",
-    );
+    expect(safeExternalUrl("https://www.instagram.com/her")).toBe("https://www.instagram.com/her");
     expect(safeExternalUrl("http://example.com/")).toBe("http://example.com/");
     expect(safeExternalUrl("  https://etsy.com/shop/her  ")).toBe("https://etsy.com/shop/her");
   });

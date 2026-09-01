@@ -68,10 +68,7 @@
       "indexes": {
         "artwork_images_artwork_idx": {
           "name": "artwork_images_artwork_idx",
-          "columns": [
-            "artwork_id",
-            "sort_order"
-          ],
+          "columns": ["artwork_id", "sort_order"],
           "isUnique": false
         }
       },
@@ -80,12 +77,8 @@
           "name": "artwork_images_artwork_id_artworks_id_fk",
           "tableFrom": "artwork_images",
           "tableTo": "artworks",
-          "columnsFrom": [
-            "artwork_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["artwork_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -192,17 +185,12 @@
       "indexes": {
         "artworks_slug_idx": {
           "name": "artworks_slug_idx",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         },
         "artworks_status_sort_idx": {
           "name": "artworks_status_sort_idx",
-          "columns": [
-            "status",
-            "sort_order"
-          ],
+          "columns": ["status", "sort_order"],
           "isUnique": false
         }
       },
@@ -290,10 +278,7 @@
       "indexes": {
         "listings_artwork_idx": {
           "name": "listings_artwork_idx",
-          "columns": [
-            "artwork_id",
-            "sort_order"
-          ],
+          "columns": ["artwork_id", "sort_order"],
           "isUnique": false
         }
       },
@@ -302,12 +287,8 @@
           "name": "listings_artwork_id_artworks_id_fk",
           "tableFrom": "listings",
           "tableTo": "artworks",
-          "columnsFrom": [
-            "artwork_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["artwork_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -380,10 +361,7 @@
       "indexes": {
         "portfolio_images_item_idx": {
           "name": "portfolio_images_item_idx",
-          "columns": [
-            "item_id",
-            "sort_order"
-          ],
+          "columns": ["item_id", "sort_order"],
           "isUnique": false
         }
       },
@@ -392,12 +370,8 @@
           "name": "portfolio_images_item_id_portfolio_items_id_fk",
           "tableFrom": "portfolio_images",
           "tableTo": "portfolio_items",
-          "columnsFrom": [
-            "item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["item_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -513,24 +487,17 @@
       "indexes": {
         "portfolio_items_slug_idx": {
           "name": "portfolio_items_slug_idx",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         },
         "portfolio_items_status_idx": {
           "name": "portfolio_items_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "portfolio_items_parent_idx": {
           "name": "portfolio_items_parent_idx",
-          "columns": [
-            "parent_id",
-            "z"
-          ],
+          "columns": ["parent_id", "z"],
           "isUnique": false
         }
       },
@@ -539,12 +506,8 @@
           "name": "portfolio_items_parent_id_portfolio_items_id_fk",
           "tableFrom": "portfolio_items",
           "tableTo": "portfolio_items",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -944,12 +907,8 @@
           "name": "wall_texts_parent_id_portfolio_items_id_fk",
           "tableFrom": "wall_texts",
           "tableTo": "portfolio_items",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

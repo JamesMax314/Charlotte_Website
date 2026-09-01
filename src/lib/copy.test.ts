@@ -17,9 +17,7 @@ describe("toParagraphs", () => {
   it("keeps a single newline inside its paragraph", () => {
     // She is typing in a plain box, so Enter has to do something. Rendered
     // with whitespace-pre-line.
-    expect(toParagraphs("One line\nand its neighbour.")).toEqual([
-      "One line\nand its neighbour.",
-    ]);
+    expect(toParagraphs("One line\nand its neighbour.")).toEqual(["One line\nand its neighbour."]);
   });
 
   it("handles a blank line that carries whitespace", () => {
