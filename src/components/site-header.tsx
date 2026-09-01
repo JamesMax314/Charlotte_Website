@@ -20,7 +20,13 @@ export async function SiteHeader() {
         those two happened to leave room, and would shift every time she
         renamed one. The equal `1fr` columns pin the centre to the centre.
       */}
-      <Container className="flex flex-wrap items-center gap-x-6 gap-y-3 py-5 md:grid md:grid-cols-[1fr_auto_1fr]">
+      {/*
+        `min-h`, not `h`. The artist sets the bar's height, but a name in a
+        large face — or a nav that has wrapped to a second row on a phone —
+        must push the bar taller rather than be clipped by it. The settings
+        panel says so when her type has outgrown the number she chose.
+      */}
+      <Container className="flex min-h-[var(--header-height,76px)] flex-wrap items-center gap-x-6 gap-y-3 py-2 md:grid md:grid-cols-[1fr_auto_1fr]">
         <Link
           href="/"
           className="group mr-auto flex items-center gap-3 md:mr-0"
@@ -47,7 +53,9 @@ export async function SiteHeader() {
           ) : (
             <Mark className="text-ink h-9 w-9 shrink-0 transition-transform duration-300 group-hover:-rotate-6" />
           )}
-          <span className="font-display text-ink text-lg tracking-tight">{name}</span>
+          <span className="font-display text-ink text-[length:var(--header-name-size,18px)] leading-tight tracking-tight">
+            {name}
+          </span>
         </Link>
 
         {/*
@@ -69,7 +77,7 @@ export async function SiteHeader() {
           aria-label="Pages"
           className="order-last w-full md:order-none md:w-auto md:justify-self-center"
         >
-          <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+          <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[length:var(--header-nav-size,14px)]">
             <li>
               <Link className="hover:text-accent transition-colors" href="/">
                 Illustration
@@ -86,7 +94,7 @@ export async function SiteHeader() {
         </nav>
 
         <nav aria-label="Main" className="md:justify-self-end">
-          <ul className="flex items-center gap-6 text-sm">
+          <ul className="flex items-center gap-6 text-[length:var(--header-nav-size,14px)]">
             <li>
               <Link className="hover:text-accent transition-colors" href="/about">
                 About

@@ -46,7 +46,8 @@ The product specification is `docs/project-brief.md`.
   asserts no client relationships.
 
 - **A settings page the artist owns.** `/admin/settings` carries her name and mark, her
-  Instagram and Etsy links, the highlight colour, uploaded fonts, and the copy for the
+  Instagram and Etsy links, the top bar's height and type sizes with a working miniature
+  of it, the highlight colour, uploaded fonts, and the copy for the
   About, Contact and Privacy pages — with a photograph beside the About text. The mark is
   both the circular badge in the header and the browser-tab icon, and she picks the body
   and heading typefaces the public site is set in.
@@ -74,6 +75,7 @@ The product specification is `docs/project-brief.md`.
 | 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                    |
 | 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
 | 10    | Custom pages the artist adds herself, at the top level and linked from the centre of both top bars, composed on the home page's wall. A `WallScope` union replaces the bare `parentId` everywhere, so the three walls cannot be confused for one another                                              |
+| 11    | The top bar's height and its two type sizes moved into settings, driven by custom properties the site layout emits, with a live miniature of the real header beside the sliders                                                                                                                       |
 
 ---
 
@@ -199,6 +201,21 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **The header's height is a `min-height`, and the panel has to say so.** A fixed height
+  would clip the artist's name in a large face, and would fight the nav wrapping to a
+  second row on a phone — so the bar grows instead. That makes the control look broken at
+  the point it matters most, which is why `exceedsHeight` exists and the settings panel
+  reports the height the bar will actually be. The lower bound of 56 is load-bearing for
+  the same reason from the other side: the mark is a fixed 36px inside 16px of padding, so
+  below 52 the mark would decide the height and the slider would do nothing at all.
+
+- **The header tokens are emitted by the site layout, never the root layout.** Same
+  reasoning as `--site-body` and `--site-display`, and they share the same `<style>`
+  element: the studio must keep its own chrome whatever the artist sets, or the bar she is
+  editing changes under her while she edits it. The settings preview scopes the identical
+  tokens to its own element instead, which is what lets it be faithful without repainting
+  the admin. That `<style>` still must never carry a `precedence` prop.
 
 - **A wall is a `WallScope`, never a parent id.** There are three — home, one of the
   artist's custom pages, and a single piece's own page — and the database says which with

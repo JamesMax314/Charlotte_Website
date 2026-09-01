@@ -3,6 +3,7 @@ import { Container } from "@/components/container";
 import { AboutPhotoField } from "@/components/admin/about-photo-field";
 import { AccentField } from "@/components/admin/accent-field";
 import { FaviconField } from "@/components/admin/favicon-field";
+import { HeaderStyleField } from "@/components/admin/header-style-field";
 import { FontsField } from "@/components/admin/fonts-field";
 import { SiteFacesField } from "@/components/admin/site-faces-field";
 import { SettingsForm } from "@/components/admin/settings-form";
@@ -11,7 +12,10 @@ import { FIELD } from "@/components/admin/styles";
 import { requireSession } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_ABOUT_COPY, DEFAULT_CONTACT_COPY, DEFAULT_PRIVACY_COPY } from "@/lib/default-copy";
-import { mergeFonts } from "@/lib/fonts";
+import { mergeFonts, resolveSiteFaces } from "@/lib/fonts";
+import { headerStyleFromSettings } from "@/lib/header-style";
+import { navLabel } from "@/lib/site-pages";
+import { getAllSitePages } from "@/lib/site-pages-queries";
 import { getSiteFonts } from "@/lib/site-settings";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -23,7 +27,12 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 
 export default async function SettingsPage() {
   await requireSession();
-  const [settings, fonts] = await Promise.all([getSiteSettings(), getSiteFonts()]);
+  const [settings, fonts, pages] = await Promise.all([
+    getSiteSettings(),
+    getSiteFonts(),
+    getAllSitePages(),
+  ]);
+  const registry = mergeFonts(fonts);
 
   return (
     <Container className="pt-10 pb-20">
@@ -70,6 +79,22 @@ export default async function SettingsPage() {
       </SettingsForm>
 
       <SettingsSection
+        title="The top bar"
+        hint="How tall it is, and how large your name and the links are set. Everything here shows in the preview as you drag."
+      >
+        <HeaderStyleField
+          initial={headerStyleFromSettings(settings)}
+          siteName={settings.siteName}
+          faviconKey={settings.faviconKey}
+          // Only her published pages: the miniature is what a visitor sees.
+          pageLabels={pages.filter((p) => p.status === "published").map(navLabel)}
+          // Resolved and passed in, because the studio deliberately does not
+          // render in her chosen faces — see src/app/(site)/layout.tsx.
+          displayFamily={resolveSiteFaces(settings, registry).display}
+        />
+      </SettingsSection>
+
+      <SettingsSection
         title="Look"
         hint="How your site is set. The highlight colour applies here in the studio too; the fonts deliberately do not, so this stays easy to work in."
       >
@@ -92,7 +117,7 @@ export default async function SettingsPage() {
             <SiteFacesField
               bodyFontId={settings.bodyFontId}
               headingFontId={settings.headingFontId}
-              fonts={mergeFonts(fonts)}
+              fonts={registry}
               uploaded={fonts}
             />
           </div>

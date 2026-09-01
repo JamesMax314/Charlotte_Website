@@ -290,6 +290,19 @@ export const siteSettings = sqliteTable("site_settings", {
   accentColour: text("accent_colour").notNull().default("#9a5b33"),
 
   /*
+    The top bar's proportions, in pixels. Stored rather than left to Tailwind
+    because the artist sets them: the header is the first thing on every page
+    and the one piece of chrome that sits against her work on every screen.
+
+    Height is a floor, not a fixed size — see src/lib/header-style.ts for why.
+    Defaults are the values the header shipped with (py-5 around a 36px mark,
+    text-lg, text-sm), so an existing site looks identical after the migration.
+  */
+  headerHeight: integer("header_height").notNull().default(76),
+  headerNameSize: integer("header_name_size").notNull().default(18),
+  headerNavSize: integer("header_nav_size").notNull().default(14),
+
+  /*
     The faces the public site is set in. Keys into the font registry
     (src/lib/fonts.ts) rather than an enum, for the same reason as
     `wall_texts.font`: an uploaded font joins the same list with no migration.

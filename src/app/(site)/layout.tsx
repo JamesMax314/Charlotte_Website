@@ -3,6 +3,7 @@ import { fadeScript } from "@/lib/fade-script";
 import { SiteFooter } from "@/components/site-footer";
 import { getSiteSettings } from "@/lib/catalogue";
 import { fontMimeType, mergeFonts, resolveSiteFaces } from "@/lib/fonts";
+import { headerStyleFromSettings, headerTokenCss } from "@/lib/header-style";
 import { getSiteFonts } from "@/lib/site-settings";
 
 /** Chrome for the public site. The admin deliberately does not get this. */
@@ -12,6 +13,10 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
   const [settings, uploaded] = await Promise.all([getSiteSettings(), getSiteFonts()]);
   const registry = mergeFonts(uploaded);
   const faces = resolveSiteFaces(settings, registry);
+  // The top bar's proportions ride along with the faces, for the same reason:
+  // set here rather than in the root layout, so the studio keeps its own
+  // chrome whatever the artist chooses for her site.
+  const header = headerStyleFromSettings(settings);
 
   /*
     An uploaded face gets none of what next/font gives the Google families: no
@@ -72,7 +77,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <style
         data-site-faces=""
         dangerouslySetInnerHTML={{
-          __html: `:root{--site-body:${faces.body};--site-display:${faces.display}}`,
+          __html: `:root{--site-body:${faces.body};--site-display:${faces.display};${headerTokenCss(header)}}`,
         }}
       />
       {/*

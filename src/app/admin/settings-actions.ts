@@ -6,6 +6,7 @@ import * as schema from "@/db/schema";
 import { requireSession } from "@/lib/auth";
 import { getDb, getSiteSettings } from "@/lib/catalogue";
 import { cssFamilyName, isKnownFontId, mergeFonts, newFontId, type FontFormat } from "@/lib/fonts";
+import { headerStyle, type HeaderStyle } from "@/lib/header-style";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 import { normaliseSettings, type SettingsInput } from "@/lib/settings-input";
 import { derivativeKeys, isSafeKey } from "@/lib/storage";
@@ -105,6 +106,35 @@ export async function setAccentColour(hex: string): Promise<void> {
  * dropping: a settings page left open in another tab can still name a font she
  * has since deleted, and she has to be told why nothing moved.
  */
+/**
+ * The top bar's proportions.
+ *
+ * Saves on change rather than behind the section's Save button: the preview
+ * beside the sliders is a live surface, and an unsaved value would leave it
+ * showing something the site is not. The same case as the highlight colour and
+ * the wall's page settings.
+ *
+ * Clamped through `headerStyle`, which is what the preview draws from too — so
+ * a hand-crafted request cannot reach a value the artist could never have seen.
+ */
+export async function setHeaderStyle(patch: Partial<HeaderStyle>): Promise<void> {
+  await requireSession();
+
+  const current = await getSiteSettings();
+  const next = headerStyle({
+    height: patch.height ?? current.headerHeight,
+    nameSize: patch.nameSize ?? current.headerNameSize,
+    navSize: patch.navSize ?? current.headerNavSize,
+  });
+
+  await upsertSiteSettings({
+    headerHeight: next.height,
+    headerNameSize: next.nameSize,
+    headerNavSize: next.navSize,
+  });
+  refresh();
+}
+
 export async function setSiteFaces(patch: {
   bodyFontId?: string;
   headingFontId?: string;
