@@ -55,3 +55,15 @@ export const isSafeKey = (key: string): boolean =>
   !key.startsWith("/") &&
   !key.includes("..") &&
   /^[a-z0-9/_-]+\.[a-z0-9]+$/i.test(key);
+
+/**
+ * The keys from a list that are safe to hand to R2, de-duplicated.
+ *
+ * Shared by the two sides of the media deletion queue — `releaseMedia` and
+ * `claimMedia` in src/lib/publish.ts — so the pair cannot disagree about which
+ * keys they act on. A key one of them skipped and the other did not would
+ * either strand a row in the queue or delete an object still in use.
+ */
+export const usableKeys = (keys: (string | null | undefined)[]): string[] => [
+  ...new Set(keys.filter((key): key is string => typeof key === "string" && isSafeKey(key))),
+];

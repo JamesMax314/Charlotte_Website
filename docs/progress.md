@@ -174,6 +174,12 @@ Non-obvious decisions that the code alone does not explain.
   can be shared by two pieces — "she deleted the piece that uploaded it" does not mean the
   object is unused. It is also where the width-ladder derivatives finally get cleaned up;
   the portfolio and artwork deletes had only ever removed the base object.
+  The queue has two sides: `releaseMedia` puts a key in, and `claimMedia` takes it out
+  again when an upload writes that key. Without the second, a deleted-then-re-uploaded
+  image sat in the queue permanently — content-addressed keys mean the same file
+  returns the same key, and the sweep then refuses to remove it precisely because the
+  new revision references it again. Nothing was ever wrongly deleted; the queue simply
+  never drained, and a stale row reads as an asset that cannot be deleted.
 
 - **`getDb` lives in `src/lib/db.ts`, not in `catalogue.ts`.** The publish layer needs
   the database, `catalogue` reads through `getSiteSource`, and `getSiteSource` lives in

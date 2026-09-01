@@ -7,7 +7,7 @@ import * as schema from "@/db/schema";
 import { WIDTH_LADDER } from "@/image-loader";
 import { getDb } from "./db";
 import { hasValidSession } from "./auth";
-import { derivativeKeys, isSafeKey } from "./storage";
+import { derivativeKeys, usableKeys } from "./storage";
 import {
   SNAPSHOT_LIMIT_BYTES,
   SNAPSHOT_VERSION,
@@ -310,7 +310,7 @@ const sweepPendingDeletions = async (published: SiteSnapshot): Promise<void> => 
  * bucket forever.
  */
 export const releaseMedia = async (keys: (string | null | undefined)[]): Promise<void> => {
-  const wanted = [...new Set(keys.filter((key): key is string => !!key && isSafeKey(key)))];
+  const wanted = usableKeys(keys);
   if (wanted.length === 0) return;
 
   const published = await getPublishedRevision();
@@ -330,4 +330,29 @@ export const releaseMedia = async (keys: (string | null | undefined)[]): Promise
       .values(deferred.map((storageKey) => ({ storageKey })))
       .onConflictDoNothing();
   }
+};
+
+/**
+ * Takes keys back out of the deletion queue, because something is using them
+ * again.
+ *
+ * Keys are content-addressed, so deleting a piece and then re-uploading the
+ * same file produces the same key. Without this the key sits in the queue
+ * permanently: `releaseMedia` put it there while the published site still
+ * needed it, and the sweep then refuses to remove it precisely *because* the
+ * new revision references it again. Nothing is ever wrongly deleted — the
+ * queue simply never drains, and a stale row reads as an asset that cannot be
+ * deleted.
+ *
+ * Called wherever an object is written, which is the only moment a key can
+ * come back into use.
+ */
+export const claimMedia = async (keys: (string | null | undefined)[]): Promise<void> => {
+  const wanted = usableKeys(keys);
+  if (wanted.length === 0) return;
+
+  const db = await getDb();
+  await db
+    .delete(schema.pendingMediaDeletions)
+    .where(inArray(schema.pendingMediaDeletions.storageKey, wanted));
 };

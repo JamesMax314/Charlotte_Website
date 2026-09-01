@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { claimMedia } from "@/lib/publish";
 import { hasValidSession } from "@/lib/auth";
 import { extensionForFormat, fontFormatFor, type FontFormat } from "@/lib/fonts";
 import { assetKey, contentHash, IMAGE_EXTENSIONS } from "@/lib/storage";
@@ -112,6 +113,10 @@ export async function POST(request: Request) {
 
   const { env } = await getCloudflareContext({ async: true });
   await env.MEDIA.put(storageKey, bytes, { httpMetadata: { contentType } });
+
+  // As in the image upload: an identical file yields an identical key, which
+  // may be one a delete had queued. See claimMedia.
+  await claimMedia([storageKey]);
 
   // The About photo carries a ladder; the other two deliberately do not.
   if (kind === "aboutPhoto") {

@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { claimMedia } from "@/lib/publish";
 import { hasValidSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,10 @@ export async function POST(request: Request) {
 
   const { env } = await getCloudflareContext({ async: true });
   await env.MEDIA.put(storageKey, bytes, { httpMetadata: { contentType: file.type } });
+
+  // The same bytes always produce the same key, so this upload may be reviving
+  // one a delete had queued for removal. See claimMedia.
+  await claimMedia([storageKey]);
 
   // Responsive derivatives, rendered in the browser. Keyed by convention so
   // src/image-loader.ts can address them without a database lookup.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assetKey, contentHash, derivativeKeys, isSafeKey } from "./storage";
+import { assetKey, contentHash, derivativeKeys, isSafeKey, usableKeys } from "./storage";
 
 const bytesOf = (text: string): ArrayBuffer => new TextEncoder().encode(text).buffer as ArrayBuffer;
 
@@ -59,5 +59,33 @@ describe("isSafeKey", () => {
   it("rejects an empty or extensionless key", () => {
     expect(isSafeKey("")).toBe(false);
     expect(isSafeKey("site/abc")).toBe(false);
+  });
+});
+
+describe("usableKeys", () => {
+  /*
+    The guard both sides of the media deletion queue share. If they disagreed
+    about which keys they act on, one would strand a row in the queue and the
+    other would delete an object still in use.
+  */
+  it("drops nulls, blanks and anything unsafe", () => {
+    expect(
+      usableKeys(["artworks/a1.jpg", null, undefined, "", "../escape.jpg", "/leading.jpg"]),
+    ).toEqual(["artworks/a1.jpg"]);
+  });
+
+  it("de-duplicates, because the same file yields the same key", () => {
+    expect(usableKeys(["artworks/a1.jpg", "artworks/a1.jpg"])).toEqual(["artworks/a1.jpg"]);
+  });
+
+  it("keeps every distinct key, in the order given", () => {
+    expect(usableKeys(["fonts/b.woff2", "artworks/a.jpg"])).toEqual([
+      "fonts/b.woff2",
+      "artworks/a.jpg",
+    ]);
+  });
+
+  it("returns nothing for a list with nothing usable in it", () => {
+    expect(usableKeys([null, undefined, ""])).toEqual([]);
   });
 });
