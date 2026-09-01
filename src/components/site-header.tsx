@@ -54,7 +54,7 @@ export async function SiteHeader() {
           Home and the artist's own pages — the gallery's own navigation, as
           against the fixed links on the right.
 
-          Home leads it rather than relying on the mark alone: a wordmark is
+          The home wall leads it rather than relying on the mark alone: a wordmark is
           only recognisable as the way back once you already know the site, and
           with pages beside it there is a row of obvious links with a
           conspicuous gap where the most-wanted one should be. It is always
@@ -72,7 +72,7 @@ export async function SiteHeader() {
           <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
             <li>
               <Link className="hover:text-accent transition-colors" href="/">
-                Home
+                Illustration
               </Link>
             </li>
             {pages.map((page) => (

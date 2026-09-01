@@ -145,7 +145,7 @@ export function NavPages({ pages }: { pages: SitePage[] }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {/*
-        Home leads the bar here for the same reason it leads the site's: this
+        The home wall leads the bar here for the same reason it leads the site's: this
         strip is meant to be a preview of the nav the artist is arranging, and
         one that opened straight onto her custom pages would not be. It sits
         outside the DndContext because it is not one of her pages — there is no
@@ -157,7 +157,7 @@ export function NavPages({ pages }: { pages: SitePage[] }) {
           pathname === "/admin/portfolio" ? "text-ink" : "text-graphite"
         }`}
       >
-        Home page
+        Illustration
       </Link>
 
       {/*
