@@ -33,8 +33,8 @@ export const HEADER_DEFAULTS: HeaderStyle = { height: 76, nameSize: 18, navSize:
  */
 export const HEADER_LIMITS = {
   height: { min: 56, max: 180 },
-  nameSize: { min: 12, max: 36 },
-  navSize: { min: 10, max: 20 },
+  nameSize: { min: 12, max: 54 },
+  navSize: { min: 10, max: 30 },
 } as const;
 
 const clamp = (value: number, { min, max }: { min: number; max: number }): number =>
