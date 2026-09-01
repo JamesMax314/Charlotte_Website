@@ -247,7 +247,7 @@ Non-obvious decisions that the code alone does not explain.
   array is ordered by layer, so `priority={i === 0}` prioritised whichever piece happened
   to sit at the back. `lcpCandidateId` picks the largest piece above the fold.
 
-- **Exactly one piece is eager; everything else is lazy.** The rest of the first screenful
+- **At most two pieces are eager; everything else is lazy.** The rest of the first screenful
   used to opt out of lazy loading as well, chosen by `y` — a coordinate on the desktop
   arrangement, which does not exist below `md`. On a phone those pieces are a stack in
   reading order, so the ones marked eager were mostly far down the page and fetched at
@@ -255,6 +255,18 @@ Non-obvious decisions that the code alone does not explain.
   so it evicted and refetched them in a loop and the artwork visibly disappeared and came
   back while scrolling. Lazy costs desktop nothing, because `loading="lazy"` does not defer
   an image that is already in the viewport — it defers only what the visitor cannot see.
+
+- **The two layouts disagree about which image is the LCP, and one set of markup serves
+  both.** Above `md` it is the largest piece near the top of the arrangement; below `md`
+  that arrangement does not exist and it is simply whatever heads the stack. Prioritising
+  only the desktop answer left the mobile LCP lazily loaded, which Next warns about and
+  which costs the metric the brief puts a budget on. `eagerIds` returns both, which is one
+  piece as often as two — and never the first-screenful fan-out that flooded a phone.
+
+- **The reveal stops measuring once every piece is revealed.** `getBoundingClientRect`
+  forces a synchronous layout, and the poll would otherwise do that twice a second for the
+  life of the page. It must test that nothing is left _and_ that a pass has run — stopping
+  on the pass alone tears the listeners down before the visitor has scrolled anywhere.
 
 - **`images.deviceSizes` must stay identical to `WIDTH_LADDER`.** Next builds the srcset
   from `deviceSizes`, and `src/image-loader.ts` then rounds each width up to a rung that

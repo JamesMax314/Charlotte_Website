@@ -5,9 +5,9 @@ import {
   canvasHeightRatio,
   coverImage,
   headingTextId,
+  eagerIds,
   inReadingOrder,
   isInteractive,
-  lcpCandidateId,
   showsHoverName,
   textStyle,
   type PortfolioItem,
@@ -145,7 +145,7 @@ export function PortfolioWall({
   const headingId = headingTextId(texts);
 
   /*
-    One piece is preloaded; everything else is lazy.
+    At most two pieces are preloaded; everything else is lazy.
 
     The rest of the first screenful used to opt out of lazy loading too, chosen
     by `y` — a coordinate on the desktop arrangement. Below `md` that layout
@@ -157,8 +157,11 @@ export function PortfolioWall({
     Lazy costs nothing on a desktop, because `loading="lazy"` does not defer an
     image that is already in the viewport — it only defers the ones a visitor
     cannot see yet, which is exactly the behaviour the tall layout needs.
+
+    Two ids rather than one because the layouts disagree about which image is
+    the LCP, and this markup serves both. See `eagerIds`.
   */
-  const lcpId = lcpCandidateId(shown);
+  const eager = eagerIds(shown);
 
   /*
     Reading order for the stacked layout, top to bottom then left to right, so
@@ -205,7 +208,7 @@ export function PortfolioWall({
 
       {shown.map((item) => (
         <WallElement key={item.id} fade={fadeIn} style={place(item)}>
-          <Tile item={item} priority={item.id === lcpId} showName={showNamesOnHover} />
+          <Tile item={item} priority={eager.has(item.id)} showName={showNamesOnHover} />
         </WallElement>
       ))}
     </div>
