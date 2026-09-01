@@ -38,7 +38,8 @@ The product specification is `docs/project-brief.md`.
 - **A settings page the artist owns.** `/admin/settings` carries her name and mark, her
   Instagram and Etsy links, the highlight colour, uploaded fonts, and the copy for the
   About, Contact and Privacy pages — with a photograph beside the About text. The mark is
-  both the circular badge in the header and the browser-tab icon.
+  both the circular badge in the header and the browser-tab icon, and she picks the body
+  and heading typefaces the public site is set in.
 
 - **Not yet built:** a store index page, link-health cron, outbound click tracking,
   contact form delivery. The custom 404 does not render — see the invariants below.
@@ -60,12 +61,43 @@ The product specification is `docs/project-brief.md`.
 | 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                        |
 | 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site |
 | 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                      |
+| 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                      |
 
 ---
 
 ## Architectural Invariants
 
 Non-obvious decisions that the code alone does not explain.
+
+- **`--site-body` and `--site-display` exist because `@theme inline` substitutes a theme
+  key's _value_ into the utility.** `.font-display` compiles to
+  `font-family: var(--font-fraunces)` and `--font-display` is never emitted at all, so
+  overriding it at runtime does nothing — while `--font-sans` would appear to work,
+  through the single `body{}` reference. Half a feature, failing quietly. The theme keys
+  now point at two tokens the site layout can actually override. Do **not** shortcut this
+  by reassigning `--font-inter` or `--font-fraunces`: the wall's text boxes resolve `sans`
+  and `serif` through those same variables, so every box that chose one would change with
+  the site. Verify against the built bundle, never the source — it is the only ground
+  truth here.
+
+- **Those tokens' defaults in `globals.css` are what the admin runs on.** The site layout
+  does not render on admin routes, so nothing overrides them and the studio stays in Inter
+  and Fraunces whatever the artist picks. They are not dead values, and the typeface
+  settings deliberately do not repaint the admin — unlike the highlight colour, because a
+  decorative body face would make the tool itself hard to use.
+
+- **The site layout's `<style>` must never carry a `precedence` prop.** React would hoist
+  it into the head, dedupe it, and then not remove it on unmount, so returning to the
+  studio would leave it painted in her faces. Without it the element's lifetime is the
+  layout's lifetime and the tokens revert cleanly.
+
+- **An uploaded face is preloaded with a rendered `<link>`, not `ReactDOM.preload`.** That
+  helper is called while the nested site layout renders, after the shell has flushed, so
+  React can only record it as a hint in the flight stream — the browser then learns about
+  the font from the bundle rather than from the parser, which is the whole point of the
+  preload. It matters because an upload gets none of what next/font gives the Google
+  families: no head stylesheet, no preload, no metric-matched fallback, and its
+  `@font-face` sits in an inline `<style>` the preload scanner never sees.
 
 - **The root layout reads D1 now, and `getSiteSettings` must keep its try/catch.** It
   needs the site name, the mark, the highlight colour and the uploaded fonts, so every

@@ -11,6 +11,25 @@ import { SECONDARY_BUTTON } from "./styles";
 const MAX_FONTS = 12;
 
 /**
+ * What removing a font actually costs.
+ *
+ * The dialog is the only place she can discover that the font she is deleting
+ * is currently setting her whole site, so it says which built-in each role
+ * falls back to — and they differ: body text goes to Inter, headings to
+ * Fraunces, so a deleted heading face does not flatten the page into one face.
+ */
+function removalWarning(font: UploadedFont, bodyFontId: string, headingFontId: string): string {
+  const roles: string[] = [];
+  if (font.id === headingFontId) roles.push("headings, which go back to Fraunces");
+  if (font.id === bodyFontId) roles.push("body text, which goes back to Inter");
+
+  const inUse =
+    roles.length > 0 ? ` It is currently your site’s ${roles.join(" and your site’s ")}.` : "";
+
+  return `“${font.label}” will no longer be offered.${inUse} Any text already using it goes back to Inter — nothing is lost, and uploading it again brings it back.`;
+}
+
+/**
  * Fonts the artist has uploaded, offered alongside the built-in faces when she
  * formats a text box on the wall.
  *
@@ -19,7 +38,16 @@ const MAX_FONTS = 12;
  * for. Nothing has to be swept, and re-uploading the same face is not undone
  * by a migration.
  */
-export function FontsField({ fonts }: { fonts: UploadedFont[] }) {
+export function FontsField({
+  fonts,
+  bodyFontId,
+  headingFontId,
+}: {
+  fonts: UploadedFont[];
+  /** The site's current faces, so the remove dialog can name the consequence. */
+  bodyFontId: string;
+  headingFontId: string;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { run, pending, error } = useAction();
   const [busy, setBusy] = useState(false);
@@ -107,11 +135,7 @@ export function FontsField({ fonts }: { fonts: UploadedFont[] }) {
       <ConfirmDialog
         open={confirming !== null}
         title="Remove this font?"
-        body={
-          confirming
-            ? `“${confirming.label}” will no longer be offered. Any text already using it goes back to Inter — nothing is lost, and uploading it again brings it back.`
-            : ""
-        }
+        body={confirming ? removalWarning(confirming, bodyFontId, headingFontId) : ""}
         confirmLabel="Remove"
         onCancel={() => setConfirming(null)}
         onConfirm={() => {

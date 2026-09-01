@@ -28,6 +28,29 @@
     properties together — see src/lib/colour.ts for the derivation.
   */
   --accent-ink: #fbfbf9;
+
+  /*
+    The two faces the site is set in.
+
+    These exist because `@theme inline` substitutes a theme key's *value* into
+    the utility: `.font-display` compiles to `font-family: var(--font-fraunces)`
+    and `--font-display` is never emitted at all, so overriding it at runtime
+    would silently do nothing. Pointing the theme keys at these two instead
+    gives the site layout something it can actually override.
+
+    It must not override `--font-inter` or `--font-fraunces` directly, tempting
+    as that looks: the wall's text boxes resolve `sans` and `serif` through the
+    same variables, so every box that chose one would change with the site.
+
+    These defaults are what the *admin* runs on — the site layout does not
+    render there, so nothing overrides them and the studio stays in Inter and
+    Fraunces whatever the artist picks for her site. They are not dead values.
+
+    Kept byte-identical to `BUILT_IN_FONTS` in src/lib/fonts.ts, so "the CSS
+    default" and "the setting `sans`" are the same string.
+  */
+  --site-body: var(--font-inter), ui-sans-serif, sans-serif;
+  --site-display: var(--font-fraunces), ui-serif, serif;
 }
 
 @theme inline {
@@ -39,14 +62,19 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
 
-  --font-display: var(--font-fraunces);
-  --font-sans: var(--font-inter);
+  --font-display: var(--site-display);
+  /*
+    Still declared even though nothing uses a `font-sans` class: Tailwind's
+    preflight derives `--default-font-family` from this key, so pointing it here
+    is what carries the body face onto the root element.
+  */
+  --font-sans: var(--site-body);
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--site-body);
   -webkit-font-smoothing: antialiased;
 }
 
