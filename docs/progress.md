@@ -46,15 +46,15 @@ The product specification is `docs/project-brief.md`.
 
 ## Recent Phase Reference
 
-| Phase | Summary                                                                                                                                                                                                                                                        |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                           |
-| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                               |
-| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                     |
-| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop` |
-| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                        |
-| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                               |
-| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold                                       |
+| Phase | Summary                                                                                                                                                                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                                    |
+| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                                        |
+| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                                              |
+| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop`                          |
+| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                                                 |
+| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                        |
+| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site |
 
 ---
 
@@ -445,14 +445,24 @@ pnpm seed                        # loads eight placeholder artworks into D1 and 
 Then either:
 
 ```bash
-pnpm dev       # fast iteration on http://localhost:3000
-pnpm preview   # the real Worker on http://localhost:8787 — build first, slower
+pnpm dev          # fast iteration on http://localhost:3000
+pnpm preview      # the real Worker on http://localhost:8787 — build first, slower
+pnpm preview:lan  # the same, reachable from a phone at http://<this-machine>:8787
 ```
 
 **Test in `preview` before believing anything.** `next dev` does not run the deployed
 worker and will happily hide production-only failures. The missing image optimiser in
 Phase 2 is the worked example: every image on the site was broken in the worker while
 `next dev` looked perfect.
+
+**On a phone, `pnpm preview:lan` — not `pnpm dev`.** `next dev` binds every interface, so
+a phone can reach it and it becomes the path of least resistance; `wrangler dev` binds
+localhost, so plain `preview` cannot be reached and the temptation is to fall back. What
+`next dev` adds is a Fast Refresh websocket, and a phone that drops it — by backgrounding
+the tab, or over patchy wifi — gets a full page reload on reconnect. That is
+indistinguishable from the site reloading itself, and it cost real time during the mobile
+fade work: repeated `GET /` in the dev log was read as the page misbehaving. Find this
+machine's address with `ipconfig getifaddr en0`.
 
 ## Deploying for the first time
 
