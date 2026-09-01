@@ -1,8 +1,16 @@
 import "server-only";
+import { cache } from "react";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { drizzle } from "drizzle-orm/d1";
 import { asc, eq, inArray, ne } from "drizzle-orm";
 import * as schema from "@/db/schema";
+import { DEFAULT_ACCENT } from "./colour";
+import {
+  DEFAULT_ABOUT_COPY,
+  DEFAULT_CONTACT_COPY,
+  DEFAULT_PRIVACY_COPY,
+  DEFAULT_SITE_NAME,
+} from "./default-copy";
 import type { Artwork, ArtworkImage, Listing } from "./artworks";
 
 /**
@@ -137,21 +145,45 @@ const SETTINGS_FALLBACK = {
   etsyShopUrl: "https://www.etsy.com/",
   contactEmail: "hello@example.com",
   instagramUrl: "https://www.instagram.com/",
+  siteName: DEFAULT_SITE_NAME,
+  faviconKey: null as string | null,
+  accentColour: DEFAULT_ACCENT,
+  // Only reached when D1 is unavailable. A stored empty string spreads *over*
+  // these, so the pages fall back themselves — see src/lib/default-copy.ts.
+  aboutCopy: DEFAULT_ABOUT_COPY,
+  aboutPhotoKey: null as string | null,
+  aboutPhotoAlt: "",
+  aboutPhotoWidth: null as number | null,
+  aboutPhotoHeight: null as number | null,
+  aboutPhotoLqip: null as string | null,
+  contactCopy: DEFAULT_CONTACT_COPY,
+  privacyCopy: DEFAULT_PRIVACY_COPY,
 };
 
 /**
  * Site settings, with a safe fallback.
  *
- * The root layout reads these, so every page depends on them. If the D1 binding
- * is unavailable — a build machine, CI — degrade to defaults rather than failing
- * the build. Pages that must show live settings are marked force-dynamic.
+ * The root layout reads these — for the site name, the favicon and the
+ * highlight colour — so every page depends on them, the admin included. If the
+ * D1 binding is unavailable, degrade to defaults rather than failing: on a
+ * build machine that is what lets CI build at all, and in production it is what
+ * keeps /admin/login reachable when the database is broken. Do not turn this
+ * catch into a throw.
+ *
+ * It does mean a missed migration is invisible — the site renders perfectly at
+ * every default while silently ignoring the artist's settings — so the failure
+ * is logged. That log line is the only signal there is.
+ *
+ * Memoised per request because the header, the footer and the page each ask
+ * independently; without this the home page ran the same query three times.
  */
-export const getSiteSettings = async () => {
+export const getSiteSettings = cache(async () => {
   try {
     const db = await getDb();
     const rows = await db.select().from(schema.siteSettings).where(eq(schema.siteSettings.id, 1));
     return rows.length === 0 ? SETTINGS_FALLBACK : { ...SETTINGS_FALLBACK, ...rows[0] };
-  } catch {
+  } catch (cause) {
+    console.error("[settings] falling back to defaults", cause);
     return SETTINGS_FALLBACK;
   }
-};
+});

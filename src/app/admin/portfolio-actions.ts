@@ -7,6 +7,7 @@ import { getDb } from "@/lib/catalogue";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId } from "@/lib/fonts";
 import { requireSession } from "@/lib/auth";
+import { upsertSiteSettings } from "@/lib/site-settings";
 
 /**
  * Portfolio mutations — the home page wall.
@@ -47,7 +48,6 @@ export async function updatePageSettings(patch: {
   contentFadeIn?: boolean;
 }): Promise<void> {
   await requireSession();
-  const db = await getDb();
 
   const values = {
     ...(patch.gutterEnabled === undefined ? {} : { gutterEnabled: patch.gutterEnabled }),
@@ -57,19 +57,7 @@ export async function updatePageSettings(patch: {
     ...(patch.showNamesOnHover === undefined ? {} : { showNamesOnHover: patch.showNamesOnHover }),
     ...(patch.contentFadeIn === undefined ? {} : { contentFadeIn: patch.contentFadeIn }),
   };
-  if (Object.keys(values).length === 0) return;
-
-  const existing = await db
-    .select({ id: schema.siteSettings.id })
-    .from(schema.siteSettings)
-    .where(eq(schema.siteSettings.id, 1));
-
-  if (existing.length === 0) {
-    await db.insert(schema.siteSettings).values({ id: 1, ...values });
-  } else {
-    await db.update(schema.siteSettings).set(values).where(eq(schema.siteSettings.id, 1));
-  }
-
+  await upsertSiteSettings(values);
   refresh();
 }
 

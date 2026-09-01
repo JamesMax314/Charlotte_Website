@@ -50,6 +50,13 @@
       "when": 1788212693578,
       "tag": "0006_content-fade-in",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788258984942,
+      "tag": "0007_site-settings",
+      "breakpoints": true
     }
   ]
 }
