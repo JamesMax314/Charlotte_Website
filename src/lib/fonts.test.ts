@@ -6,9 +6,13 @@ import {
   fontFaceCss,
   fontFormatFor,
   isKnownFontId,
+  DISPLAY_FONT_ID,
+  fontMimeType,
   mergeFonts,
   newFontId,
   resolveFontFamily,
+  resolveRoleFamily,
+  resolveSiteFaces,
   uploadedFontOption,
   type FontOption,
   type UploadedFont,
@@ -166,5 +170,75 @@ describe("fontFaceCss", () => {
   it("emits one rule per font", () => {
     const css = fontFaceCss([hers, { ...hers, id: "font-2", family: "Other" }]);
     expect(css.match(/@font-face/g)).toHaveLength(2);
+  });
+});
+
+describe("resolveRoleFamily", () => {
+  const registry = mergeFonts([hers]);
+
+  it("resolves a chosen face for either role", () => {
+    expect(resolveRoleFamily(hers.id, "body", registry)).toBe('"Hers", ui-sans-serif, sans-serif');
+    expect(resolveRoleFamily(hers.id, "display", registry)).toBe(
+      '"Hers", ui-sans-serif, sans-serif',
+    );
+  });
+
+  it("falls a deleted heading face back to Fraunces, not Inter", () => {
+    // This is the whole reason the helper exists. resolveFontFamily would send
+    // headings to the body face, so the page would lose its hierarchy rather
+    // than merely change face.
+    expect(resolveRoleFamily(hers.id, "display", mergeFonts([]))).toBe(
+      resolveFontFamily(DISPLAY_FONT_ID),
+    );
+    expect(resolveRoleFamily(hers.id, "display", mergeFonts([]))).toContain("--font-fraunces");
+  });
+
+  it("falls a deleted body face back to Inter", () => {
+    expect(resolveRoleFamily(hers.id, "body", mergeFonts([]))).toBe(
+      resolveFontFamily(DEFAULT_FONT_ID),
+    );
+  });
+});
+
+describe("resolveSiteFaces", () => {
+  it("returns the two built-in stacks for the shipped defaults", () => {
+    // These two strings are duplicated as literals in the :root block of
+    // src/app/globals.css, which is what the admin falls back to. Change one
+    // and you must change the other.
+    expect(
+      resolveSiteFaces({ bodyFontId: DEFAULT_FONT_ID, headingFontId: DISPLAY_FONT_ID }),
+    ).toEqual({
+      body: "var(--font-inter), ui-sans-serif, sans-serif",
+      display: "var(--font-fraunces), ui-serif, serif",
+    });
+  });
+
+  it("resolves each role independently", () => {
+    const faces = resolveSiteFaces(
+      { bodyFontId: "grotesk", headingFontId: hers.id },
+      mergeFonts([hers]),
+    );
+    expect(faces.body).toContain("--font-space-grotesk");
+    expect(faces.display).toBe('"Hers", ui-sans-serif, sans-serif');
+  });
+
+  it("cannot be made to inject CSS by a hand-edited row", () => {
+    // The values go straight into a <style> in the site layout, so a stored id
+    // that matches nothing must resolve to a built-in rather than pass through.
+    const faces = resolveSiteFaces({
+      bodyFontId: '";}html{display:none}',
+      headingFontId: "../../etc/passwd",
+    });
+    expect(faces.body).toBe("var(--font-inter), ui-sans-serif, sans-serif");
+    expect(faces.display).toBe("var(--font-fraunces), ui-serif, serif");
+    expect(`${faces.body}${faces.display}`).not.toContain("}");
+  });
+});
+
+describe("fontMimeType", () => {
+  it("matches what the upload route stores as the content type", () => {
+    expect(fontMimeType("woff2")).toBe("font/woff2");
+    expect(fontMimeType("truetype")).toBe("font/ttf");
+    expect(fontMimeType("opentype")).toBe("font/otf");
   });
 });

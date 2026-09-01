@@ -154,3 +154,72 @@ export const fontFaceCss = (fonts: UploadedFont[]): string =>
         `@font-face{font-family:"${font.family}";src:url("/media/${font.storageKey}") format("${font.format}");font-display:swap;}`,
     )
     .join("");
+
+// ---------------------------------------------------------------- site faces
+
+/**
+ * The built-in the site's headings fall back to — the counterpart to
+ * `DEFAULT_FONT_ID`, which serves the same purpose for body text.
+ */
+export const DISPLAY_FONT_ID = "serif";
+
+export type FaceRole = "body" | "display";
+
+const FALLBACK_FOR_ROLE: Record<FaceRole, string> = {
+  body: DEFAULT_FONT_ID,
+  display: DISPLAY_FONT_ID,
+};
+
+/**
+ * A role's face, falling back to that role's own built-in.
+ *
+ * `resolveFontFamily` falls back to Inter, which is right for a text box and
+ * wrong here. Deleting the uploaded font she had chosen for headings would set
+ * every heading on the site in its body face, so the page would lose its
+ * typographic hierarchy rather than merely change face.
+ *
+ * The fallback goes back through `resolveFontFamily` so its own last-resort
+ * chain still applies — a registry somehow missing `serif` still yields
+ * something renderable rather than `undefined`.
+ */
+export const resolveRoleFamily = (
+  id: string,
+  role: FaceRole,
+  fonts: FontOption[] = BUILT_IN_FONTS,
+): string =>
+  fonts.find((font) => font.id === id)?.family ?? resolveFontFamily(FALLBACK_FOR_ROLE[role], fonts);
+
+export interface SiteFaces {
+  body: string;
+  display: string;
+}
+
+/**
+ * The pair the public site is set in, as complete CSS font-family values.
+ *
+ * These two strings are what the site layout interpolates into `--site-body`
+ * and `--site-display`. Nothing the artist typed reaches that stylesheet: the
+ * database stores an id, and what comes out here is either a `BUILT_IN_FONTS`
+ * literal or an uploaded family that was put through `cssFamilyName` on write.
+ * An id that matches nothing resolves to a built-in, so a hand-edited row
+ * cannot inject CSS.
+ *
+ * The defaults these produce are duplicated as literals in the `:root` block of
+ * `src/app/globals.css`, which is what the admin and a scriptless page fall
+ * back to. Change one and you must change the other.
+ */
+export const resolveSiteFaces = (
+  chosen: { bodyFontId: string; headingFontId: string },
+  fonts: FontOption[] = BUILT_IN_FONTS,
+): SiteFaces => ({
+  body: resolveRoleFamily(chosen.bodyFontId, "body", fonts),
+  display: resolveRoleFamily(chosen.headingFontId, "display", fonts),
+});
+
+/**
+ * The MIME type `/media` serves an uploaded face as.
+ *
+ * Matches what the upload route stores as the object's content type, and is
+ * what a `<link rel="preload" as="font">` needs to avoid fetching it twice.
+ */
+export const fontMimeType = (format: FontFormat): string => `font/${extensionForFormat(format)}`;
