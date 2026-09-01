@@ -9,6 +9,7 @@ import {
   getWallTexts,
 } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
+import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { SITE_URL } from "@/lib/site";
 
 // Reads D1 at request time; see docs/progress.md.
@@ -54,7 +55,7 @@ export default async function PortfolioItemPage({ params }: Props) {
     "@context": "https://schema.org",
     "@type": "VisualArtwork",
     name: item.name || slug,
-    creator: { "@type": "Person", name: "Charlotte Wilkinson" },
+    creator: { "@type": "Person", name: settings.siteName || DEFAULT_SITE_NAME },
     ...(cover ? { image: `${SITE_URL}${cover.src}` } : {}),
     url: `${SITE_URL}/work/${item.slug}`,
   };
