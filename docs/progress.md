@@ -22,9 +22,9 @@ The product specification is `docs/project-brief.md`.
   the store is `artworks` + `listings`, browsable at `/shop` and sold at `/shop/<slug>`.
   They share the upload endpoint and image pipeline and nothing else.
 
-- **The shop is a catalogue, not a wall.** Uniform 3:4 tiles with a centre crop and a
-  search box that narrows them in the browser. A piece sells one thing: one product type
-  in her own words, one Etsy link, one price.
+- **The shop is a catalogue, not a wall.** Uniform 3:4 tiles with a centre crop, in the
+  artist's order — no search, no filters, and no client JavaScript on the index. A piece
+  sells one thing: one product type in her own words, one Etsy link, one price.
 
 - **Everything lives in D1 and R2.** Artwork is in a private bucket, served only through
   `/media` on content-addressed keys, with a responsive width ladder written in the
@@ -56,18 +56,18 @@ The product specification is `docs/project-brief.md`.
 
 ## Recent Phase Reference
 
-| Phase | Summary                                                                                                                                                                                                                                                                                                                 |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                                                                    |
-| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                                                                        |
-| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                                                                              |
-| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop`                                                          |
-| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                                                                                 |
-| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                                                        |
-| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site                                 |
-| 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                                                      |
-| 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                                      |
-| 9     | The store reworked to docs/store.md: a `/shop` index with a search box; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
+| Phase | Summary                                                                                                                                                                                                                                                                                               |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Scaffolded Next.js 16 + Tailwind v4 on Cloudflare Workers (OpenNext); pnpm, design tokens, Prettier/ESLint/Vitest, GitHub Actions CI                                                                                                                                                                  |
+| 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                                                                      |
+| 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                                                            |
+| 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop`                                        |
+| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                                                               |
+| 5     | The wall renders as one DOM tree rather than two, with CSS deciding the layout at the breakpoint                                                                                                                                                                                                      |
+| 6     | Fixed the fade-in on mobile: one shared scroll sweep replacing the split timer/observer reveal, the opening pass moved off the bundle into the inline script, and image widths cut to the rung a phone can actually hold. The reloading that outlived it was Fast Refresh, not the site               |
+| 7     | Settings page: name, mark, links, highlight colour with a contrast guard, uploaded fonts, and the copy and photograph for the three static pages. Ownerless uploads, a runtime accent token, and the font list finally threaded through both walls                                                    |
+| 8     | Body and heading typefaces chosen from the admin, driving the public site only. Runtime face tokens sit between the Tailwind theme and next/font, and uploaded faces are preloaded                                                                                                                    |
+| 9     | The store reworked to docs/store.md: a `/shop` index; 3:4 cards; arrows on the product gallery; a free-text product type in place of the print/digital enum; and an admin grid whose add tile, dialog editor and right-click menu replace the separate artwork page and the multi-size listing editor |
 
 ---
 
@@ -173,8 +173,8 @@ Non-obvious decisions that the code alone does not explain.
 
 - **The product type is free text, not an enum.** `listings.kind` was `print | digital`,
   which decided for the artist what she is allowed to sell; the column is dropped and
-  `label` holds whatever she types. It is part of the search haystack for the same
-  reason — with no fixed set to filter by, the words she chose are the only way in.
+  `label` holds whatever she types. Nothing groups or filters by it — under fifty pieces,
+  the grid is the whole catalogue and scrolling is faster than searching it.
 
 - **One listing per piece is a decision about the admin, not the schema.** The dialog
   edits a single product type, link and price, and `soleListing` is where that is named;

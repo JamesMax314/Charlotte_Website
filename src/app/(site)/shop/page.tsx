@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/container";
-import { ShopBrowser } from "@/components/shop-browser";
+import { ArtworkGrid } from "@/components/artwork-grid";
 import { getPublishedArtworks } from "@/lib/catalogue";
 import { SITE_URL } from "@/lib/site";
 
@@ -20,7 +20,7 @@ export default async function ShopPage() {
 
   return (
     <Container className="pt-10 pb-4">
-      <header className="mb-8">
+      <header className="border-line mb-10 border-b pb-6">
         <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Shop</h1>
         <p className="text-graphite mt-2 max-w-prose text-sm">
           Every piece is sold through Etsy, which handles payment, postage and returns.
@@ -32,7 +32,7 @@ export default async function ShopPage() {
           Nothing is for sale just yet. Do come back.
         </p>
       ) : (
-        <ShopBrowser artworks={artworks} />
+        <ArtworkGrid artworks={artworks} />
       )}
     </Container>
   );
