@@ -5,8 +5,8 @@ import { eq } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { requireSession } from "@/lib/auth";
 import { getDb, getSiteSettings } from "@/lib/catalogue";
-import { cssFamilyName, newFontId, type FontFormat } from "@/lib/fonts";
-import { upsertSiteSettings } from "@/lib/site-settings";
+import { cssFamilyName, isKnownFontId, mergeFonts, newFontId, type FontFormat } from "@/lib/fonts";
+import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 import { normaliseSettings, type SettingsInput } from "@/lib/settings-input";
 import { derivativeKeys, isSafeKey } from "@/lib/storage";
 import { WIDTH_LADDER } from "@/image-loader";
@@ -89,6 +89,39 @@ export async function setAccentColour(hex: string): Promise<void> {
   const { values, rejected } = normaliseSettings({ accentColour: hex });
   if (rejected.length > 0) throw new Error("That is not a colour.");
 
+  await upsertSiteSettings(values);
+  refresh();
+}
+
+/**
+ * The two faces the public site is set in.
+ *
+ * Separate from `saveSettingsForm` for the same reason as `setAccentColour`:
+ * a discrete choice with a live surface, saved as she makes it.
+ *
+ * The guard has to read the database, exactly like `updateWallText` — the valid
+ * set is the built-ins plus her uploads, which `normaliseSettings` cannot see
+ * because it is pure. Unlike the wall this rejects rather than silently
+ * dropping: a settings page left open in another tab can still name a font she
+ * has since deleted, and she has to be told why nothing moved.
+ */
+export async function setSiteFaces(patch: {
+  bodyFontId?: string;
+  headingFontId?: string;
+}): Promise<void> {
+  await requireSession();
+
+  const registry = mergeFonts(await getSiteFonts());
+  const values: { bodyFontId?: string; headingFontId?: string } = {};
+
+  for (const key of ["bodyFontId", "headingFontId"] as const) {
+    const id = patch[key];
+    if (id === undefined) continue;
+    if (!isKnownFontId(id, registry)) throw new Error("That font is no longer available.");
+    values[key] = id;
+  }
+
+  // upsertSiteSettings no-ops on an empty patch, so a call with neither is free.
   await upsertSiteSettings(values);
   refresh();
 }

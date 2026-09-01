@@ -4,12 +4,14 @@ import { AboutPhotoField } from "@/components/admin/about-photo-field";
 import { AccentField } from "@/components/admin/accent-field";
 import { FaviconField } from "@/components/admin/favicon-field";
 import { FontsField } from "@/components/admin/fonts-field";
+import { SiteFacesField } from "@/components/admin/site-faces-field";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { SettingsSection } from "@/components/admin/settings-section";
 import { FIELD } from "@/components/admin/styles";
 import { requireSession } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_ABOUT_COPY, DEFAULT_CONTACT_COPY, DEFAULT_PRIVACY_COPY } from "@/lib/default-copy";
+import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -69,16 +71,30 @@ export default async function SettingsPage() {
 
       <SettingsSection
         title="Look"
-        hint="Applies across the whole site, and here in the studio as you change it."
+        hint="How your site is set. The highlight colour applies here in the studio too; the fonts deliberately do not, so this stays easy to work in."
       >
         <div className="flex flex-col gap-8">
           <div>
             <h3 className="mb-3 text-sm">Highlight colour</h3>
             <AccentField accentColour={settings.accentColour} />
           </div>
+          {/* The library sits above the thing that consumes it: upload, then choose. */}
           <div>
-            <h3 className="mb-3 text-sm">Fonts</h3>
-            <FontsField fonts={fonts} />
+            <h3 className="mb-3 text-sm">Your fonts</h3>
+            <FontsField
+              fonts={fonts}
+              bodyFontId={settings.bodyFontId}
+              headingFontId={settings.headingFontId}
+            />
+          </div>
+          <div>
+            <h3 className="mb-3 text-sm">Site typefaces</h3>
+            <SiteFacesField
+              bodyFontId={settings.bodyFontId}
+              headingFontId={settings.headingFontId}
+              fonts={mergeFonts(fonts)}
+              uploaded={fonts}
+            />
           </div>
         </div>
       </SettingsSection>
