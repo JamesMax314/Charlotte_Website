@@ -1,0 +1,1 @@
+ALTER TABLE `site_settings` ADD `content_fade_in` integer DEFAULT false NOT NULL;

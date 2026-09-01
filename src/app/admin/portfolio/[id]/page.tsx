@@ -53,6 +53,7 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
           gutter: settings.gutter,
           snapEnabled: settings.snapEnabled,
           showNamesOnHover: settings.showNamesOnHover,
+          contentFadeIn: settings.contentFadeIn,
         }}
       />
 

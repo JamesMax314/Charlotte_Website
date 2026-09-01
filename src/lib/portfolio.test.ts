@@ -5,6 +5,8 @@ import {
   headingTextId,
   inReadingOrder,
   isInteractive,
+  isLikelyAboveFold,
+  lcpCandidateId,
   showsHoverName,
   type PortfolioItem,
   type WallText,
@@ -186,5 +188,68 @@ describe("showsHoverName", () => {
 
   it("shows nothing for an element on a piece's own page", () => {
     expect(showsHoverName(item({ name: "Detail", parentId: "parent" }), true)).toBe(false);
+  });
+});
+
+describe("lcpCandidateId", () => {
+  /**
+   * The array is ordered by layer, so taking the first entry prioritised
+   * whichever piece happened to sit at the back — rarely the biggest thing on
+   * screen, and the reason Next warned about the wrong image.
+   */
+  it("picks the largest piece above the fold, not the first in layer order", () => {
+    const items = [
+      item({ id: "back-but-small", z: 1, y: 4, width: 20, images: withCover(100, 100) }),
+      item({ id: "front-and-big", z: 9, y: 20, width: 60, images: withCover(100, 100) }),
+    ];
+    expect(lcpCandidateId(items)).toBe("front-and-big");
+  });
+
+  it("ignores a huge piece that sits below the fold", () => {
+    const items = [
+      item({ id: "above", y: 10, width: 40, images: withCover(100, 100) }),
+      item({ id: "far-below", y: 200, width: 95, images: withCover(100, 100) }),
+    ];
+    expect(lcpCandidateId(items)).toBe("above");
+  });
+
+  it("accounts for aspect ratio, not just width", () => {
+    const items = [
+      item({ id: "wide-and-short", y: 4, width: 50, images: withCover(200, 40) }),
+      item({ id: "narrow-and-tall", y: 4, width: 45, images: withCover(40, 200) }),
+    ];
+    expect(lcpCandidateId(items)).toBe("narrow-and-tall");
+  });
+
+  it("falls back to the largest overall when nothing is above the fold", () => {
+    const items = [
+      item({ id: "small", y: 300, width: 10, images: withCover(100, 100) }),
+      item({ id: "large", y: 400, width: 80, images: withCover(100, 100) }),
+    ];
+    expect(lcpCandidateId(items)).toBe("large");
+  });
+
+  it("ignores pieces with no photograph yet", () => {
+    const items = [
+      item({ id: "no-image", y: 2, width: 99 }),
+      item({ id: "has-image", y: 30, width: 20, images: withCover(100, 100) }),
+    ];
+    expect(lcpCandidateId(items)).toBe("has-image");
+  });
+
+  it("returns null when there is nothing to prioritise", () => {
+    expect(lcpCandidateId([])).toBeNull();
+    expect(lcpCandidateId([item({ id: "bare" })])).toBeNull();
+  });
+});
+
+describe("isLikelyAboveFold", () => {
+  it("treats pieces near the top as above the fold", () => {
+    expect(isLikelyAboveFold(item({ y: 0 }))).toBe(true);
+    expect(isLikelyAboveFold(item({ y: 64 }))).toBe(true);
+  });
+
+  it("treats pieces further down as below it", () => {
+    expect(isLikelyAboveFold(item({ y: 120 }))).toBe(false);
   });
 });

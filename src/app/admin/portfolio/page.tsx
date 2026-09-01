@@ -33,6 +33,7 @@ export default async function PortfolioAdminPage() {
           gutter: settings.gutter,
           snapEnabled: settings.snapEnabled,
           showNamesOnHover: settings.showNamesOnHover,
+          contentFadeIn: settings.contentFadeIn,
         }}
       />
 

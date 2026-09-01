@@ -43,6 +43,13 @@
       "when": 1788203731381,
       "tag": "0005_piece-pages",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788212693578,
+      "tag": "0006_content-fade-in",
+      "breakpoints": true
     }
   ]
 }

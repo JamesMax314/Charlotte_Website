@@ -82,6 +82,7 @@ export default async function PortfolioItemPage({ params }: Props) {
           items={children}
           texts={texts}
           showNamesOnHover={settings.showNamesOnHover}
+          fadeIn={settings.contentFadeIn}
         />
       </div>
     </Container>

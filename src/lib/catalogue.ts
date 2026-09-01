@@ -133,6 +133,7 @@ const SETTINGS_FALLBACK = {
   gutter: 2,
   snapEnabled: true,
   showNamesOnHover: true,
+  contentFadeIn: false,
   etsyShopUrl: "https://www.etsy.com/",
   contactEmail: "hello@example.com",
   instagramUrl: "https://www.instagram.com/",

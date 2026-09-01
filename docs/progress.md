@@ -26,9 +26,10 @@ The product specification is `docs/project-brief.md`.
   `/media` on content-addressed keys, with a responsive width ladder written in the
   browser at upload — there is no image optimiser on Workers.
 
-- **The admin.** Passphrase sign-in; a Home page editor with page settings, right-click
-  menus, an image details dialog and text formatting at the pointer; a per-piece page
-  editor; and the older store editor for artworks and Etsy listings.
+- **The admin.** Passphrase sign-in; a Home page editor with page settings — gap,
+  snapping, hover names and an optional content fade-in — plus right-click menus, an
+  image details dialog and text formatting at the pointer; a per-piece page editor; and
+  the older store editor for artworks and Etsy listings.
 
 - **Content is real, copy is not.** `pnpm seed` prefers the artist's work in `tmp_art/`
   (gitignored) and falls back to generated placeholders. All wording is placeholder and
@@ -51,6 +52,7 @@ The product specification is `docs/project-brief.md`.
 | 1     | Public catalogue on seeded data: home, work grid, artwork detail with `<dialog>` lightbox, static pages, sitemap/robots, `VisualArtwork` JSON-LD                                                                                                               |
 | 2     | Catalogue moved into D1 + R2; passphrase admin with upload, drag-to-arrange, publish/archive and the Etsy listing editor; custom image loader replacing the absent Workers image optimiser                                                                     |
 | 3     | Layout and styling on real artwork; home rebuilt as a free-form wall of images and text the artist composes; snapping with a gutter, page settings, fonts, right-click menus, in-place image details; per-piece pages on the same wall; store moved to `/shop` |
+| 4     | Optional content fade-in as the visitor scrolls, staggered from the top; plus the loading-priority and root hydration fixes it surfaced                                                                                                                        |
 
 ---
 
@@ -185,6 +187,52 @@ Non-obvious decisions that the code alone does not explain.
 - **Text boxes resize in both directions; pieces do not.** A piece's height follows its
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
+
+- **An IntersectionObserver cannot fade in what is already on screen.** It reports the
+  intersection as soon as it starts observing, so the reveal lands in the same frame as
+  the hidden state and there is nothing to transition from — the piece simply appears.
+  Pieces on screen at load are revealed on a timer instead, staggered by how far down
+  they sit so the wall assembles from the top; only pieces below the fold use the
+  observer. The timing lives in `src/lib/reveal.ts`, pure and unit-tested, because
+  measuring this in a browser proved unreliable.
+
+- **The fade hides before first paint, via an inline script, not from React.** Hiding
+  from the component meant the wall painted once, vanished, then faded — a visible
+  flicker. The `fade-target` class now ships in the markup but the CSS only acts on it
+  under `.js-fade`, which a small inline script at the top of the site layout adds while
+  the document is still parsing, ahead of the wall. With scripting off the class is never
+  added and the page simply renders.
+
+- **Loading priority is chosen by size and position, never by array index.** The wall's
+  array is ordered by layer, so `priority={i === 0}` prioritised whichever piece happened
+  to sit at the back. `lcpCandidateId` picks the largest piece above the fold; the rest of
+  the first screenful merely opts out of lazy loading, so they do not all compete for
+  bandwidth by being preloaded. Lazily loading an image already on screen always delays
+  the Largest Contentful Paint.
+
+- **The fade defers the LCP, by design.** An element at `opacity: 0` is not contentful, so
+  the metric is recorded when a piece reveals rather than when it loads — and the
+  _later_-revealing piece can become the LCP rather than the largest. Worth remembering if
+  the LCP budget in the brief ever comes under pressure: turning the fade off is the
+  lever.
+
+- **`<html>` carries `suppressHydrationWarning`, and must keep it.** The inline script
+  adds `js-fade` to that element before React hydrates, so the client class list will
+  never match what the server sent — that divergence is the mechanism, not a fault. The
+  attribute covers only that element, so a genuine mismatch anywhere else is still
+  reported.
+
+- **That inline script carries a five-second failsafe**, which removes `.js-fade` if no
+  piece has been revealed by then — the signal that hydration never happened. Without it,
+  a bundle that failed to load would leave the gallery permanently blank. Note it also
+  makes Chrome's `--virtual-time-budget` hang, so screenshots of the site must use real
+  time.
+
+- **Superseded: the fade-in never hides content in server markup.** `.fade-target` is applied by
+  `src/components/fade-in.tsx` after it mounts, never rendered by the server. Markup that
+  started hidden would stay hidden for good if the script failed to load. A `<noscript>`
+  override and a `prefers-reduced-motion` rule cover the other two ways it could strand
+  content. The editor never fades — the artist has to see what she is arranging.
 
 - **Known debt: the custom 404 never renders.** `src/app/(site)/not-found.tsx` — the
   "Walked off somewhere" page with the mirrored mark — is not picked up, so both unmatched

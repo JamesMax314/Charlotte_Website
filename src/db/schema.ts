@@ -231,6 +231,8 @@ export const siteSettings = sqliteTable("site_settings", {
   gutter: real("gutter").notNull().default(2),
   snapEnabled: integer("snap_enabled", { mode: "boolean" }).notNull().default(true),
   showNamesOnHover: integer("show_names_on_hover", { mode: "boolean" }).notNull().default(true),
+  /** Fade images in as a visitor scrolls. Site only; the editor never fades. */
+  contentFadeIn: integer("content_fade_in", { mode: "boolean" }).notNull().default(false),
   etsyShopUrl: text("etsy_shop_url").notNull().default(""),
   contactEmail: text("contact_email").notNull().default(""),
   instagramUrl: text("instagram_url").notNull().default(""),
