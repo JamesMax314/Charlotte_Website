@@ -6,7 +6,6 @@
  */
 
 export type ArtworkStatus = "draft" | "published" | "archived";
-export type ListingKind = "print" | "digital";
 export type Availability = "available" | "sold_out";
 
 export interface ArtworkImage {
@@ -21,7 +20,7 @@ export interface ArtworkImage {
 
 export interface Listing {
   id: string;
-  kind: ListingKind;
+  /** What she is selling, in her words. Free text: she names her own formats. */
   label: string;
   etsyUrl: string;
   /** Indicative only — Etsy is the source of truth. Integer pence. */
@@ -71,22 +70,6 @@ export const isBuyable = (listing: Listing) => listing.availability === "availab
 export const isSoldOut = (artwork: Artwork) =>
   artwork.listings.length > 0 && artwork.listings.every((l) => !isBuyable(l));
 
-/**
- * The price a card should advertise.
- *
- * Prints are the headline product, so a cheap digital download must not set the
- * "from" price: advertising "From £12" beside a £65 print is true and misleading
- * at once. Falls back to whatever is buyable when there is no print.
- */
-export const headlinePricePence = (artwork: Artwork): number | null => {
-  const buyable = artwork.listings.filter(isBuyable);
-  if (buyable.length === 0) return null;
-
-  const prints = buyable.filter((l) => l.kind === "print");
-  const pool = prints.length > 0 ? prints : buyable;
-  return Math.min(...pool.map((l) => l.pricePence));
-};
-
 /** Etsy links must actually point at Etsy (brief A-08). */
 export const isValidEtsyUrl = (value: string): boolean => {
   try {
@@ -117,3 +100,35 @@ export const toSlug = (value: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
+
+/**
+ * The one listing a shop piece carries.
+ *
+ * The store sells a single thing per piece: one product type, one Etsy link,
+ * one price. That is a decision about the admin, not about the schema — the
+ * `listings` table still holds many rows per artwork, so sizes and formats can
+ * come back without a migration. Anything beyond the first is simply not shown.
+ */
+export const soleListing = (artwork: Artwork): Listing | undefined => artwork.listings[0];
+
+/**
+ * Everything the store dialog edits, in one shape.
+ *
+ * Lives here rather than beside the action because a "use server" module may
+ * only export async functions — a type declared there cannot be imported.
+ * `price` and `etsyUrl` arrive exactly as typed; the server validates them.
+ */
+export interface ArtworkDetails {
+  title: string;
+  description: string;
+  status: ArtworkStatus;
+  /** The product type, as she types it. */
+  label: string;
+  price: string;
+  etsyUrl: string;
+  soldOut: boolean;
+  year: string;
+  medium: string;
+  dimensionsNote: string;
+  slug: string;
+}

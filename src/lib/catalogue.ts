@@ -36,7 +36,6 @@ const toImage = (row: schema.ArtworkImageRow): ArtworkImage => ({
 
 const toListing = (row: schema.ListingRow): Listing => ({
   id: row.id,
-  kind: row.kind,
   label: row.label,
   etsyUrl: row.etsyUrl,
   pricePence: row.pricePence,

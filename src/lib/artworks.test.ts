@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  headlinePricePence,
   isPlaceholderSlug,
   primaryImage,
+  soleListing,
   isInGallery,
   isPubliclyRoutable,
   isSoldOut,
@@ -27,48 +27,11 @@ const artwork = (listings: Artwork["listings"]): Artwork => ({
 
 const listing = (over: Partial<Artwork["listings"][number]>): Artwork["listings"][number] => ({
   id: "l",
-  kind: "print",
   label: "A2",
   etsyUrl: "https://www.etsy.com/listing/1",
   pricePence: 6500,
   availability: "available",
   ...over,
-});
-
-describe("headlinePricePence", () => {
-  it("ignores a cheaper digital download when a print is available", () => {
-    const a = artwork([
-      listing({ id: "p", kind: "print", pricePence: 6500 }),
-      listing({ id: "d", kind: "digital", pricePence: 1200 }),
-    ]);
-    expect(headlinePricePence(a)).toBe(6500);
-  });
-
-  it("falls back to a download when there is no print", () => {
-    expect(headlinePricePence(artwork([listing({ kind: "digital", pricePence: 1200 })]))).toBe(
-      1200,
-    );
-  });
-
-  it("takes the cheapest of several available prints", () => {
-    const a = artwork([
-      listing({ id: "a", pricePence: 6500 }),
-      listing({ id: "b", pricePence: 4500 }),
-    ]);
-    expect(headlinePricePence(a)).toBe(4500);
-  });
-
-  it("skips sold-out prints when pricing", () => {
-    const a = artwork([
-      listing({ id: "a", pricePence: 4500, availability: "sold_out" }),
-      listing({ id: "b", pricePence: 6500 }),
-    ]);
-    expect(headlinePricePence(a)).toBe(6500);
-  });
-
-  it("returns null when nothing is for sale", () => {
-    expect(headlinePricePence(artwork([]))).toBeNull();
-  });
 });
 
 describe("isSoldOut", () => {
@@ -154,5 +117,17 @@ describe("toSlug", () => {
 
   it("trims punctuation from the ends", () => {
     expect(toSlug("  Swimmers!  ")).toBe("swimmers");
+  });
+});
+
+describe("soleListing", () => {
+  it("is undefined before the artist has added the Etsy details", () => {
+    expect(soleListing(artwork([]))).toBeUndefined();
+  });
+
+  it("takes the first listing, ignoring any left over from the multi-size editor", () => {
+    const first = listing({ id: "l1", pricePence: 4500 });
+    const stale = listing({ id: "l2", pricePence: 9900 });
+    expect(soleListing(artwork([first, stale]))).toBe(first);
   });
 });

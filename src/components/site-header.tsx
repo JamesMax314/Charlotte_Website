@@ -49,20 +49,16 @@ export async function SiteHeader() {
                 Contact
               </Link>
             </li>
-            {/* Hidden rather than pointed nowhere when the artist has no shop yet. */}
-            {settings.etsyShopUrl && (
-              <li>
-                <a
-                  className="text-graphite hover:text-accent hidden transition-colors sm:inline"
-                  href={settings.etsyShopUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Shop
-                  <span className="sr-only"> on Etsy (opens in a new tab)</span>
-                </a>
-              </li>
-            )}
+            {/*
+              The shop is ours now, not a link straight out to Etsy — the
+              handoff happens on the product page. The footer still carries the
+              Etsy shop front (brief P-09).
+            */}
+            <li>
+              <Link className="hover:text-accent transition-colors" href="/shop">
+                Shop
+              </Link>
+            </li>
           </ul>
         </nav>
       </Container>

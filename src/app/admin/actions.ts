@@ -5,8 +5,15 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
+import type { ListingRow } from "@/db/schema";
 import { getDb } from "@/lib/catalogue";
-import { isPlaceholderSlug, isValidEtsyUrl, toSlug } from "@/lib/artworks";
+import {
+  isPlaceholderSlug,
+  isValidEtsyUrl,
+  toSlug,
+  type ArtworkDetails,
+  type ArtworkStatus,
+} from "@/lib/artworks";
 import { SESSION_COOKIE, checkPassphrase, createSessionValue, requireSession } from "@/lib/auth";
 
 /**
@@ -64,11 +71,19 @@ async function uniqueSlug(base: string, excludeId?: string): Promise<string> {
   return `${root}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export async function createArtwork(formData: FormData) {
+/**
+ * A piece to hang the dialog on.
+ *
+ * The row has to exist before an image can be attached to it, so adding a
+ * piece creates a draft and hands back its id — cancelling the dialog deletes
+ * it again, which is the only thing standing between this flow and a database
+ * full of empty pieces. Deliberately does not revalidate or navigate: nothing
+ * public has changed yet, and the artist must stay on the grid.
+ */
+export async function createArtworkDraft(): Promise<string> {
   await requireSession();
   const db = await getDb();
 
-  const title = String(formData.get("title") ?? "").trim() || "Untitled";
   const id = crypto.randomUUID();
   const [{ next }] = await db
     .select({ next: sql<number>`coalesce(max(${schema.artworks.sortOrder}), 0) + 1` })
@@ -76,10 +91,10 @@ export async function createArtwork(formData: FormData) {
 
   await db.insert(schema.artworks).values({
     id,
-    slug: await uniqueSlug(title),
-    title,
-    year: Number(formData.get("year")) || new Date().getFullYear(),
-    medium: String(formData.get("medium") ?? "").trim(),
+    slug: await uniqueSlug("Untitled"),
+    title: "Untitled",
+    year: new Date().getFullYear(),
+    medium: "",
     description: "",
     status: "draft",
     sortOrder: next,
@@ -87,19 +102,39 @@ export async function createArtwork(formData: FormData) {
     updatedAt: new Date(),
   });
 
-  redirect(`/admin/artworks/${id}`);
+  return id;
 }
 
-export async function updateArtwork(id: string, formData: FormData): Promise<void> {
+/**
+ * Saves the whole piece — the artwork row and the one thing it sells.
+ *
+ * The store sells a single product per piece, so the listing is upserted
+ * alongside the artwork rather than managed separately. An empty Etsy link is
+ * how the artist says the piece is shown but not sold (brief P-07): the
+ * listing goes, and the buy panel with it. Any extra listings from the old
+ * multi-size editor are left untouched and simply no longer offered.
+ */
+export async function saveArtworkDetails(
+  id: string,
+  details: ArtworkDetails,
+): Promise<{ error?: string }> {
   await requireSession();
   const db = await getDb();
 
-  const title = String(formData.get("title") ?? "").trim() || "Untitled";
-  const status = String(formData.get("status") ?? "draft") as schema.ArtworkRow["status"];
+  const title = details.title.trim() || "Untitled";
+  const etsyUrl = details.etsyUrl.trim();
+  const pounds = Number(details.price);
+
+  if (etsyUrl && !isValidEtsyUrl(etsyUrl)) {
+    return { error: "That is not an https etsy.com link." };
+  }
+  if (etsyUrl && (!Number.isFinite(pounds) || pounds < 0)) {
+    return { error: "Enter a price in pounds, like 45 or 62.50." };
+  }
 
   // A slug still on its placeholder follows the title; one the artist has
   // edited deliberately is left alone.
-  const submittedSlug = String(formData.get("slug") ?? "").trim();
+  const submittedSlug = details.slug.trim();
   const slugSource = !submittedSlug || isPlaceholderSlug(submittedSlug) ? title : submittedSlug;
 
   await db
@@ -107,30 +142,72 @@ export async function updateArtwork(id: string, formData: FormData): Promise<voi
     .set({
       title,
       slug: await uniqueSlug(slugSource, id),
-      year: Number(formData.get("year")) || new Date().getFullYear(),
-      medium: String(formData.get("medium") ?? "").trim(),
-      dimensionsNote: String(formData.get("dimensionsNote") ?? "").trim() || null,
-      description: String(formData.get("description") ?? "").trim(),
-      status,
-      isFeatured: formData.get("isFeatured") === "on",
+      year: Number(details.year) || new Date().getFullYear(),
+      medium: details.medium.trim(),
+      dimensionsNote: details.dimensionsNote.trim() || null,
+      description: details.description.trim(),
+      status: details.status,
       updatedAt: new Date(),
     })
     .where(eq(schema.artworks.id, id));
 
+  const existing = await db
+    .select({ id: schema.listings.id })
+    .from(schema.listings)
+    .where(eq(schema.listings.artworkId, id))
+    .orderBy(schema.listings.sortOrder)
+    .limit(1);
+
+  if (!etsyUrl) {
+    if (existing.length > 0) {
+      await db.delete(schema.listings).where(eq(schema.listings.id, existing[0].id));
+    }
+  } else {
+    const values = {
+      artworkId: id,
+      label: details.label.trim(),
+      etsyUrl,
+      // Money is integer pence everywhere; round rather than trusting floats.
+      pricePence: Math.round(pounds * 100),
+      availability: (details.soldOut ? "sold_out" : "available") as ListingRow["availability"],
+      sortOrder: 0,
+    };
+
+    if (existing.length > 0) {
+      await db.update(schema.listings).set(values).where(eq(schema.listings.id, existing[0].id));
+    } else {
+      await db.insert(schema.listings).values({ id: crypto.randomUUID(), ...values });
+    }
+  }
+
   refreshPublicPages();
+  return {};
 }
 
-/**
- * Archive rather than delete. Archived work keeps a live URL; permanent
- * deletion is a separate, explicit action.
- */
-export async function archiveArtwork(id: string) {
+/** Draft, published or archived, from the grid's right-click menu. */
+export async function setArtworkStatus(id: string, status: ArtworkStatus) {
   await requireSession();
   const db = await getDb();
   await db
     .update(schema.artworks)
-    .set({ status: "archived", isFeatured: false, updatedAt: new Date() })
+    .set({ status, updatedAt: new Date() })
     .where(eq(schema.artworks.id, id));
+  refreshPublicPages();
+}
+
+/**
+ * Sold out, from the grid, without opening the piece.
+ *
+ * Availability lives on the listing, so a piece with nothing listed has no
+ * sold-out state to toggle — the update simply matches no rows.
+ */
+export async function setArtworkSoldOut(id: string, soldOut: boolean) {
+  await requireSession();
+  const db = await getDb();
+  await db
+    .update(schema.listings)
+    .set({ availability: soldOut ? "sold_out" : "available" })
+    .where(eq(schema.listings.artworkId, id));
   refreshPublicPages();
 }
 
@@ -150,7 +227,6 @@ export async function deleteArtworkPermanently(id: string) {
 
   await db.delete(schema.artworks).where(eq(schema.artworks.id, id));
   refreshPublicPages();
-  redirect("/admin");
 }
 
 /**
@@ -175,16 +251,6 @@ export async function reorderArtworks(ids: string[]) {
     })
     .where(inArray(schema.artworks.id, ids));
 
-  refreshPublicPages();
-}
-
-export async function setFeatured(id: string, isFeatured: boolean) {
-  await requireSession();
-  const db = await getDb();
-  await db
-    .update(schema.artworks)
-    .set({ isFeatured, updatedAt: new Date() })
-    .where(eq(schema.artworks.id, id));
   refreshPublicPages();
 }
 
@@ -234,61 +300,5 @@ export async function deleteImage(id: string) {
   }
 
   await db.delete(schema.artworkImages).where(eq(schema.artworkImages.id, id));
-  refreshPublicPages();
-}
-
-// ---------------------------------------------------------------- listings
-
-export async function saveListing(
-  artworkId: string,
-  _prev: { error?: string },
-  formData: FormData,
-) {
-  await requireSession();
-  const db = await getDb();
-
-  const etsyUrl = String(formData.get("etsyUrl") ?? "").trim();
-  if (!isValidEtsyUrl(etsyUrl)) {
-    return { error: "That is not an https etsy.com link." };
-  }
-
-  const pounds = Number(formData.get("price"));
-  if (!Number.isFinite(pounds) || pounds < 0) {
-    return { error: "Enter a price in pounds, like 45 or 62.50." };
-  }
-
-  const editionSize = formData.get("editionSize");
-  const editionRemaining = formData.get("editionRemaining");
-  const existingId = String(formData.get("listingId") ?? "");
-
-  const values = {
-    artworkId,
-    kind: String(formData.get("kind") ?? "print") as schema.ListingRow["kind"],
-    label: String(formData.get("label") ?? "").trim() || "Print",
-    etsyUrl,
-    // Money is integer pence everywhere; round rather than trusting float maths.
-    pricePence: Math.round(pounds * 100),
-    availability: String(
-      formData.get("availability") ?? "available",
-    ) as schema.ListingRow["availability"],
-    editionSize: editionSize ? Number(editionSize) : null,
-    editionRemaining: editionRemaining ? Number(editionRemaining) : null,
-    sortOrder: Number(formData.get("sortOrder")) || 0,
-  };
-
-  if (existingId) {
-    await db.update(schema.listings).set(values).where(eq(schema.listings.id, existingId));
-  } else {
-    await db.insert(schema.listings).values({ id: crypto.randomUUID(), ...values });
-  }
-
-  refreshPublicPages();
-  return { ok: true as const };
-}
-
-export async function deleteListing(id: string) {
-  await requireSession();
-  const db = await getDb();
-  await db.delete(schema.listings).where(eq(schema.listings.id, id));
   refreshPublicPages();
 }
