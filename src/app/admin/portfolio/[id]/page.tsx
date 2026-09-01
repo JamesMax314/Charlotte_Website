@@ -5,6 +5,8 @@ import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
 import { PageSettingsPanel } from "@/components/admin/page-settings";
 import { getAllPortfolioItems, getPortfolioItemById, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
+import { mergeFonts } from "@/lib/fonts";
+import { getSiteFonts } from "@/lib/site-settings";
 import { requireSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +26,11 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
   const item = await getPortfolioItemById(id);
   if (!item) notFound();
 
-  const [items, texts, settings] = await Promise.all([
+  const [items, texts, settings, fonts] = await Promise.all([
     getAllPortfolioItems(id),
     getWallTexts(id),
     getSiteSettings(),
+    getSiteFonts(),
   ]);
 
   return (
@@ -64,6 +67,7 @@ export default async function PortfolioItemPageEditor({ params }: Props) {
         snapEnabled={settings.snapEnabled}
         gutter={settings.gutterEnabled ? settings.gutter : 0}
         parentId={id}
+        fonts={mergeFonts(fonts)}
       />
     </Container>
   );

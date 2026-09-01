@@ -13,6 +13,7 @@ import {
   type PortfolioItem,
   type WallText,
 } from "@/lib/portfolio";
+import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 
 /**
  * The home page wall.
@@ -131,12 +132,21 @@ export function PortfolioWall({
   texts,
   showNamesOnHover,
   fadeIn = false,
+  fonts = BUILT_IN_FONTS,
 }: {
   items: PortfolioItem[];
   texts: WallText[];
   showNamesOnHover: boolean;
   /** Site only. The editor never fades, or the artist could not see her work. */
   fadeIn?: boolean;
+  /**
+   * Built-ins plus whatever the artist has uploaded.
+   *
+   * Injected rather than imported, like the toolbar's list. Not passing it is
+   * the failure with no symptom: an uploaded font resolves perfectly in the
+   * admin and renders as Inter for every visitor, and nothing reports it.
+   */
+  fonts?: FontOption[];
 }) {
   const shown = items.filter((item) => coverImage(item));
   if (shown.length === 0 && texts.length === 0) return null;
@@ -195,7 +205,7 @@ export function PortfolioWall({
               className="wall-text leading-snug whitespace-pre-wrap"
               style={
                 {
-                  ...textStyle(text, { includeFontSize: false }),
+                  ...textStyle(text, { includeFontSize: false, fonts }),
                   "--fs": text.fontSize,
                 } as WallVars
               }

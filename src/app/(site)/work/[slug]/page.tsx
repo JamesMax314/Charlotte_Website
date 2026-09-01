@@ -10,6 +10,8 @@ import {
 } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
+import { mergeFonts } from "@/lib/fonts";
+import { getSiteFonts } from "@/lib/site-settings";
 import { SITE_URL } from "@/lib/site";
 
 // Reads D1 at request time; see docs/progress.md.
@@ -43,10 +45,11 @@ export default async function PortfolioItemPage({ params }: Props) {
   const item = await getPortfolioItemBySlug(slug);
   if (!item) notFound();
 
-  const [children, texts, settings] = await Promise.all([
+  const [children, texts, settings, fonts] = await Promise.all([
     getPublishedChildren(item.id),
     getWallTexts(item.id),
     getSiteSettings(),
+    getSiteFonts(),
   ]);
 
   // VisualArtwork only. No Product/Offer markup: nothing here is for sale.
@@ -84,6 +87,7 @@ export default async function PortfolioItemPage({ params }: Props) {
           texts={texts}
           showNamesOnHover={settings.showNamesOnHover}
           fadeIn={settings.contentFadeIn}
+          fonts={mergeFonts(fonts)}
         />
       </div>
     </Container>

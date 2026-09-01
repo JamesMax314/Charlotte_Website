@@ -3,16 +3,19 @@ import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
 import { PageSettingsPanel } from "@/components/admin/page-settings";
 import { getAllPortfolioItems, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
+import { mergeFonts } from "@/lib/fonts";
+import { getSiteFonts } from "@/lib/site-settings";
 import { requireSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortfolioAdminPage() {
   await requireSession();
-  const [items, texts, settings] = await Promise.all([
+  const [items, texts, settings, fonts] = await Promise.all([
     getAllPortfolioItems(),
     getWallTexts(),
     getSiteSettings(),
+    getSiteFonts(),
   ]);
 
   return (
@@ -43,6 +46,7 @@ export default async function PortfolioAdminPage() {
         texts={texts}
         snapEnabled={settings.snapEnabled}
         gutter={settings.gutterEnabled ? settings.gutter : 0}
+        fonts={mergeFonts(fonts)}
       />
 
       <p className="text-graphite mt-4 max-w-2xl text-xs">

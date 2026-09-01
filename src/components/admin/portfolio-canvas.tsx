@@ -30,6 +30,7 @@ import {
   updateWallText,
 } from "@/app/admin/portfolio-actions";
 import { TextToolbar } from "./text-toolbar";
+import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { useAction } from "./use-action";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { FloatingLayer } from "./floating-layer";
@@ -89,12 +90,15 @@ export function PortfolioCanvas({
   snapEnabled,
   gutter,
   parentId = null,
+  fonts = BUILT_IN_FONTS,
 }: {
   items: PortfolioItem[];
   texts: WallText[];
   snapEnabled: boolean;
   /** Already resolved to 0 when the artist has the gap turned off. */
   gutter: number;
+  /** Built-ins plus the artist's uploads, for the canvas and the toolbar alike. */
+  fonts?: FontOption[];
   /**
    * Which wall this is. Null is the home page; an id is that piece's own page,
    * where elements are inert and never link anywhere.
@@ -571,7 +575,7 @@ export function PortfolioCanvas({
                     onChange={(e) => patchText(text.id, { content: e.target.value })}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="h-full w-full resize-none bg-transparent p-1 leading-snug outline-none"
-                    style={textStyle(text)}
+                    style={textStyle(text, { fonts })}
                   />
                 ) : (
                   <p
@@ -585,7 +589,7 @@ export function PortfolioCanvas({
                       openTextMenu(e.clientX, e.clientY, text);
                     }}
                     className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap"
-                    style={textStyle(text)}
+                    style={textStyle(text, { fonts })}
                   >
                     {text.content}
                   </p>
@@ -754,6 +758,7 @@ export function PortfolioCanvas({
           label={`Formatting for ${formatTarget.content.slice(0, 30) || "text"}`}
         >
           <TextToolbar
+            fonts={fonts}
             text={formatTarget}
             onChange={(patch) => patchText(formatTarget.id, patch)}
             onDelete={() => {
