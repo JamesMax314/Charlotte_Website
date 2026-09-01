@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_FONTS } from "./fonts";
-import { applyDocToElement, docFromElement, markSpan } from "./rich-dom";
+import { activeSpanMark, applyDocToElement, docFromElement, markSpan } from "./rich-dom";
 import { docToPlain, type RichDoc } from "./rich-text";
 
 const editable = (html: string): HTMLElement => {
@@ -156,6 +156,51 @@ describe("markSpan", () => {
     expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
       [{ text: "x", colour: "#aabbcc", font: id, size: 1.5 }],
     ]);
+  });
+});
+
+describe("activeSpanMark", () => {
+  const inEditor = (html: string) => {
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    return root;
+  };
+
+  it("reports nothing where the text carries no marks of its own", () => {
+    const root = inEditor("<div>plain</div>");
+    expect(activeSpanMark(root.querySelector("div")!.firstChild, root)).toEqual({});
+  });
+
+  it("reports the face and size the caret is standing in", () => {
+    const id = BUILT_IN_FONTS[0].id;
+    const root = inEditor(
+      `<div><span data-rt-font="${id}" data-rt-size="2"><span data-rt-colour="#aabbcc">x</span></span></div>`,
+    );
+    const caret = root.querySelector("[data-rt-colour]")!.firstChild;
+    expect(activeSpanMark(caret, root)).toEqual({ font: id, size: 2, colour: "#aabbcc" });
+  });
+
+  /** The nearest mark wins, which is what nesting a run inside another means. */
+  it("takes the innermost of two marks of the same kind", () => {
+    const root = inEditor(
+      '<div><span data-rt-size="3"><span data-rt-size="1.4">x</span></span></div>',
+    );
+    expect(activeSpanMark(root.querySelector("[data-rt-size='1.4']")!.firstChild, root).size).toBe(
+      1.4,
+    );
+  });
+
+  it("stops at the editor root rather than walking out of it", () => {
+    const outer = document.createElement("div");
+    outer.setAttribute("data-rt-size", "5");
+    const root = document.createElement("div");
+    root.innerHTML = "<div>x</div>";
+    outer.appendChild(root);
+    expect(activeSpanMark(root.querySelector("div")!.firstChild, root)).toEqual({});
+  });
+
+  it("copes with no caret at all", () => {
+    expect(activeSpanMark(null, document.createElement("div"))).toEqual({});
   });
 });
 

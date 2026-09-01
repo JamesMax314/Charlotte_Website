@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { applyDocToElement, docFromElement, markSpan, type SpanMark } from "@/lib/rich-dom";
+import {
+  activeSpanMark,
+  applyDocToElement,
+  docFromElement,
+  markSpan,
+  type SpanMark,
+} from "@/lib/rich-dom";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { docToPlain, safeHref, type RichDoc } from "@/lib/rich-text";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
@@ -143,14 +149,22 @@ export function RichTextEditor({
   */
   const savedRange = useRef<Range | null>(null);
 
+  /*
+    The marks in force where the caret is, so the toolbar can report the face
+    and size the artist is standing in rather than a fixed label. Read from the
+    DOM rather than kept alongside it: the browser owns the caret, and a second
+    copy of "where am I" is a second thing that can be wrong.
+  */
+  const [active, setActive] = useState<SpanMark>({});
+
   useEffect(() => {
     const remember = () => {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
       const range = selection.getRangeAt(0);
-      if (ref.current?.contains(range.commonAncestorContainer)) {
-        savedRange.current = range.cloneRange();
-      }
+      if (!ref.current?.contains(range.commonAncestorContainer)) return;
+      savedRange.current = range.cloneRange();
+      setActive(activeSpanMark(selection.anchorNode, ref.current));
     };
     document.addEventListener("selectionchange", remember);
     return () => document.removeEventListener("selectionchange", remember);
@@ -182,6 +196,11 @@ export function RichTextEditor({
     restoreSelection();
     applySpanMark(mark, fonts);
     read();
+    // The caret often lands inside the new span without the selection moving,
+    // so `selectionchange` may not fire and the toolbar would still report the
+    // face the artist just replaced.
+    const selection = window.getSelection();
+    if (selection && ref.current) setActive(activeSpanMark(selection.anchorNode, ref.current));
   };
 
   const addLink = () => {
@@ -202,14 +221,19 @@ export function RichTextEditor({
         >
           <select
             aria-label="Typeface"
-            defaultValue=""
-            onChange={(e) => {
-              if (e.target.value) span({ font: e.target.value });
-              e.target.value = "";
-            }}
-            className="border-line focus:border-ink max-w-28 border bg-transparent px-1 py-1 text-xs outline-none"
+            value={active.font ?? ""}
+            onChange={(e) => e.target.value && span({ font: e.target.value })}
+            className="border-line focus:border-ink max-w-36 border bg-transparent px-1 py-1 text-xs outline-none"
           >
-            <option value="">Typeface</option>
+            {/*
+              Disabled, not hidden: it is how the box reports "no face of its
+              own, inheriting the one the box is set in", and Chrome still
+              shows a disabled option as the current value. Selectable, it
+              would be a choice that does nothing.
+            */}
+            <option value="" disabled>
+              Box typeface
+            </option>
             {fonts.map((font) => (
               <option key={font.id} value={font.id} style={{ fontFamily: font.family }}>
                 {font.label}
@@ -219,14 +243,12 @@ export function RichTextEditor({
 
           <select
             aria-label="Size"
-            defaultValue=""
-            onChange={(e) => {
-              if (e.target.value) span({ size: Number(e.target.value) });
-              e.target.value = "";
-            }}
+            // Normal is a real value rather than a placeholder: a run at 1 is
+            // stored as no size mark at all, so the two agree by construction.
+            value={String(active.size ?? 1)}
+            onChange={(e) => span({ size: Number(e.target.value) })}
             className="border-line focus:border-ink border bg-transparent px-1 py-1 text-xs outline-none"
           >
-            <option value="">Size</option>
             {SIZES.map((size) => (
               <option key={size.label} value={size.value}>
                 {size.label}

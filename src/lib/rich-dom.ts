@@ -58,6 +58,42 @@ export function markSpan(mark: SpanMark, fonts: FontOption[]): HTMLSpanElement {
   return span;
 }
 
+/**
+ * The span marks in force at a point in the editor.
+ *
+ * Walks outward from the caret to the editor root, taking the nearest mark of
+ * each kind — which is what makes the toolbar able to show the face and size
+ * the artist is actually standing in rather than a fixed label.
+ */
+export function activeSpanMark(node: Node | null, root: HTMLElement): SpanMark {
+  const mark: SpanMark = {};
+  let el: HTMLElement | null =
+    node === null
+      ? null
+      : node.nodeType === Node.ELEMENT_NODE
+        ? (node as HTMLElement)
+        : node.parentElement;
+
+  while (el && root.contains(el)) {
+    if (mark.colour === undefined) {
+      const colour = el.getAttribute(MARK_ATTR.colour);
+      if (colour) mark.colour = colour;
+    }
+    if (mark.font === undefined) {
+      const font = el.getAttribute(MARK_ATTR.font);
+      if (font) mark.font = font;
+    }
+    if (mark.size === undefined) {
+      const size = el.getAttribute(MARK_ATTR.size);
+      if (size) mark.size = Number(size);
+    }
+    if (el === root) break;
+    el = el.parentElement;
+  }
+
+  return mark;
+}
+
 /** Builds the element for one run, innermost mark first. */
 function runToNode(run: RichRun, fonts: FontOption[]): Node {
   let node: Node = document.createTextNode(run.text);
