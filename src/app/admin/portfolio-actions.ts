@@ -8,7 +8,8 @@ import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { docFromPlain, docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { requireSession } from "@/lib/auth";
-import { HOME_WALL, scopeColumns, type WallScope } from "@/lib/portfolio";
+import { EDITOR_TOP_ROOM, HOME_WALL, scopeColumns, scopeOf, type WallScope } from "@/lib/portfolio";
+import { onWall } from "@/lib/portfolio-queries";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 
 /**
@@ -63,6 +64,51 @@ export async function updatePageSettings(patch: {
   refresh();
 }
 
+/**
+ * Makes room above a wall by moving everything on it down.
+ *
+ * The wall grows downward by itself, because its height is read from the
+ * lowest element. Upward it cannot: `y` is measured from the top, and the top
+ * is zero. So an element placed above the arrangement gets its room by pushing
+ * the arrangement down — relative positions are untouched, and the element
+ * that overhung becomes the new top at zero. See `shiftedDown`.
+ *
+ * `by` is capped at the editor's top band, which is as far above the wall as
+ * any one gesture can reach. Server actions are public endpoints, and without
+ * the cap a hand-crafted request could push the whole wall arbitrarily far
+ * down a page with no matching way back.
+ */
+async function makeRoomAtTop(scope: WallScope, by: number): Promise<void> {
+  if (!(by > 0)) return;
+  const room = Math.min(by, EDITOR_TOP_ROOM);
+  const db = await getDb();
+
+  for (const table of [schema.portfolioItems, schema.wallTexts]) {
+    const where = onWall(table, scope);
+    // Unreachable — every scope produces a clause — but an undefined `where`
+    // would shift every wall in the database rather than this one.
+    if (!where) throw new Error("Refusing to shift a wall without a scope clause");
+    await db
+      .update(table)
+      .set({ y: sql`${table.y} + ${room}`, updatedAt: new Date() })
+      .where(where);
+  }
+}
+
+/** The wall a stored row sits on, for a mutation that only knows its id. */
+async function wallOf(
+  table: typeof schema.portfolioItems | typeof schema.wallTexts,
+  id: string,
+): Promise<WallScope | null> {
+  const db = await getDb();
+  const rows = await db
+    .select({ parentId: table.parentId, pageId: table.pageId })
+    .from(table)
+    .where(eq(table.id, id))
+    .limit(1);
+  return rows.length === 0 ? null : scopeOf(rows[0]);
+}
+
 // ---------------------------------------------------------------- pieces
 
 /**
@@ -83,6 +129,11 @@ export async function createPortfolioItemDraft(
   const [{ nextZ }] = await db
     .select({ nextZ: sql<number>`coalesce(max(${schema.portfolioItems.z}), 0) + 1` })
     .from(schema.portfolioItems);
+
+  // Dropped into the band above the wall: push the arrangement down so the new
+  // piece has somewhere of its own to sit, rather than landing on the work
+  // that is already at the top.
+  if (at) await makeRoomAtTop(scope, -at.y);
 
   await db.insert(schema.portfolioItems).values({
     id,
@@ -187,6 +238,14 @@ export async function savePortfolioLayout(
   await requireSession();
   const db = await getDb();
 
+  // Released above the top of the wall: everything else moves down first, and
+  // the piece then comes to rest at zero as the new top. Order matters — the
+  // shift touches this row too, and the write below overrides it absolutely.
+  if (layout.y < 0) {
+    const scope = await wallOf(schema.portfolioItems, id);
+    if (scope) await makeRoomAtTop(scope, -layout.y);
+  }
+
   await db
     .update(schema.portfolioItems)
     .set({
@@ -270,6 +329,9 @@ export async function createWallText(
   const db = await getDb();
 
   const seed = docFromPlain("New text");
+  // As for a piece: text placed above the wall makes room for itself.
+  if (at) await makeRoomAtTop(scope, -at.y);
+
   await db.insert(schema.wallTexts).values({
     id: crypto.randomUUID(),
     content: docToPlain(seed),
@@ -353,6 +415,12 @@ export async function saveWallTextLayout(
 ): Promise<void> {
   await requireSession();
   const db = await getDb();
+
+  // See savePortfolioLayout: room above the wall is made by moving the wall.
+  if (layout.y < 0) {
+    const scope = await wallOf(schema.wallTexts, id);
+    if (scope) await makeRoomAtTop(scope, -layout.y);
+  }
 
   await db
     .update(schema.wallTexts)

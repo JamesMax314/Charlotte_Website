@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canvasHeightRatio,
+  shiftedDown,
   coverImage,
   headingTextId,
   inReadingOrder,
@@ -99,6 +100,38 @@ describe("canvasHeightRatio", () => {
 
   it("keeps a floor so an empty or shallow wall still has height", () => {
     expect(canvasHeightRatio([])).toBeGreaterThan(0);
+  });
+
+  it("grows by exactly what the wall was shifted down, so making room adds room", () => {
+    const items = [item({ y: 60, width: 60, images: withCover(100, 100) })];
+    expect(canvasHeightRatio(shiftedDown(items, 20))).toBe(canvasHeightRatio(items) + 20);
+  });
+});
+
+describe("shiftedDown", () => {
+  it("moves every row down by the same amount, so the arrangement is preserved", () => {
+    const rows = [{ y: 0 }, { y: 30 }, { y: 12.5 }];
+    expect(shiftedDown(rows, 7).map((r) => r.y)).toEqual([7, 37, 19.5]);
+  });
+
+  it("leaves the wall alone when there is nothing above it", () => {
+    const rows = [{ y: 4 }];
+    expect(shiftedDown(rows, 0)).toBe(rows);
+    expect(shiftedDown(rows, -5)).toBe(rows);
+  });
+
+  it("does not mutate the rows it is given", () => {
+    const rows = [{ y: 4 }];
+    shiftedDown(rows, 10);
+    expect(rows[0].y).toBe(4);
+  });
+
+  it("brings an element above the top back onto the wall", () => {
+    // A piece dragged into the editor's band rests at -8; the wall moves down
+    // by 8, and the piece becomes its top.
+    const overhang = 8;
+    const rows = [{ y: -overhang }, { y: 0 }];
+    expect(shiftedDown(rows, overhang).map((r) => r.y)).toEqual([0, overhang]);
   });
 });
 

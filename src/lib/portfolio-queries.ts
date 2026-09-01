@@ -24,9 +24,11 @@ import {
  * Both content tables carry `parent_id` and `page_id`, and the home wall is
  * the pair of nulls — so a read that filters on one column and forgets the
  * other does not fail, it quietly leaks a custom page's work onto the home
- * page. Every query below goes through here; nothing hand-rolls the pair.
+ * page. Every query below goes through here, as does the one write that
+ * touches a whole wall at once — see `makeRoomAtTop` in the portfolio actions.
+ * Nothing hand-rolls the pair.
  */
-const onWall = (
+export const onWall = (
   table: typeof schema.portfolioItems | typeof schema.wallTexts,
   scope: WallScope,
 ): SQL | undefined => {

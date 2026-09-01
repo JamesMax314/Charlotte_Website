@@ -13,7 +13,9 @@ The product specification is `docs/project-brief.md`.
 - **The home page is a wall the artist composes herself.** Images and text boxes are
   placed, resized and layered freely; positions are percentages of canvas width so the
   arrangement scales with the viewport, and below `md` it gives way to a stack in reading
-  order. Edges snap to one another with an optional gutter.
+  order. Edges snap to one another with an optional gutter. The wall grows at both ends:
+  downward on its own, and upward when she drops or drags work into the band the editor
+  keeps above it, which moves the rest of the arrangement down to make way.
 
 - **Text is rich text, everywhere she types it.** Wall boxes and the About,
   Contact and Privacy copy all take bold, italic, underline, colour, face, size and links
@@ -86,6 +88,7 @@ The product specification is `docs/project-brief.md`.
 | 12    | Rich text in every box the artist types into — marks, faces, sizes and links within one box — stored as a sanitised document and rendered as React elements rather than as HTML                                                                                                                       |
 | 13    | The artist's Instagram at the right end of the top bar, drawn as a line glyph and sized in `em` so it tracks her nav type                                                                                                                                                                             |
 | 14    | About and Contact merged into one page: the contact words, address and button sit beneath the about copy, edited in the same settings box, and `/contact` 308s to the heading                                                                                                                         |
+| 15    | The wall makes room at its top. An editor-only band above the page takes work dropped or dragged into it, and the arrangement moves down by the overhang so the new element becomes the top. Grow only — a matching shrink would make dragging the topmost element down lurch the whole wall          |
 
 ---
 

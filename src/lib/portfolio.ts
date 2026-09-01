@@ -268,6 +268,30 @@ export const inReadingOrder = (items: PortfolioItem[]): PortfolioItem[] =>
   [...items].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 
 /**
+ * The empty band the wall keeps below the lowest element, in canvas-width
+ * percent. Part of the wall itself, so a visitor sees it too.
+ */
+export const WALL_HEADROOM = 12;
+
+/**
+ * The band the editor draws *above* the wall, in canvas-width percent.
+ *
+ * Deliberately not part of `canvasHeightRatio`, and therefore invisible on the
+ * public site. The bottom can afford a margin because `y` is measured down
+ * from the top: trailing space costs nothing and no element's coordinate
+ * depends on it. Space above the top is the opposite — the top is the datum,
+ * so every element would have to move to accommodate it. Baking it in here
+ * would silently push every wall the artist has already composed down the
+ * published page.
+ *
+ * So the band exists only in the editor, as somewhere to drop work that
+ * belongs above everything else. Twenty is chosen so a default-sized piece —
+ * 28 wide on a 4:3 box, 21 tall — can be lifted essentially clear of the
+ * arrangement in a single gesture.
+ */
+export const EDITOR_TOP_ROOM = 20;
+
+/**
  * How tall the wall must be, as a percentage of its width.
  *
  * Computed from the lowest piece rather than stored, so the canvas always fits
@@ -282,5 +306,23 @@ export const canvasHeightRatio = (items: PortfolioItem[], texts: WallText[] = []
   // Headroom matters: the editor must derive this from committed positions
   // only. Deriving it from the live drag made the canvas grow as a piece was
   // dragged down, which shifted every other piece and fought the drag.
-  return Math.max(80, ...bottoms) + 12;
+  return Math.max(80, ...bottoms) + WALL_HEADROOM;
 };
+
+/**
+ * Moves a whole wall down, so that something can sit above what was its top.
+ *
+ * The wall grows downward on its own — `canvasHeightRatio` reads the lowest
+ * element — but it cannot grow upward the same way, because `y` is measured
+ * from the top and the top is fixed at zero. Making room above therefore means
+ * moving everything else: shift the arrangement down by the amount that
+ * overhangs, and the element that overhung lands at zero as the new top.
+ * Relative positions are untouched, so the composition is preserved exactly.
+ *
+ * There is no matching shrink, and there must not be. Pulling the wall up
+ * whenever its topmost element moved down would mean dragging that element
+ * down did nothing at all — everything else would follow it, and the artist
+ * would see the whole wall lurch instead of one piece move.
+ */
+export const shiftedDown = <T extends { y: number }>(rows: T[], by: number): T[] =>
+  by > 0 ? rows.map((row) => ({ ...row, y: row.y + by })) : rows;
