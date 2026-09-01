@@ -240,6 +240,50 @@ export const headingTextId = (texts: WallText[]): string | null => {
 };
 
 /**
+ * The limits a wall text's size is held between, in `cqw`.
+ *
+ * Exported because three places need to agree: the studio's input, the pt
+ * bounds derived from it, and `updateWallText`, which clamps again because a
+ * server action is a public endpoint. They were three copies of 0.5 and 20.
+ */
+export const WALL_TEXT_CQW = { min: 0.5, max: 20 } as const;
+
+/**
+ * The canvas width the studio quotes point sizes against.
+ *
+ * Ninety percent of a 1440px viewport, which is what `Container` gives the
+ * wall on a typical desktop. A reference is unavoidable: sizes are stored in
+ * `cqw` so type scales with the viewport, which means there is no single true
+ * point size — 23pt here is 23pt on a 1440 screen and proportionally larger on
+ * a wider one. Fixed rather than measured from the live canvas, because a
+ * number that changed as the artist resized her browser window would be worse
+ * than one that is merely nominal.
+ */
+export const REFERENCE_CANVAS_WIDTH = 1296;
+
+/** CSS points per pixel: 72 points to the inch against 96 CSS pixels. */
+const PT_PER_PX = 72 / 96;
+
+/**
+ * Stored size to the number the artist sees.
+ *
+ * She thinks in type sizes, and `2.4` means nothing to anybody — but the wall
+ * has to keep sizing in `cqw` or type would stop scaling with it. So the unit
+ * is converted at the edge and the storage is left alone.
+ */
+export const cqwToPt = (cqw: number): number => (cqw / 100) * REFERENCE_CANVAS_WIDTH * PT_PER_PX;
+
+/**
+ * The number she typed, back to storage.
+ *
+ * Rounded, because the raw quotient carries a dozen meaningless decimals into
+ * the database and, through it, into the published snapshot's hash — where it
+ * would read as a change to the site.
+ */
+export const ptToCqw = (pt: number): number =>
+  Math.round((pt / PT_PER_PX / REFERENCE_CANVAS_WIDTH) * 100 * 1000) / 1000;
+
+/**
  * Type styles for a text box, other than its size.
  *
  * Sizes are `cqw` — percentages of the containing canvas — which keeps type in

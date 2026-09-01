@@ -9,7 +9,7 @@ import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { docFromPlain, docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { requireSession } from "@/lib/auth";
-import { HOME_WALL, scopeColumns, type WallScope } from "@/lib/portfolio";
+import { HOME_WALL, WALL_TEXT_CQW, scopeColumns, type WallScope } from "@/lib/portfolio";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 
 /**
@@ -326,7 +326,7 @@ export async function updateWallText(
     // Guard rails so a stray value cannot make text invisible or fill the wall.
     ...(patch.fontSize === undefined
       ? {}
-      : { fontSize: Math.min(Math.max(patch.fontSize, 0.5), 20) }),
+      : { fontSize: Math.min(Math.max(patch.fontSize, WALL_TEXT_CQW.min), WALL_TEXT_CQW.max) }),
     ...(patch.align === undefined ? {} : { align: patch.align }),
     ...(patch.bold === undefined ? {} : { bold: patch.bold }),
     ...(patch.italic === undefined ? {} : { italic: patch.italic }),

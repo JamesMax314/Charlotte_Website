@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { TextAlign, WallText } from "@/lib/portfolio";
+import { WALL_TEXT_CQW, cqwToPt, ptToCqw, type TextAlign, type WallText } from "@/lib/portfolio";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 
@@ -118,6 +118,15 @@ export function TextToolbar({
    */
   fonts?: FontOption[];
 }) {
+  /*
+    Held while she types, so a half-typed number is not immediately committed.
+    Without it, typing "12" commits "1" first — which is below the minimum, so
+    it clamps to 5 and the next keystroke lands on "52".
+  */
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
+  const minPt = Math.ceil(cqwToPt(WALL_TEXT_CQW.min));
+  const maxPt = Math.floor(cqwToPt(WALL_TEXT_CQW.max));
+
   return (
     <div className="flex w-72 flex-wrap items-center gap-2 p-2">
       <label className="text-graphite flex w-full items-center gap-1.5 text-xs">
@@ -141,15 +150,38 @@ export function TextToolbar({
 
       <label className="text-graphite flex items-center gap-1.5 text-xs">
         Size
-        <input
-          type="number"
-          min={0.5}
-          max={20}
-          step={0.1}
-          value={text.fontSize}
-          onChange={(e) => onChange({ fontSize: Number(e.target.value) })}
-          className="border-line focus:border-ink w-16 border bg-transparent px-2 py-1 text-xs outline-none"
-        />
+        {/*
+          Points, never the stored `cqw`. The wall has to size type as a
+          percentage of its own width or type would stop scaling with it, but
+          "2.4" means nothing to anyone — so the unit is converted at the edge
+          and the storage is left alone. See cqwToPt for what the number is
+          exact against.
+        */}
+        <span className="relative inline-flex items-center">
+          <input
+            type="number"
+            min={minPt}
+            max={maxPt}
+            step={1}
+            value={sizeDraft ?? Math.round(cqwToPt(text.fontSize))}
+            onChange={(e) => {
+              setSizeDraft(e.target.value);
+              const pt = Number(e.target.value);
+              // Commit only what is in range; a cleared field reads as 0, and
+              // committing that would collapse her text to nothing mid-edit.
+              if (Number.isFinite(pt) && pt >= minPt && pt <= maxPt) {
+                onChange({ fontSize: ptToCqw(pt) });
+              }
+            }}
+            // Snaps back to what was actually stored, so an abandoned or
+            // out-of-range entry never lingers in the field as if it took.
+            onBlur={() => setSizeDraft(null)}
+            className="border-line focus:border-ink w-20 border bg-transparent py-1 pr-7 pl-2 text-xs outline-none"
+          />
+          <span aria-hidden className="text-graphite/70 pointer-events-none absolute right-2">
+            pt
+          </span>
+        </span>
       </label>
 
       <span className="bg-line mx-1 h-6 w-px" aria-hidden="true" />

@@ -101,6 +101,7 @@ The product specification is `docs/project-brief.md`.
 | 17    | Reverted Phase 15. The editor's band above the wall is gone and elements clamp to zero again — dropping or dragging above the top no longer pushes the arrangement down. `WALL_HEADROOM` is kept; it named a number the wall already had                                                                                 |
 | 18    | The real domain, charlottewilkinsonart.co.uk, is the committed default for canonicals, the sitemap and OG cards, and `robots.txt` allows indexing only on that host — so the workers.dev origin the site answers on is never indexed alongside it                                                                        |
 | 19    | Deployed to Cloudflare on the artist's own account: two R2 buckets, a D1 database in WEUR, all migrations, both secrets, and the apex bound as a custom domain in `wrangler.jsonc`. Guarded reads now rethrow Next's control-flow errors, which the session check had started swallowing                                 |
+| 20    | Wall text sizes are typed in points. Storage stays `cqw` so type still scales with the wall; `cqwToPt` converts at the edge against a documented reference width, and the studio, the derived pt bounds and the server clamp now share one pair of limits                                                                |
 
 ---
 
@@ -737,6 +738,13 @@ pnpm seed                        # loads eight placeholder artworks into D1 and 
 ```
 
 Then either:
+
+**Changing `database_id` in `wrangler.jsonc` gives you a new, empty local database.**
+Miniflare keys local D1 storage by that id, so the first `pnpm preview` after the remote
+database was created found no tables and every page 500'd. The old data is not lost — it
+is still in `.wrangler/state/v3/d1/miniflare-D1DatabaseObject/` under the previous id's
+filename, and copying it over the new one restores it. Otherwise `pnpm db:migrate:local`
+and `pnpm seed` rebuild it.
 
 ```bash
 pnpm dev          # fast iteration on http://localhost:3000

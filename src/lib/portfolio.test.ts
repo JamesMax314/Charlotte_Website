@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   canvasHeightRatio,
+  cqwToPt,
+  ptToCqw,
+  WALL_TEXT_CQW,
   coverImage,
   headingTextId,
   inReadingOrder,
@@ -336,5 +339,34 @@ describe("isOnWall", () => {
 
   it("agrees with scopeOf, which is the rule it is built from", () => {
     for (const row of [home, onPage, onPiece]) expect(isOnWall(row, scopeOf(row))).toBe(true);
+  });
+});
+
+describe("point sizes", () => {
+  /*
+    The artist types points; the wall stores `cqw` so type keeps scaling with
+    it. The pair only earns its keep if a number she typed comes back as the
+    same number — otherwise every visit to the panel nudges her sizes.
+  */
+  it("round-trips a typed point size unchanged", () => {
+    for (const pt of [5, 10, 12, 23, 48, 194]) {
+      expect(Math.round(cqwToPt(ptToCqw(pt)))).toBe(pt);
+    }
+  });
+
+  it("keeps the stored value inside the limits the server clamps to", () => {
+    expect(ptToCqw(Math.ceil(cqwToPt(WALL_TEXT_CQW.min)))).toBeGreaterThanOrEqual(
+      WALL_TEXT_CQW.min,
+    );
+    expect(ptToCqw(Math.floor(cqwToPt(WALL_TEXT_CQW.max)))).toBeLessThanOrEqual(WALL_TEXT_CQW.max);
+  });
+
+  it("rounds the stored size, so it cannot carry float noise into the published hash", () => {
+    const stored = ptToCqw(10);
+    expect(stored).toBe(Number(stored.toFixed(3)));
+  });
+
+  it("is proportional, so doubling the points doubles the stored size", () => {
+    expect(ptToCqw(20)).toBeCloseTo(ptToCqw(10) * 2, 3);
   });
 });
