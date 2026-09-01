@@ -7,9 +7,7 @@ import {
   aspectOf,
   canvasHeightRatio,
   coverImage,
-  EDITOR_TOP_ROOM,
   HOME_WALL,
-  shiftedDown,
   textStyle,
   type PortfolioItem,
   type WallScope,
@@ -160,63 +158,20 @@ export function PortfolioCanvas({
   const teardownRef = useRef<(() => void) | null>(null);
   useEffect(() => () => teardownRef.current?.(), []);
 
-  /**
-   * Where everything rests, as opposed to where it is currently being dragged.
-   *
-   * The wall's height reads this and never the live positions: derived from the
-   * gesture in flight, the canvas grew as a piece was pulled down, which moved
-   * every other piece and fought the drag. It is a separate list rather than a
-   * copy of the props because a commit can settle the whole wall at once — see
-   * `applyTopRoom`.
-   */
-  const [restingItems, setRestingItems] = useState(initialItems);
-  const [restingTexts, setRestingTexts] = useState(initialTexts);
-
-  /*
-    Re-sync when the server sends a new arrangement. The sentinel holds the
-    props by reference, so it stays comparable however far the local copies
-    have moved on. Both lists come from one server render, so both reset
-    together.
-  */
-  const [synced, setSynced] = useState({ items: initialItems, texts: initialTexts });
-  if (synced.items !== initialItems || synced.texts !== initialTexts) {
-    setSynced({ items: initialItems, texts: initialTexts });
+  const [lastItems, setLastItems] = useState(initialItems);
+  if (initialItems !== lastItems) {
+    setLastItems(initialItems);
     setItems(initialItems);
-    setRestingItems(initialItems);
+  }
+  const [lastTexts, setLastTexts] = useState(initialTexts);
+  if (initialTexts !== lastTexts) {
+    setLastTexts(initialTexts);
     setTexts(initialTexts);
-    setRestingTexts(initialTexts);
   }
 
-  const ratio = canvasHeightRatio(restingItems, restingTexts);
-
-  /*
-    The editor is taller than the wall by the top band.
-
-    Everything below still speaks the wall's coordinates — percentages of width
-    measured from the wall's top, which is what the site renders — so the two
-    cannot drift. Only the conversion into the box on screen knows about the
-    band: `topOf` places a wall coordinate, `heightOf` scales a wall length.
-  */
-  const boxRatio = ratio + EDITOR_TOP_ROOM;
-  const heightOf = (length: number) => (length / boxRatio) * 100;
-  const topOf = (y: number) => heightOf(y + EDITOR_TOP_ROOM);
-
-  /**
-   * Makes room at the top of the wall, before the server has said so.
-   *
-   * Both the drawn and the resting lists move: the resting one is what the
-   * height is read from, so without it the wall would not actually grow until
-   * the round trip came back. The element that overhung is pinned to zero — it
-   * is the new top, and the room was measured from it.
-   */
-  const applyTopRoom = (room: number, movedId: string) => {
-    const shift = <T extends { id: string; y: number }>(rows: T[]) =>
-      shiftedDown(rows, room).map((row) => (row.id === movedId ? { ...row, y: 0 } : row));
-    setItems(shift);
-    setRestingItems(shift);
-    setTexts(shift);
-    setRestingTexts(shift);
-  };
+  // Height comes from the committed lists, never the live drag — otherwise the
+  // canvas grows as a piece is pulled down and shifts everything else.
+  const ratio = canvasHeightRatio(lastItems, lastTexts);
 
   const asPercent = useCallback((px: number) => {
     const width = canvasRef.current?.offsetWidth ?? 1;
@@ -315,23 +270,16 @@ export function PortfolioCanvas({
       const snapping = snapEnabled && !moveEvent.altKey;
 
       if (drag.mode === "move") {
-        /*
-          Above the wall the drag runs on into the band rather than stopping at
-          zero, which is what lets work be placed at the top: on release the
-          overhang becomes room, and everything else moves down to give it.
-          Bounded by the band because there is no shrink to undo an overshoot —
-          the artist would have to move every other element back by hand.
-        */
         const loose = {
           x: drag.originX + dx,
-          y: Math.max(-EDITOR_TOP_ROOM, drag.originY + dy),
+          y: Math.max(0, drag.originY + dy),
           width: drag.originWidth,
           height: drag.originHeight,
         };
         const snapped = snapping
           ? snapMove(loose, drag.guides)
           : { x: loose.x, y: loose.y, vertical: null, horizontal: null };
-        drag.latest = { ...loose, x: snapped.x, y: Math.max(-EDITOR_TOP_ROOM, snapped.y) };
+        drag.latest = { ...loose, x: snapped.x, y: Math.max(0, snapped.y) };
         setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
       } else if (drag.kind === "item") {
         // Pieces resize by width alone; height follows the cover image's aspect
@@ -402,13 +350,6 @@ export function PortfolioCanvas({
 
       setSaving(true);
       const done = () => setSaving(false);
-
-      // Anything resting above the wall makes room for itself. The server does
-      // the same shift from the same negative y; this only spares the artist
-      // the round trip.
-      const room = Math.max(0, -drag.latest.y);
-      if (room > 0) applyTopRoom(room, drag.id);
-
       if (drag.kind === "item") {
         run(
           savePortfolioLayout(drag.id, {
@@ -477,11 +418,9 @@ export function PortfolioCanvas({
     const box = canvasRef.current?.getBoundingClientRect();
     if (!box || box.width === 0) return { x: 4, y: 4 };
     return {
-      // Both axes are percentages of width; see the schema. `y` is measured
-      // from the top of the wall, not of the box, so a point in the band above
-      // it is negative — which is what asks for room to be made there.
+      // Both axes are percentages of width; see the schema.
       x: ((clientX - box.left) / box.width) * 100,
-      y: ((clientY - box.top) / box.width) * 100 - EDITOR_TOP_ROOM,
+      y: ((clientY - box.top) / box.width) * 100,
     };
   };
 
@@ -621,24 +560,8 @@ export function PortfolioCanvas({
         }}
         className="border-line bg-paper-sunk/40 relative w-full overflow-hidden border"
         // container-type lets text sizes resolve in cqw, exactly as on the site.
-        // The box is the wall plus the band above it; `cqw` reads width only,
-        // so type is sized identically either way.
-        style={{ aspectRatio: `100 / ${boxRatio}`, containerType: "inline-size" }}
+        style={{ aspectRatio: `100 / ${ratio}`, containerType: "inline-size" }}
       >
-        {/*
-          The band above the wall, marked as off-page so the artist can see
-          where her page actually begins. Work dropped or dragged in here
-          becomes the new top and pushes the rest down.
-        */}
-        <div
-          aria-hidden
-          className="border-line/70 bg-paper pointer-events-none absolute inset-x-0 top-0 border-b border-dashed"
-          style={{ height: `${heightOf(EDITOR_TOP_ROOM)}%` }}
-        >
-          <span className="text-graphite/70 absolute bottom-1 left-2 text-[10px] tracking-wide">
-            Drop here to add above — the page starts at this line
-          </span>
-        </div>
         {texts.map((text) => {
           const dragging = activeId === text.id;
           const selected = selectedTextId === text.id;
@@ -649,9 +572,9 @@ export function PortfolioCanvas({
               className="group absolute touch-none"
               style={{
                 left: `${text.x}%`,
-                top: `${topOf(text.y)}%`,
+                top: `${(text.y / ratio) * 100}%`,
                 width: `${text.width}%`,
-                height: `${heightOf(text.height)}%`,
+                height: `${(text.height / ratio) * 100}%`,
                 zIndex: text.z,
               }}
             >
@@ -729,7 +652,7 @@ export function PortfolioCanvas({
               className="group absolute touch-none select-none"
               style={{
                 left: `${item.x}%`,
-                top: `${topOf(item.y)}%`,
+                top: `${(item.y / ratio) * 100}%`,
                 width: `${item.width}%`,
                 zIndex: item.z,
               }}
@@ -800,7 +723,7 @@ export function PortfolioCanvas({
         {shown.horizontal !== null && (
           <div
             className="bg-accent pointer-events-none absolute right-0 left-0 z-50 h-px"
-            style={{ top: `${topOf(shown.horizontal)}%` }}
+            style={{ top: `${(shown.horizontal / ratio) * 100}%` }}
           />
         )}
 
