@@ -5,7 +5,7 @@ import { Container } from "@/components/container";
 import { ArtworkViewer } from "@/components/artwork-viewer";
 import { BuyPanel } from "@/components/buy-panel";
 import { getArtworkBySlug } from "@/lib/catalogue";
-import { primaryImage } from "@/lib/artworks";
+import { primaryImage, productTypeLabel, soleListing } from "@/lib/artworks";
 import { SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -41,6 +41,8 @@ export default async function ArtworkPage({ params }: Props) {
   // Drafts resolve to nothing; archived work still renders (brief P-08, A-09).
   if (!artwork) notFound();
 
+  const listing = soleListing(artwork);
+
   // VisualArtwork only. No Product/Offer markup: we are not the seller, and
   // claiming an offer we cannot fulfil risks a structured-data penalty (N-03).
   const jsonLd = {
@@ -62,10 +64,10 @@ export default async function ArtworkPage({ params }: Props) {
       />
 
       <Link
-        href="/"
+        href="/shop"
         className="text-graphite hover:text-accent mb-8 inline-block text-sm transition-colors"
       >
-        ← All work
+        ← Shop
       </Link>
 
       <div className="grid gap-12 lg:grid-cols-[1.6fr_1fr] lg:gap-16">
@@ -79,6 +81,12 @@ export default async function ArtworkPage({ params }: Props) {
           </h1>
 
           <dl className="text-graphite mt-4 space-y-1 text-sm">
+            {listing && (
+              <div className="flex gap-2">
+                <dt className="sr-only">Product type</dt>
+                <dd className="text-ink">{productTypeLabel(listing.kind)}</dd>
+              </div>
+            )}
             <div className="flex gap-2">
               <dt className="sr-only">Year</dt>
               <dd>{artwork.year}</dd>

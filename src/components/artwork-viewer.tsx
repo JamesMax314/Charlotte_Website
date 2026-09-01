@@ -4,6 +4,26 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArtworkImage } from "@/lib/artworks";
 
+const ARROW =
+  "bg-paper/85 border-line text-ink hover:bg-paper absolute top-1/2 -translate-y-1/2 border p-2 transition-colors";
+
+function Chevron({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="h-5 w-5"
+    >
+      <path d={direction === "left" ? "M15 5 8 12l7 7" : "M9 5l7 7-7 7"} />
+    </svg>
+  );
+}
+
 /**
  * The artwork images, with a lightbox.
  *
@@ -39,22 +59,49 @@ export function ArtworkViewer({ images, title }: { images: ArtworkImage[]; title
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="bg-paper-sunk border-line block w-full cursor-zoom-in overflow-hidden border"
-        aria-label={`View ${title} larger`}
-      >
-        <Image
-          src={active.src}
-          alt={active.alt}
-          width={active.width}
-          height={active.height}
-          priority
-          sizes="(min-width: 1024px) 60vw, 100vw"
-          className="h-auto w-full"
-        />
-      </button>
+      {/*
+        The arrows are siblings of the zoom button, not children of it: nested
+        inside, every press to cycle would open the lightbox as well.
+      */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="bg-paper-sunk border-line block w-full cursor-zoom-in overflow-hidden border"
+          aria-label={`View ${title} larger`}
+        >
+          <Image
+            src={active.src}
+            alt={active.alt}
+            width={active.width}
+            height={active.height}
+            priority
+            sizes="(min-width: 1024px) 60vw, 100vw"
+            className="h-auto w-full"
+          />
+        </button>
+
+        {count > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              aria-label="Previous image"
+              className={`${ARROW} left-2`}
+            >
+              <Chevron direction="left" />
+            </button>
+            <button
+              type="button"
+              onClick={() => go(1)}
+              aria-label="Next image"
+              className={`${ARROW} right-2`}
+            >
+              <Chevron direction="right" />
+            </button>
+          </>
+        )}
+      </div>
 
       {count > 1 && (
         <ul className="mt-3 flex flex-wrap gap-3">
