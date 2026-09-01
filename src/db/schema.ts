@@ -245,6 +245,20 @@ export const siteSettings = sqliteTable("site_settings", {
   accentColour: text("accent_colour").notNull().default("#9a5b33"),
 
   /*
+    The faces the public site is set in. Keys into the font registry
+    (src/lib/fonts.ts) rather than an enum, for the same reason as
+    `wall_texts.font`: an uploaded font joins the same list with no migration.
+
+    Defaulted to real built-in ids rather than '' so the id always names an
+    entry, the admin's select always has something selected, and the resolver
+    has no second "unset" state to handle.
+
+    The admin deliberately ignores both — see src/app/(site)/layout.tsx.
+  */
+  bodyFontId: text("body_font_id").notNull().default("sans"),
+  headingFontId: text("heading_font_id").notNull().default("serif"),
+
+  /*
     Copy for the three static pages, as typed into a plain textarea: a blank
     line starts a paragraph. Empty means "she has not written anything yet",
     and the page falls back to the prose it shipped with — see

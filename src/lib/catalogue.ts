@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { asc, eq, inArray, ne } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { DEFAULT_ACCENT } from "./colour";
+import { DEFAULT_FONT_ID, DISPLAY_FONT_ID } from "./fonts";
 import {
   DEFAULT_ABOUT_COPY,
   DEFAULT_CONTACT_COPY,
@@ -148,6 +149,8 @@ const SETTINGS_FALLBACK = {
   siteName: DEFAULT_SITE_NAME,
   faviconKey: null as string | null,
   accentColour: DEFAULT_ACCENT,
+  bodyFontId: DEFAULT_FONT_ID,
+  headingFontId: DISPLAY_FONT_ID,
   // Only reached when D1 is unavailable. A stored empty string spreads *over*
   // these, so the pages fall back themselves — see src/lib/default-copy.ts.
   aboutCopy: DEFAULT_ABOUT_COPY,
