@@ -116,6 +116,7 @@ The product specification is `docs/project-brief.md`.
 | 20    | Wall text sizes are typed in points. Storage stays `cqw` so type still scales with the wall; `cqwToPt` converts at the edge against a documented reference width, and the studio, the derived pt bounds and the server clamp now share one pair of limits. The run-level Small/Normal/Large dropdown is a points input too, converted against the box it sits in |
 | 21    | CI generates `cloudflare-env.d.ts` before it typechecks. The Worker's bindings live only in that generated file, so `env.DB` and `env.MEDIA` were TS2339 on every run while a developer machine stayed clean                                                                                                                                                     |
 | 22    | Search and sharing. Canonicals, Open Graph and Twitter cards on every page; `Person`/`WebSite` entity markup with `sameAs`; breadcrumbs; a heading fallback so no page renders without an `<h1>`; an artist-owned description and share image; `lastModified` in the sitemap                                                                                     |
+| 23    | Type sizes are chosen from a list, not typed into a spinner. One scrolling list of point sizes serves both the box and the run, and a span's size style is rebased against what it nests inside so the editor finally paints the size it reports                                                                                                                 |
 
 ---
 
@@ -367,6 +368,39 @@ Non-obvious decisions that the code alone does not explain.
   page and has no price; `artworks` + `listings` are the store. They share the upload
   endpoint and the `ImageManager` component but nothing else. Do not merge them — the
   brief treats "shown" and "for sale" as different things.
+
+- **The size list is not a native `<select>`, and not a `FloatingLayer` either.** Native
+  was tried first and the reasoning looked sound — reliable on a tablet, no dismissal to
+  own — but a native popup is drawn by the operating system, and with a rung for every
+  point from 5 to 40 macOS paints all forty-three from the top of the screen to the
+  bottom. No CSS reaches that menu; `appearance: base-select` is the only hook and it did
+  nothing here. A list that cannot be told how tall it is cannot be the answer.
+  `FloatingLayer` is the other trap: it closes on any pointerdown outside itself and this
+  control sits _inside_ one, so a portalled list reads as a click elsewhere and takes the
+  formatting panel down on the way to picking a size. Rendered inline and absolutely
+  positioned, a click on an option is a click inside the panel — which is what
+  `ColourControl` beside it already relies on. Escape is caught in the capture phase and
+  stopped, so one press closes the list and not the panel behind it.
+
+- **A size mark's `em` is rebased; its `data-rt-size` is not.** A run's size is a
+  multiple of the _box_, which is what `marksOf` reads back — but the style is `em`, a
+  multiple of the _parent_, and the two only agree when the span is a direct child of the
+  editor. Nested, they multiply: 30pt applied inside a half-size run painted half of 30
+  while storing the full multiple, so the editor and the saved document disagreed and
+  every further adjustment drifted from the last. `rebaseSizeStyle` divides the style by
+  what the span inherits and `clearSizeMarks` drops the marks it wrapped around;
+  `applySpanMark` calls both _after_ insertion, because extracting a selection splits the
+  surrounding elements and where the span lands is the only reliable answer to what it
+  inherits. This is why the size control could be seen to move the wrong way.
+
+- **A size the artist cannot get is never offered.** Both point fields derive their bounds
+  the same way they always did — from `WALL_TEXT_CQW` for a box and from
+  `RICH_LIMITS.size` against `basePt` for a run — but the bounds now filter the list
+  rather than clamp a choice. A spinner let her land on a number that silently became a
+  different one; a shorter list is the honest form of the same limit. `ptOptions` also
+  merges the current size in when it is off the ladder, because a `<select>` whose value
+  matches no option renders blank — and the home page's heading, seeded at 5.2cqw, is
+  about 51pt.
 
 - **Rich text is stored as a document and rendered as elements, never as HTML.** The
   obvious shape — keep a string of HTML, render it with `dangerouslySetInnerHTML` — puts a

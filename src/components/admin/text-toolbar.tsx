@@ -4,6 +4,7 @@ import { useState } from "react";
 import { WALL_TEXT_CQW, cqwToPt, ptToCqw, type TextAlign, type WallText } from "@/lib/portfolio";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
+import { SizeSelect } from "./size-select";
 
 type Patch = Partial<
   Pick<WallText, "fontSize" | "align" | "bold" | "italic" | "underline" | "colour" | "font">
@@ -118,12 +119,6 @@ export function TextToolbar({
    */
   fonts?: FontOption[];
 }) {
-  /*
-    Held while she types, so a half-typed number is not immediately committed.
-    Without it, typing "12" commits "1" first — which is below the minimum, so
-    it clamps to 5 and the next keystroke lands on "52".
-  */
-  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
   const minPt = Math.ceil(cqwToPt(WALL_TEXT_CQW.min));
   const maxPt = Math.floor(cqwToPt(WALL_TEXT_CQW.max));
 
@@ -157,31 +152,14 @@ export function TextToolbar({
           and the storage is left alone. See cqwToPt for what the number is
           exact against.
         */}
-        <span className="relative inline-flex items-center">
-          <input
-            type="number"
-            min={minPt}
-            max={maxPt}
-            step={1}
-            value={sizeDraft ?? Math.round(cqwToPt(text.fontSize))}
-            onChange={(e) => {
-              setSizeDraft(e.target.value);
-              const pt = Number(e.target.value);
-              // Commit only what is in range; a cleared field reads as 0, and
-              // committing that would collapse her text to nothing mid-edit.
-              if (Number.isFinite(pt) && pt >= minPt && pt <= maxPt) {
-                onChange({ fontSize: ptToCqw(pt) });
-              }
-            }}
-            // Snaps back to what was actually stored, so an abandoned or
-            // out-of-range entry never lingers in the field as if it took.
-            onBlur={() => setSizeDraft(null)}
-            className="border-line focus:border-ink w-20 border bg-transparent py-1 pr-7 pl-2 text-xs outline-none"
-          />
-          <span aria-hidden className="text-graphite/70 pointer-events-none absolute right-2">
-            pt
-          </span>
-        </span>
+        <SizeSelect
+          label="Size"
+          valuePt={Math.round(cqwToPt(text.fontSize))}
+          minPt={minPt}
+          maxPt={maxPt}
+          onChange={(pt) => onChange({ fontSize: ptToCqw(pt) })}
+          className="w-20"
+        />
       </label>
 
       <span className="bg-line mx-1 h-6 w-px" aria-hidden="true" />
