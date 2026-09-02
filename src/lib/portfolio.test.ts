@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PT_STEPS, ptOptions } from "./type-scale";
 import {
   canvasHeightRatio,
   cqwToPt,
@@ -368,5 +369,24 @@ describe("point sizes", () => {
 
   it("is proportional, so doubling the points doubles the stored size", () => {
     expect(ptToCqw(20)).toBeCloseTo(ptToCqw(10) * 2, 3);
+  });
+
+  /*
+    Every size the box's dropdown offers, not a sample. A step that did not
+    survive the round trip would show one number in the list and another the
+    moment the panel reopened.
+  */
+  it("round-trips every step the size dropdown offers", () => {
+    const minPt = Math.ceil(cqwToPt(WALL_TEXT_CQW.min));
+    const maxPt = Math.floor(cqwToPt(WALL_TEXT_CQW.max));
+    for (const pt of ptOptions(minPt, minPt, maxPt)) {
+      expect(Math.round(cqwToPt(ptToCqw(pt)))).toBe(pt);
+    }
+  });
+
+  it("offers the whole ladder for a text box", () => {
+    const minPt = Math.ceil(cqwToPt(WALL_TEXT_CQW.min));
+    const maxPt = Math.floor(cqwToPt(WALL_TEXT_CQW.max));
+    expect(ptOptions(minPt, minPt, maxPt)).toEqual([...PT_STEPS]);
   });
 });

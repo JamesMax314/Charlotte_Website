@@ -59,6 +59,44 @@ export function markSpan(mark: SpanMark, fonts: FontOption[]): HTMLSpanElement {
 }
 
 /**
+ * Drops every size mark inside an element, style and attribute together.
+ *
+ * Applied to a span that has just been wrapped around a selection: the size
+ * being applied wins outright over any inside it. Left in place they would
+ * compound, because a nested `em` multiplies — so 30pt wrapped around a
+ * half-size run painted at half of 30 — while `marksOf` reads only the
+ * innermost, so the document would disagree with the screen either way.
+ *
+ * Size only. A nested colour or face is merely redundant; those do not
+ * multiply.
+ */
+export function clearSizeMarks(el: HTMLElement): void {
+  for (const inner of el.querySelectorAll<HTMLElement>(`[${MARK_ATTR.size}]`)) {
+    inner.removeAttribute(MARK_ATTR.size);
+    inner.style.removeProperty("font-size");
+  }
+}
+
+/**
+ * Rewrites a span's size style against what it ended up nesting inside.
+ *
+ * The model says a run's size is a multiple of the *box*. The DOM says `em`,
+ * which is a multiple of the parent — and the two are only the same thing when
+ * the span is a direct child of the editor. The attribute therefore keeps the
+ * true multiple, which is what is read back, and only the style is divided by
+ * what it inherits, so the browser paints the size the artist chose.
+ *
+ * Called after insertion rather than before, because extracting a selection
+ * splits the surrounding elements: where the span lands is the only reliable
+ * answer to what it inherits.
+ */
+export function rebaseSizeStyle(span: HTMLElement, size: number | undefined, root: HTMLElement) {
+  if (size === undefined) return;
+  const inherited = activeSpanMark(span.parentNode, root).size ?? 1;
+  span.style.fontSize = `${inherited > 0 ? size / inherited : size}em`;
+}
+
+/**
  * The span marks in force at a point in the editor.
  *
  * Walks outward from the caret to the editor root, taking the nearest mark of
@@ -92,6 +130,53 @@ export function activeSpanMark(node: Node | null, root: HTMLElement): SpanMark {
   }
 
   return mark;
+}
+
+/**
+ * Writes a span mark onto the current selection, or arms it for the next keystroke.
+ *
+ * Lives here rather than in the editor because every line of it is this
+ * module's business: it builds a span with `markSpan`, and both of the rules
+ * that keep a size mark honest — clearing what it wrapped, rebasing what it
+ * nests inside — are the ones above.
+ */
+export function applySpanMark(mark: SpanMark, fonts: FontOption[], root: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+
+  // Built by the same function that seeds the editor, so the mark cannot be
+  // stored without also being visible.
+  const span = markSpan(mark, fonts);
+
+  if (range.collapsed) {
+    /*
+      Nothing is selected, so there is nothing to restyle — the brief is
+      explicit that existing text must not change. An empty span with a
+      zero-width space gives the caret somewhere to sit that already carries
+      the mark, so the next thing typed is inside it.
+    */
+    span.appendChild(document.createTextNode("​"));
+    range.insertNode(span);
+    rebaseSizeStyle(span, mark.size, root);
+    const inner = document.createRange();
+    inner.setStart(span.firstChild!, 1);
+    inner.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(inner);
+    return;
+  }
+
+  // surroundContents throws when the range crosses an element boundary; the
+  // extract/append path handles that case and behaves identically otherwise.
+  span.appendChild(range.extractContents());
+  if (mark.size !== undefined) clearSizeMarks(span);
+  range.insertNode(span);
+  rebaseSizeStyle(span, mark.size, root);
+  selection.removeAllRanges();
+  const after = document.createRange();
+  after.selectNodeContents(span);
+  selection.addRange(after);
 }
 
 /** Builds the element for one run, innermost mark first. */

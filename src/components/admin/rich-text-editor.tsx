@@ -5,8 +5,8 @@ import { createPortal } from "react-dom";
 import {
   activeSpanMark,
   applyDocToElement,
+  applySpanMark,
   docFromElement,
-  markSpan,
   type SpanMark,
 } from "@/lib/rich-dom";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
@@ -19,6 +19,7 @@ import {
   type RichDoc,
 } from "@/lib/rich-text";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
+import { SizeSelect } from "./size-select";
 
 /**
  * A rich-text box, with its formatting controls along the top.
@@ -45,43 +46,6 @@ const BUTTON =
   "border-line hover:border-ink flex h-7 min-w-7 items-center justify-center border px-1.5 text-xs transition-colors";
 
 const SWATCHES = [INK, "#6d6a66", DEFAULT_ACCENT, PAPER, "#2140d6"];
-
-/** Writes a span mark onto the current selection, or arms it for the next keystroke. */
-function applySpanMark(mark: SpanMark, fonts: FontOption[]): void {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) return;
-  const range = selection.getRangeAt(0);
-
-  // Built by the same function that seeds the editor, so the mark cannot be
-  // stored without also being visible.
-  const span = markSpan(mark, fonts);
-
-  if (range.collapsed) {
-    /*
-      Nothing is selected, so there is nothing to restyle — the brief is
-      explicit that existing text must not change. An empty span with a
-      zero-width space gives the caret somewhere to sit that already carries
-      the mark, so the next thing typed is inside it.
-    */
-    span.appendChild(document.createTextNode("​"));
-    range.insertNode(span);
-    const inner = document.createRange();
-    inner.setStart(span.firstChild!, 1);
-    inner.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(inner);
-    return;
-  }
-
-  // surroundContents throws when the range crosses an element boundary; the
-  // extract/append path handles that case and behaves identically otherwise.
-  span.appendChild(range.extractContents());
-  range.insertNode(span);
-  selection.removeAllRanges();
-  const after = document.createRange();
-  after.selectNodeContents(span);
-  selection.addRange(after);
-}
 
 export function RichTextEditor({
   value,
@@ -209,8 +173,6 @@ export function RichTextEditor({
     copy of "where am I" is a second thing that can be wrong.
   */
   const [active, setActive] = useState<SpanMark>({});
-  /* Held while she types, for the reason given on the same field in TextToolbar. */
-  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
 
   useEffect(() => {
     const remember = () => {
@@ -248,8 +210,10 @@ export function RichTextEditor({
   };
 
   const span = (mark: SpanMark) => {
+    const el = ref.current;
+    if (!el) return;
     restoreSelection();
-    applySpanMark(mark, fonts);
+    applySpanMark(mark, fonts, el);
     read();
     // The caret often lands inside the new span without the selection moving,
     // so `selectionchange` may not fire and the toolbar would still report the
@@ -297,30 +261,16 @@ export function RichTextEditor({
         still a multiple — see runSizeInPt — so this number moves if the box is
         resized, which is the price of type that scales with the wall.
       */}
-      <span className="relative inline-flex items-center">
-        <input
-          type="number"
-          aria-label="Size"
-          min={Math.ceil(runSizeInPt(basePt, RICH_LIMITS.size.min))}
-          max={Math.floor(runSizeInPt(basePt, RICH_LIMITS.size.max))}
-          step={1}
-          value={sizeDraft ?? Math.round(runSizeInPt(basePt, active.size ?? 1))}
-          onChange={(e) => {
-            setSizeDraft(e.target.value);
-            const pt = Number(e.target.value);
-            if (!Number.isFinite(pt) || pt <= 0) return;
-            span({ size: runSizeFromPt(basePt, pt) });
-          }}
-          onBlur={() => setSizeDraft(null)}
-          className="border-line focus:border-ink w-16 border bg-transparent py-1 pr-6 pl-1.5 text-xs outline-none"
-        />
-        <span
-          aria-hidden
-          className="text-graphite/70 pointer-events-none absolute right-1.5 text-[10px]"
-        >
-          pt
-        </span>
-      </span>
+      <SizeSelect
+        label="Size"
+        valuePt={Math.round(runSizeInPt(basePt, active.size ?? 1))}
+        // The bounds filter the list rather than clamping a choice: a step
+        // this box cannot reach is one the artist could pick and not get.
+        minPt={Math.ceil(runSizeInPt(basePt, RICH_LIMITS.size.min))}
+        maxPt={Math.floor(runSizeInPt(basePt, RICH_LIMITS.size.max))}
+        onChange={(pt) => span({ size: runSizeFromPt(basePt, pt) })}
+        className={layout === "top" ? "" : "w-full"}
+      />
 
       <span
         className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}

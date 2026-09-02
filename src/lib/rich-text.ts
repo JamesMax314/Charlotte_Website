@@ -49,8 +49,21 @@ export const RICH_LIMITS = {
   text: 20_000,
   paragraphs: 400,
   runsPerParagraph: 400,
-  size: { min: 0.4, max: 6 },
+  size: { min: 0.2, max: 6 },
 } as const;
+
+/**
+ * The precision a size multiple is held to.
+ *
+ * Three decimals, not two. The multiple is quoted back to the artist in points
+ * against the box it sits in, so the rounding error is multiplied by the box —
+ * and at the top of the range, where a box can be nearly 200pt, two decimals
+ * cost her the size she picked: 96pt stored as 0.49 reads back as 95. Three
+ * caps the error below a fifth of a point everywhere. Widening it leaves
+ * existing two-decimal values untouched, so nothing is rewritten and the
+ * published hash does not move.
+ */
+const round = (value: number): number => Math.round(value * 1000) / 1000;
 
 /**
  * A run's size in points, given the size of the box it sits in.
@@ -64,16 +77,16 @@ export const RICH_LIMITS = {
 export const runSizeInPt = (basePt: number, multiple = 1): number => basePt * multiple;
 
 /**
- * The multiple to store for a point size the artist typed.
+ * The multiple to store for a point size the artist chose.
  *
- * Rounded to two decimals and clamped to the same bounds as `clampSize`, which
- * sanitises it again on the way into the database — a run at exactly the box's
- * size is stored as no size mark at all, so typing the base size clears the
- * mark rather than writing a redundant 1.
+ * Rounded and clamped to the same bounds as `clampSize`, which sanitises it
+ * again on the way into the database — a run at exactly the box's size is
+ * stored as no size mark at all, so choosing the base size clears the mark
+ * rather than writing a redundant 1.
  */
 export const runSizeFromPt = (basePt: number, pt: number): number => {
   if (!(basePt > 0)) return 1;
-  const multiple = Math.round((pt / basePt) * 100) / 100;
+  const multiple = round(pt / basePt);
   return Math.min(Math.max(multiple, RICH_LIMITS.size.min), RICH_LIMITS.size.max);
 };
 
@@ -117,7 +130,7 @@ const cleanText = (value: string): string =>
 
 const clampSize = (value: unknown): number | undefined => {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
-  const rounded = Math.round(value * 100) / 100;
+  const rounded = round(value);
   if (rounded === 1) return undefined; // the default carries no information
   return Math.min(Math.max(rounded, RICH_LIMITS.size.min), RICH_LIMITS.size.max);
 };

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_FONTS } from "./fonts";
-import { activeSpanMark, applyDocToElement, docFromElement, markSpan } from "./rich-dom";
+import {
+  activeSpanMark,
+  applyDocToElement,
+  applySpanMark,
+  clearSizeMarks,
+  docFromElement,
+  markSpan,
+  rebaseSizeStyle,
+} from "./rich-dom";
 import { docToPlain, type RichDoc } from "./rich-text";
 
 const editable = (html: string): HTMLElement => {
@@ -237,5 +245,177 @@ describe("applyDocToElement", () => {
     const el = document.createElement("div");
     applyDocToElement(el, [[{ text: "a" }], [], [{ text: "b" }]], BUILT_IN_FONTS);
     expect(el.children[1].innerHTML).toBe("<br>");
+  });
+});
+
+/*
+  The model flattens and the DOM does not, and these two functions are what
+  reconciles them.
+
+  A run's size is a multiple of the *box*. `marksOf` reads only the innermost
+  mark, so nesting cannot change what is stored — but the style is `em`, which
+  multiplies. Applying 30pt inside a half-size run therefore painted half of
+  30 while storing the full multiple, so the editor and the saved document
+  disagreed and every further adjustment drifted from the last.
+*/
+describe("size marks do not compound", () => {
+  const rooted = (html: string): HTMLElement => {
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    return root;
+  };
+
+  it("drops the size marks inside a span, style and attribute together", () => {
+    const root = rooted(
+      '<div><span data-rt-size="2" style="font-size: 2em">' +
+        '<span data-rt-size="0.5" style="font-size: 0.5em">x</span>' +
+        "</span></div>",
+    );
+    const outer = root.querySelector<HTMLElement>("[data-rt-size]")!;
+    clearSizeMarks(outer);
+
+    expect(root.querySelectorAll("[data-rt-size]")).toHaveLength(1);
+    expect(outer.getAttribute("data-rt-size")).toBe("2");
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([[{ text: "x", size: 2 }]]);
+  });
+
+  it("leaves colour and face alone, which do not multiply", () => {
+    const root = rooted(
+      '<div><span data-rt-size="2"><span data-rt-colour="#aabbcc">x</span></span></div>',
+    );
+    clearSizeMarks(root.querySelector<HTMLElement>("[data-rt-size]")!);
+    expect(root.querySelector("[data-rt-colour]")).not.toBeNull();
+  });
+
+  it("divides the style by what the span nests inside, keeping the attribute true", () => {
+    const root = rooted('<div><span data-rt-size="0.5" style="font-size: 0.5em"></span></div>');
+    const parent = root.querySelector<HTMLElement>("[data-rt-size]")!;
+    const span = markSpan({ size: 1.5 }, BUILT_IN_FONTS);
+    span.textContent = "x";
+    parent.appendChild(span);
+
+    rebaseSizeStyle(span, 1.5, root);
+
+    // 1.5 of the box, sitting inside half of it, is three times its parent.
+    expect(span.style.fontSize).toBe("3em");
+    expect(span.getAttribute("data-rt-size")).toBe("1.5");
+  });
+
+  it("leaves the style alone when the span is a direct child of the box", () => {
+    const root = rooted("<div></div>");
+    const span = markSpan({ size: 1.5 }, BUILT_IN_FONTS);
+    span.textContent = "x";
+    root.firstElementChild!.appendChild(span);
+
+    rebaseSizeStyle(span, 1.5, root);
+    expect(span.style.fontSize).toBe("1.5em");
+  });
+
+  it("does nothing when no size is being applied", () => {
+    const root = rooted("<div></div>");
+    const span = markSpan({ colour: "#aabbcc" }, BUILT_IN_FONTS);
+    root.firstElementChild!.appendChild(span);
+    rebaseSizeStyle(span, undefined, root);
+    expect(span.style.fontSize).toBe("");
+  });
+});
+
+/*
+  The whole path, driven through a live selection rather than through its
+  parts, because every previous failure here was in the wiring.
+
+  The size the panel reports and the size the editor paints have to be the same
+  number, and stay the same number when the artist changes her mind — which is
+  what the old spinner could not manage.
+*/
+describe("applySpanMark", () => {
+  const mounted = (html: string): HTMLElement => {
+    document.body.innerHTML = "";
+    const root = document.createElement("div");
+    root.innerHTML = html;
+    document.body.appendChild(root);
+    return root;
+  };
+
+  /** Selects the text of the first element matching, as clicking a word would. */
+  const select = (root: HTMLElement, selector: string) => {
+    const range = document.createRange();
+    range.selectNodeContents(root.querySelector(selector) ?? root);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  /** The innermost size mark — the one the model reads back. */
+  const marked = (root: HTMLElement): Element => {
+    const all = root.querySelectorAll("[data-rt-size]");
+    return all[all.length - 1];
+  };
+
+  /** What the browser actually paints, walking the `em` chain to the box. */
+  const paintedSize = (node: Element, root: HTMLElement): number => {
+    let painted = 1;
+    let el: Element | null = node;
+    while (el && el !== root) {
+      const size = (el as HTMLElement).style.fontSize;
+      if (size.endsWith("em")) painted *= Number(size.slice(0, -2));
+      el = el.parentElement;
+    }
+    return painted;
+  };
+
+  it("paints the size it stores, inside a run that already had one", () => {
+    const root = mounted(
+      '<div><span data-rt-size="0.5" style="font-size: 0.5em">word</span></div>',
+    );
+    select(root, "span");
+
+    applySpanMark({ size: 1.5 }, BUILT_IN_FONTS, root);
+
+    const doc = docFromElement(root, BUILT_IN_FONTS);
+    expect(doc).toEqual([[{ text: "word", size: 1.5 }]]);
+    expect(paintedSize(marked(root), root)).toBeCloseTo(1.5, 5);
+  });
+
+  /*
+    The regression the artist reported as the size moving on its own. Changing
+    her mind twice used to multiply rather than replace, so a size she had
+    already used came back as something else.
+  */
+  it("lands back on the same size when she changes her mind twice", () => {
+    const root = mounted("<div>word</div>");
+
+    for (const size of [1.3, 0.5, 1.3]) {
+      select(root, "div");
+      applySpanMark({ size }, BUILT_IN_FONTS, root);
+    }
+
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([[{ text: "word", size: 1.3 }]]);
+    expect(paintedSize(marked(root), root)).toBeCloseTo(1.3, 5);
+  });
+
+  it("arms a collapsed caret without compounding what it sits in", () => {
+    const root = mounted(
+      '<div><span data-rt-size="0.5" style="font-size: 0.5em">word</span></div>',
+    );
+    const text = root.querySelector("span")!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 2);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    applySpanMark({ size: 2 }, BUILT_IN_FONTS, root);
+
+    const armed = root.querySelector('[data-rt-size="2"]')!;
+    expect(paintedSize(armed, root)).toBeCloseTo(2, 5);
+  });
+
+  it("leaves a colour or face alone, which have no arithmetic to get wrong", () => {
+    const root = mounted("<div>word</div>");
+    select(root, "div");
+    applySpanMark({ colour: "#aabbcc" }, BUILT_IN_FONTS, root);
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([[{ text: "word", colour: "#aabbcc" }]]);
   });
 });
