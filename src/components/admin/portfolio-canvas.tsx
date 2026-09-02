@@ -109,6 +109,16 @@ type GroupDrag = {
 const DRAG_THRESHOLD_PX = 4;
 
 /**
+ * Half the group handle's hit box, in pixels.
+ *
+ * The handle is centred on the corner of the selection, so this is how far its
+ * centre must stay from the edge of the canvas for the whole of it to remain
+ * inside — which matters because the canvas clips and a selection may bleed
+ * past it.
+ */
+const HANDLE_INSET = 14;
+
+/**
  * How long a touch must be held to stand in for a right-click.
  *
  * iPadOS has no right-click, and the artist works on a tablet, so without this
@@ -1133,25 +1143,32 @@ export function PortfolioCanvas({
 
         {selectionBounds && (
           /*
-            The handle is a sibling of the box rather than a corner of it, and
-            its position is clamped to the canvas. Work is allowed to bleed
-            past the wall's edges — the layout clamps run to -25% and 125% —
-            and the canvas clips, so a handle hung off the true corner of the
-            selection was simply not there whenever the artist had selected
-            something that bled. It scales from the real bounds either way.
+            The handle is a sibling of the box rather than a corner of it, so
+            that it can be clamped: work is allowed to bleed past the wall's
+            edges — the layout clamps run to -25% and 125% — and the canvas
+            clips, so a handle hung off the true corner of the selection was
+            simply not there whenever the artist had selected something that
+            bled. It scales from the real bounds either way.
+
+            It sits centred on the corner. The clamp is expressed in CSS
+            rather than in the percentages, because what has to stay inside the
+            canvas is the handle's own 28px box and only CSS knows both units
+            at once — `HANDLE_INSET` is half of it. Clamping the percentage
+            alone would put the corner on the edge and leave half the handle
+            outside it.
           */
           <div
             role="button"
             tabIndex={-1}
             aria-label="Resize the selection"
             onPointerDown={(e) => beginGroup(e, "scale")}
-            className="absolute z-[9000] h-7 w-7 -translate-x-full -translate-y-full cursor-nwse-resize touch-none"
+            className="absolute z-[9000] h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize touch-none"
             style={{
-              left: `${Math.min(Math.max(selectionBounds.x + selectionBounds.width, 0), 100)}%`,
-              top: `${(Math.min(Math.max(selectionBounds.y + selectionBounds.height, 0), ratio) / ratio) * 100}%`,
+              left: `min(max(${selectionBounds.x + selectionBounds.width}%, ${HANDLE_INSET}px), calc(100% - ${HANDLE_INSET}px))`,
+              top: `min(max(${((selectionBounds.y + selectionBounds.height) / ratio) * 100}%, ${HANDLE_INSET}px), calc(100% - ${HANDLE_INSET}px))`,
             }}
           >
-            <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
+            <span className="bg-accent border-paper absolute inset-0 m-auto block h-5 w-5 border-2" />
           </div>
         )}
 
