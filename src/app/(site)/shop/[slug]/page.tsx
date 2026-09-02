@@ -7,6 +7,8 @@ import { BuyPanel } from "@/components/buy-panel";
 import { getArtworkBySlug, getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { primaryImage, soleListing } from "@/lib/artworks";
+import { JsonLd } from "@/components/json-ld";
+import { absoluteUrl, visualArtworkJsonLd } from "@/lib/seo";
 import { SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -46,23 +48,19 @@ export default async function ArtworkPage({ params }: Props) {
 
   // VisualArtwork only. No Product/Offer markup: we are not the seller, and
   // claiming an offer we cannot fulfil risks a structured-data penalty (N-03).
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "VisualArtwork",
+  const cover = primaryImage(artwork);
+  const jsonLd = visualArtworkJsonLd({
     name: artwork.title,
+    path: `/shop/${artwork.slug}`,
+    creatorName: settings.siteName || DEFAULT_SITE_NAME,
     artform: artwork.medium,
     dateCreated: String(artwork.year),
-    creator: { "@type": "Person", name: settings.siteName || DEFAULT_SITE_NAME },
-    ...(primaryImage(artwork) ? { image: `${SITE_URL}${primaryImage(artwork)!.src}` } : {}),
-    url: `${SITE_URL}/shop/${artwork.slug}`,
-  };
+    imageUrl: cover ? absoluteUrl(cover.src) : null,
+  });
 
   return (
     <Container>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd nodes={[jsonLd]} />
 
       <Link
         href="/shop"

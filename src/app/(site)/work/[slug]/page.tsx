@@ -8,6 +8,8 @@ import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
+import { JsonLd } from "@/components/json-ld";
+import { absoluteUrl, visualArtworkJsonLd } from "@/lib/seo";
 import { SITE_URL } from "@/lib/site";
 import type { WallScope } from "@/lib/portfolio";
 import { getSitePageById } from "@/lib/site-pages-queries";
@@ -71,21 +73,16 @@ export default async function PortfolioItemPage({ params }: Props) {
 
   // VisualArtwork only. No Product/Offer markup: nothing here is for sale.
   const cover = item.images[0];
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "VisualArtwork",
+  const jsonLd = visualArtworkJsonLd({
     name: item.name || slug,
-    creator: { "@type": "Person", name: settings.siteName || DEFAULT_SITE_NAME },
-    ...(cover ? { image: `${SITE_URL}${cover.src}` } : {}),
-    url: `${SITE_URL}/work/${item.slug}`,
-  };
+    path: `/work/${item.slug}`,
+    creatorName: settings.siteName || DEFAULT_SITE_NAME,
+    imageUrl: cover ? absoluteUrl(cover.src) : null,
+  });
 
   return (
     <Container>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd nodes={[jsonLd]} />
 
       <Link href={back.href} className="text-graphite hover:text-accent mb-8 inline-block text-sm">
         ← {back.label}
