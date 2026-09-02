@@ -9,7 +9,14 @@ import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
 import { JsonLd } from "@/components/json-ld";
-import { absoluteUrl, visualArtworkJsonLd } from "@/lib/seo";
+import {
+  absoluteUrl,
+  metaDescription,
+  siteOpenGraph,
+  siteTwitter,
+  socialImage,
+  visualArtworkJsonLd,
+} from "@/lib/seo";
 import { SITE_URL } from "@/lib/site";
 import type { WallScope } from "@/lib/portfolio";
 import { getSitePageById } from "@/lib/site-pages-queries";
@@ -22,19 +29,34 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const item = await getPortfolioItemBySlug(slug);
+  const [item, settings] = await Promise.all([getPortfolioItemBySlug(slug), getSiteSettings()]);
   if (!item) return {};
 
+  const siteName = settings.siteName || DEFAULT_SITE_NAME;
+  const title = item.name || "Work";
+  const description = metaDescription(item.information);
   const cover = item.images[0];
+  const { image, card } = socialImage({
+    siteName,
+    page: cover ?? null,
+    faviconKey: settings.faviconKey,
+  });
+
   return {
-    title: item.name || "Work",
-    description: item.information.slice(0, 200),
+    title,
+    ...(description ? { description } : {}),
     alternates: { canonical: `${SITE_URL}/work/${item.slug}` },
-    openGraph: {
-      title: item.name || "Work",
-      description: item.information.slice(0, 200),
-      ...(cover ? { images: [{ url: cover.src }] } : {}),
-    },
+    // Built here rather than declared inline: a page's openGraph replaces the
+    // layout's outright, so anything this object omits is simply gone.
+    openGraph: siteOpenGraph({
+      title,
+      description,
+      path: `/work/${item.slug}`,
+      siteName,
+      image,
+      type: "article",
+    }),
+    twitter: siteTwitter({ title, description, image, card }),
   };
 }
 

@@ -8,7 +8,14 @@ import { getArtworkBySlug, getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { primaryImage, soleListing } from "@/lib/artworks";
 import { JsonLd } from "@/components/json-ld";
-import { absoluteUrl, visualArtworkJsonLd } from "@/lib/seo";
+import {
+  absoluteUrl,
+  metaDescription,
+  siteOpenGraph,
+  siteTwitter,
+  socialImage,
+  visualArtworkJsonLd,
+} from "@/lib/seo";
 import { SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -20,20 +27,31 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const artwork = await getArtworkBySlug(slug);
+  const [artwork, settings] = await Promise.all([getArtworkBySlug(slug), getSiteSettings()]);
   if (!artwork) return {};
 
-  const image = primaryImage(artwork);
+  const siteName = settings.siteName || DEFAULT_SITE_NAME;
+  const description = metaDescription(artwork.description);
+  const cover = primaryImage(artwork);
+  const { image, card } = socialImage({
+    siteName,
+    page: cover ?? null,
+    faviconKey: settings.faviconKey,
+  });
 
   return {
     title: artwork.title,
-    description: artwork.description,
+    ...(description ? { description } : {}),
     alternates: { canonical: `${SITE_URL}/shop/${artwork.slug}` },
-    openGraph: {
+    openGraph: siteOpenGraph({
       title: artwork.title,
-      description: artwork.description,
-      ...(image ? { images: [{ url: image.src }] } : {}),
-    },
+      description,
+      path: `/shop/${artwork.slug}`,
+      siteName,
+      image,
+      type: "article",
+    }),
+    twitter: siteTwitter({ title: artwork.title, description, image, card }),
   };
 }
 

@@ -4,6 +4,7 @@ import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_ACCENT, judgeAccent, normaliseHex } from "@/lib/colour";
 import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { fontFaceCss } from "@/lib/fonts";
+import { siteOpenGraph, siteTwitter, socialImage } from "@/lib/seo";
 import { getSiteFonts } from "@/lib/site-settings";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -57,11 +58,30 @@ const caveat = Caveat({
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   const name = settings.siteName || DEFAULT_SITE_NAME;
+  const description = `Illustrated maps, editorial spreads and sequences by ${name}. Selected prints available.`;
+  const { image, card } = socialImage({ siteName: name, faviconKey: settings.faviconKey });
 
   return {
     metadataBase: new URL(SITE_URL),
     title: { default: `${name} — illustration`, template: `%s · ${name}` },
-    description: `Illustrated maps, editorial spreads and sequences by ${name}. Selected prints available.`,
+    description,
+    /*
+      Relative on purpose, and it must stay relative.
+
+      Next merges a page's metadata over the layout's by replacing whole keys,
+      so an absolute canonical here would be inherited verbatim by every page
+      that does not set its own — stamping the home page's address on /about and
+      /privacy and telling Google they are duplicates of it. A "./" is resolved
+      against the request's own pathname instead (resolveRelativeUrl in Next's
+      metadata resolver), so each page self-canonicalises and "/" comes out as
+      the bare origin.
+    */
+    alternates: { canonical: "./" },
+    authors: [{ name, url: SITE_URL }],
+    creator: name,
+    publisher: name,
+    openGraph: siteOpenGraph({ description, path: "/", siteName: name, image }),
+    twitter: siteTwitter({ description, image, card }),
     icons: { icon: settings.faviconKey ? `/media/${settings.faviconKey}` : "/icon.svg" },
   };
 }

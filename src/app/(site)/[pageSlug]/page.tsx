@@ -5,8 +5,10 @@ import { PortfolioWall } from "@/components/portfolio-wall";
 import { getPublishedWall, getWallTexts } from "@/lib/portfolio-queries";
 import { getPublishedSitePageBySlug } from "@/lib/site-pages-queries";
 import { getSiteSettings } from "@/lib/catalogue";
+import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { mergeFonts } from "@/lib/fonts";
 import type { WallScope } from "@/lib/portfolio";
+import { siteOpenGraph, siteTwitter, socialImage } from "@/lib/seo";
 import { getSiteFonts } from "@/lib/site-settings";
 import { SITE_URL } from "@/lib/site";
 
@@ -27,13 +29,23 @@ type Props = { params: Promise<{ pageSlug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { pageSlug } = await params;
-  const page = await getPublishedSitePageBySlug(pageSlug);
+  const [page, settings] = await Promise.all([
+    getPublishedSitePageBySlug(pageSlug),
+    getSiteSettings(),
+  ]);
   if (!page) return {};
+
+  const siteName = settings.siteName || DEFAULT_SITE_NAME;
+  const { image, card } = socialImage({ siteName, faviconKey: settings.faviconKey });
 
   return {
     title: page.title,
     alternates: { canonical: `${SITE_URL}/${page.slug}` },
-    openGraph: { title: page.title },
+    // `{ title }` alone used to be enough. It is not any more: a page's
+    // openGraph replaces the layout's whole block, so declaring one key here
+    // would drop the site name, the locale, the type and the card image.
+    openGraph: siteOpenGraph({ title: page.title, path: `/${page.slug}`, siteName, image }),
+    twitter: siteTwitter({ title: page.title, image, card }),
   };
 }
 
