@@ -1,6 +1,6 @@
 # Project Brief / PRD — Artist Portfolio Site
 
-Status: **Draft v0.3** · Owner: James Maxwell · Last updated: 2026-08-31
+Status: **Draft v0.4** · Owner: James Maxwell · Last updated: 2026-09-02
 
 > Changed in v0.2: on-site checkout removed. The site is a portfolio that links out to
 > the artist's Etsy shop. Rationale and the fee trade-off are in §13; §17 covers bringing
@@ -8,6 +8,11 @@ Status: **Draft v0.3** · Owner: James Maxwell · Last updated: 2026-08-31
 >
 > Changed in v0.3: **Cloudflare free tier confirmed** as the hosting decision (§11).
 > **Etsy shop confirmed** — the artist is creating it now, unblocking Phase 3 (§15 Q1).
+>
+> Changed in v0.4: **the artist does not use an iPad.** She works at a desktop
+> computer, with a mouse and a keyboard. The tablet was an assumption in v0.1 and it was
+> wrong; §4, J3, A-02 and A-12 are corrected, and touch is no longer a design target for
+> the admin. Nothing changes for visitors, who are still mostly on a phone.
 
 ---
 
@@ -22,8 +27,8 @@ Three design principles, in priority order when they conflict:
 
 1. **Send visitors to Etsy ready to buy.** The site's job is desire and trust; Etsy's job
    is the transaction. The handoff must be obvious and never feel like a dead end.
-2. **Self-serve.** The artist can add, remove and rearrange artwork herself, from her
-   phone, without a developer and without breaking the design.
+2. **Self-serve.** The artist can add, remove and rearrange artwork herself, at her own
+   computer, without a developer and without breaking the design.
 3. **Cheap to run.** Target fixed cost of **under £2/month**. No platform subscription.
 
 The site holds no money, no customer data, and no orders. That is the point.
@@ -56,9 +61,11 @@ Explicitly out of scope. Listed so they don't creep in.
 mobile. Wants to look at big images without friction. Will follow a clear "Buy on Etsy"
 link, but will bounce if the link is broken or the price is a surprise.
 
-**The artist (admin).** Non-technical, on an iPad or phone. Wants to upload a batch of
-photos, drag them into an order she likes, paste an Etsy link, and get back to painting.
-Must not be able to accidentally destroy the site.
+**The artist (admin).** Non-technical, at a desktop computer with a mouse and a keyboard.
+Wants to upload a batch of photos, drag them into an order she likes, paste an Etsy link,
+and get back to painting. Must not be able to accidentally destroy the site. She does not
+use a tablet — the admin is designed for a pointer, so modifier keys and right-click are
+available and a gesture does not have to survive a finger.
 
 **Developer (us).** Maintains it occasionally. Optimises for a codebase that can sit
 untouched for six months and still deploy.
@@ -74,7 +81,8 @@ seconds.
 
 **J3 — Artist rearranges the gallery.** Arrange view → drags thumbnails into a new order →
 autosaves. This is the artist's most-used feature after uploading and must be genuinely
-pleasant on touch.
+pleasant with a mouse — including on several pieces at once, which is what a rectangle
+dragged over them, or shift-clicking them, is for.
 
 **J4 — A piece sells out.** Artist toggles the artwork to "Sold" in the admin. The page
 stays live, the buy button is replaced by a sold state and an enquiry link.
@@ -128,13 +136,14 @@ Plus the minimum to manage links.
 
 - A-01 **Auth:** passwordless magic link to a single allowlisted email address. No public
   signup route exists. Session cookie, httpOnly, 30-day expiry.
-- A-02 **Upload:** multi-file drag-and-drop, and camera-roll picking on mobile. Files go
+- A-02 **Upload:** multi-file drag-and-drop from the desktop. Files go
   **direct to object storage via a presigned URL** — never through the serverless function.
   Client-side downscale before upload so a 60MB TIFF doesn't stall on mobile data.
 - A-03 On upload, derive responsive sizes and an LQIP blur placeholder. Original is retained.
 - A-04 **Alt text is required** to publish, pre-filled with a sensible default from the title.
 - A-05 **Arrange view:** drag to reorder artworks in the gallery, and images within an
-  artwork. Touch-first, large hit areas, autosave indicator. The headline admin feature.
+  artwork, one at a time or several together — selected by dragging a rectangle over them
+  or by shift-clicking. Autosave indicator. The headline admin feature.
 - A-06 Set featured / set hero image from the same view.
 - A-07 Delete = **archive** (soft delete), with hard delete available afterwards. Archived
   work stays reachable at its URL.
@@ -145,7 +154,8 @@ Plus the minimum to manage links.
   seconds without a redeploy.
 - A-11 **Link health check:** a dashboard panel flagging listings whose Etsy URL last
   returned a non-200, so dead links surface before a customer finds them (§9).
-- A-12 The whole admin must be usable one-handed on a phone.
+- A-12 The admin targets a desktop browser. It need not work one-handed, on a phone or on
+  a tablet, and a feature must not be compromised to keep a touch gesture available.
 
 ## 9. The Etsy link layer
 
@@ -298,7 +308,7 @@ actually enjoys using this.
 | Customers lost at the handoff                     | Track outbound clicks (P-11) so the drop-off is measurable rather than assumed                      |
 | Etsy suspends the shop or raises fees             | Site is unaffected structurally; §17 is the exit route, and the data model already supports it      |
 | We own no customer relationship                   | Accepted for v1; owned mailing list is the mitigation (P-12)                                        |
-| Artist uploads 60MB files on mobile data          | Client-side downscale, size cap, clear progress UI (A-02)                                           |
+| Artist uploads 60MB files straight off a camera   | Client-side downscale, size cap, clear progress UI (A-02)                                           |
 | Artist finds the admin awkward and stops using it | Phase 2 ships early for real hands-on feedback                                                      |
 
 ## 17. Reversibility — bringing checkout in-house later
