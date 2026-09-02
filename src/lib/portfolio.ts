@@ -326,7 +326,7 @@ export const aspectOf = (item: PortfolioItem): number => {
  * Derived from the arrangement rather than stored separately, so the artist
  * never has to maintain a second ordering that can drift out of step.
  */
-export const inReadingOrder = (items: PortfolioItem[]): PortfolioItem[] =>
+export const inReadingOrder = <T extends { x: number; y: number }>(items: T[]): T[] =>
   [...items].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y));
 
 /**

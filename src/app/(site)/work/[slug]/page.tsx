@@ -124,6 +124,7 @@ export default async function PortfolioItemPage({ params }: Props) {
           showNamesOnHover={settings.showNamesOnHover}
           fadeIn={settings.contentFadeIn}
           fonts={mergeFonts(fonts)}
+          heading={item.name || undefined}
         />
       </div>
     </Container>

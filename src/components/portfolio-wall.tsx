@@ -134,10 +134,20 @@ export function PortfolioWall({
   showNamesOnHover,
   fadeIn = false,
   fonts = BUILT_IN_FONTS,
+  heading,
 }: {
   items: PortfolioItem[];
   texts: WallText[];
   showNamesOnHover: boolean;
+  /**
+   * The heading to fall back on when the artist has written no text.
+   *
+   * The largest text box becomes the page's `<h1>`, which is right while there
+   * is one — but a wall of pictures and no words leaves the page with no
+   * heading at all, and the home page is the one that has to be found by the
+   * artist's name. Rendered out of sight, so her arrangement is untouched.
+   */
+  heading?: string;
   /** Site only. The editor never fades, or the artist could not see her work. */
   fadeIn?: boolean;
   /**
@@ -198,6 +208,8 @@ export function PortfolioWall({
 
   return (
     <div className="wall" style={{ "--ratio": ratio } as WallVars}>
+      {headingId === null && heading && <h1 className="sr-only">{heading}</h1>}
+
       {texts.map((text) => {
         const Tag = text.id === headingId ? "h1" : "p";
         return (

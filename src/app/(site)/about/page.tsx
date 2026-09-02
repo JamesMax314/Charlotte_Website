@@ -4,20 +4,35 @@ import { Container } from "@/components/container";
 import { DrawnRule } from "@/components/drawn-rule";
 import { RichTextBlocks } from "@/components/rich-text";
 import { mergeFonts } from "@/lib/fonts";
-import { copyDoc } from "@/lib/rich-text";
+import { copyDoc, docToPlain } from "@/lib/rich-text";
 import { getSiteFonts } from "@/lib/site-settings";
 import { Mark } from "@/components/mark";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_ABOUT_COPY, DEFAULT_CONTACT_COPY } from "@/lib/default-copy";
+import { metaDescription } from "@/lib/seo";
 
 // The root layout's header and footer read site settings from D1, so this page
 // cannot be prerendered without baking in stale settings.
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "About",
-  description: "About the artist, how the prints are made, and how to get in touch.",
-};
+/**
+ * Her own words, not a fixed sentence about prints.
+ *
+ * /about is the second page a search for the artist's name lands on, so the
+ * description should be the copy she actually wrote — which is exactly the use
+ * `docToPlain` exists for. The old string stays as the last resort.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSiteSettings();
+  const copy = docToPlain(copyDoc(settings.aboutRich, settings.aboutCopy, DEFAULT_ABOUT_COPY));
+
+  return {
+    title: "About",
+    description:
+      metaDescription(copy) ||
+      "About the artist, how the prints are made, and how to get in touch.",
+  };
+}
 
 export default async function AboutPage() {
   const settings = await getSiteSettings();
