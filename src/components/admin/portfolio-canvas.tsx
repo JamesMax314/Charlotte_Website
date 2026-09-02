@@ -22,14 +22,29 @@ import {
   snapResize,
   snapResizeFree,
   type Guides,
+  type Rect,
 } from "@/lib/snap";
+import {
+  alignSelection,
+  boundsOf,
+  caughtBy,
+  distributeSelection,
+  marqueeRect,
+  moveSelection,
+  scaleFactorFor,
+  scaleSelection,
+  snapScaleFactor,
+  type SelectedElement,
+} from "@/lib/selection";
 import {
   createPortfolioItemDraft,
   createWallText,
   deletePortfolioItem,
+  deleteWallSelection,
   deleteWallText,
   savePortfolioItemDetails,
   savePortfolioLayout,
+  saveWallLayouts,
   saveWallTextLayout,
   updateWallText,
 } from "@/app/admin/portfolio-actions";
@@ -40,6 +55,7 @@ import { useAction } from "./use-action";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImageDialog, type ImageDetails } from "./image-dialog";
+import { SelectionToolbar } from "./selection-toolbar";
 import { uploadImage } from "@/lib/client-upload";
 
 /**
@@ -68,6 +84,25 @@ type Drag = {
   moved: boolean;
   latest: { x: number; y: number; width: number; height: number };
   guides: Guides;
+};
+
+/**
+ * A move or scale of a whole selection.
+ *
+ * `start` is the selection as it stood when the gesture began, and every frame
+ * is computed from it rather than from the frame before. That is what lets an
+ * element clamp at a limit and come back unharmed when the artist scales the
+ * other way — an incremental sum would have lost the difference for good.
+ */
+type GroupDrag = {
+  mode: "move" | "scale";
+  pointerX: number;
+  pointerY: number;
+  start: SelectedElement[];
+  bounds: Rect;
+  guides: Guides;
+  moved: boolean;
+  latest: SelectedElement[];
 };
 
 /** Below this, a pointer gesture is a tap (select or open), not a drag. */
@@ -127,6 +162,19 @@ export function PortfolioCanvas({
   const [menu, setMenu] = useState<Menu | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
+  /**
+   * The multi-selection.
+   *
+   * Bare ids, with no note of which table they came from: pieces and text
+   * boxes are picked and moved as one body, and the two sets of ids are UUIDs
+   * that cannot collide. Which kind an id is is answered by looking it up,
+   * once, in `elements` below.
+   */
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  /** The rubber band while it is being drawn, in canvas percentages. */
+  const [marquee, setMarquee] = useState<Rect | null>(null);
+  const [pendingGroupDelete, setPendingGroupDelete] = useState<SelectedElement[] | null>(null);
+
   /** The details dialog, and the file input that feeds it. */
   const [dialog, setDialog] = useState<{
     id: string;
@@ -146,6 +194,7 @@ export function PortfolioCanvas({
    * treated the drag as a tap.
    */
   const dragRef = useRef<Drag | null>(null);
+  const groupRef = useRef<GroupDrag | null>(null);
   const teardownRef = useRef<(() => void) | null>(null);
   useEffect(() => () => teardownRef.current?.(), []);
 
@@ -168,6 +217,253 @@ export function PortfolioCanvas({
     const width = canvasRef.current?.offsetWidth ?? 1;
     return (px / width) * 100;
   }, []);
+
+  /**
+   * Both kinds of wall element in one list, in the shape the group maths wants.
+   *
+   * A piece's height is derived here rather than stored, exactly as the public
+   * wall derives it, so a selection spanning artwork and text has one geometry
+   * and not two.
+   */
+  const elements: SelectedElement[] = [
+    ...items.map((item) => ({
+      kind: "item" as const,
+      id: item.id,
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.width * aspectOf(item),
+    })),
+    ...texts.map((text) => ({
+      kind: "text" as const,
+      id: text.id,
+      x: text.x,
+      y: text.y,
+      width: text.width,
+      height: text.height,
+      fontSize: text.fontSize,
+    })),
+  ];
+  const selectedElements = elements.filter((element) => selectedIds.has(element.id));
+  // One element selected is not a group: it keeps the single-element handle and
+  // the tap that opens it. The bar and the group handle need two.
+  const isGroup = selectedElements.length > 1;
+  const selectionBounds = isGroup ? boundsOf(selectedElements) : null;
+
+  /** Writes a group result into the optimistic copies the canvas renders. */
+  const applyElements = (next: SelectedElement[]) => {
+    const byId = new Map(next.map((element) => [element.id, element]));
+    setItems((current) =>
+      current.map((item) => {
+        const moved = byId.get(item.id);
+        // Height is never stored — it comes from the cover image — so a piece
+        // takes only the three fields the wall actually keeps.
+        return moved ? { ...item, x: moved.x, y: moved.y, width: moved.width } : item;
+      }),
+    );
+    setTexts((current) =>
+      current.map((text) => {
+        const moved = byId.get(text.id);
+        return moved
+          ? {
+              ...text,
+              x: moved.x,
+              y: moved.y,
+              width: moved.width,
+              height: moved.height,
+              fontSize: moved.fontSize ?? text.fontSize,
+            }
+          : text;
+      }),
+    );
+  };
+
+  /** Commits a group result: one round trip for the whole selection. */
+  const saveElements = (next: SelectedElement[]) => {
+    setSaving(true);
+    run(
+      saveWallLayouts({
+        items: next
+          .filter((element) => element.kind === "item")
+          .map(({ id, x, y, width }) => ({ id, x, y, width })),
+        texts: next.flatMap((element) =>
+          element.kind === "text" && element.fontSize !== undefined
+            ? [
+                {
+                  id: element.id,
+                  x: element.x,
+                  y: element.y,
+                  width: element.width,
+                  height: element.height,
+                  fontSize: element.fontSize,
+                },
+              ]
+            : [],
+        ),
+      }).finally(() => setSaving(false)),
+      "Saving the arrangement",
+    );
+  };
+
+  const applyAndSave = (next: SelectedElement[]) => {
+    applyElements(next);
+    saveElements(next);
+  };
+
+  /**
+   * Window-level pointer tracking for one gesture.
+   *
+   * Attached synchronously by the caller, never from an effect: an effect runs
+   * after the next render, which dropped the opening moves of a fast gesture
+   * and made dragging appear dead. `teardownRef` holds the listener removal
+   * alone, so a long-press can abandon a gesture without running its `onUp`.
+   */
+  const trackPointer = (onMove: (event: PointerEvent) => void, onUp: () => void) => {
+    const finish = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      teardownRef.current = null;
+    };
+    const handleUp = () => {
+      finish();
+      onUp();
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    teardownRef.current = finish;
+  };
+
+  /**
+   * Moves or scales the whole selection.
+   *
+   * Snapping is applied to the selection's bounding box and the resulting
+   * delta handed to every member, rather than each member snapping for itself:
+   * a group where each element found its own guide would arrive rearranged.
+   */
+  const beginGroup = (event: React.PointerEvent, mode: GroupDrag["mode"]) => {
+    if (event.button !== 0) return;
+    const bounds = boundsOf(selectedElements);
+    if (!bounds) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    cancelLongPress();
+
+    const group: GroupDrag = {
+      mode,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      start: selectedElements,
+      bounds,
+      // Guides come from what is *not* selected. A member snapping to another
+      // member would fight the gesture and pull the group apart.
+      guides: collectGuides(
+        elements
+          .filter((element) => !selectedIds.has(element.id))
+          .map(({ x, y, width, height }) => ({ x, y, width, height })),
+        ratio,
+        gutter,
+      ),
+      moved: false,
+      latest: selectedElements,
+    };
+    groupRef.current = group;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const rawX = moveEvent.clientX - group.pointerX;
+      const rawY = moveEvent.clientY - group.pointerY;
+      if (!group.moved && Math.hypot(rawX, rawY) < DRAG_THRESHOLD_PX) return;
+      group.moved = true;
+
+      const dx = asPercent(rawX);
+      const dy = asPercent(rawY);
+      const snapping = snapEnabled && !moveEvent.altKey;
+
+      if (group.mode === "move") {
+        const loose = {
+          ...group.bounds,
+          x: group.bounds.x + dx,
+          y: Math.max(0, group.bounds.y + dy),
+        };
+        const snapped = snapping
+          ? snapMove(loose, group.guides)
+          : { x: loose.x, y: loose.y, vertical: null, horizontal: null };
+        group.latest = moveSelection(group.start, {
+          x: snapped.x - group.bounds.x,
+          y: Math.max(0, snapped.y) - group.bounds.y,
+        });
+        setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
+      } else {
+        const wanted = scaleFactorFor(group.bounds, { x: dx, y: dy });
+        const snapped = snapping
+          ? snapScaleFactor(group.bounds, wanted, group.guides)
+          : { factor: wanted, vertical: null, horizontal: null };
+        group.latest = scaleSelection(group.start, group.bounds, snapped.factor);
+        setShown({ vertical: snapped.vertical, horizontal: snapped.horizontal });
+      }
+
+      applyElements(group.latest);
+    };
+
+    const onUp = () => {
+      groupRef.current = null;
+      setShown({ vertical: null, horizontal: null });
+      // A press that never moved leaves the selection alone. Clicking one
+      // member of a group must not throw the rest of it away.
+      if (group.moved) saveElements(group.latest);
+    };
+
+    trackPointer(onMove, onUp);
+  };
+
+  /**
+   * Draws the rubber band over empty canvas.
+   *
+   * Mouse and pen only. A finger drag on bare canvas is how a tall wall is
+   * scrolled, and the artist works at a desktop — claiming that gesture would
+   * cost a real behaviour to add one she cannot reach without a keyboard
+   * anyway, since shift-click is the other half of this feature.
+   */
+  const beginMarquee = (event: React.PointerEvent) => {
+    if (event.button !== 0 || event.pointerType === "touch") return;
+
+    const { clientX, clientY } = event;
+    const from = pointAt(clientX, clientY);
+    // Shift adds to the selection here for the same reason it does on an
+    // element: a second sweep should be able to gather more work.
+    const additive = event.shiftKey;
+    let drawn: Rect | null = null;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (
+        !drawn &&
+        Math.hypot(moveEvent.clientX - clientX, moveEvent.clientY - clientY) < DRAG_THRESHOLD_PX
+      ) {
+        return;
+      }
+      cancelLongPress();
+      drawn = marqueeRect(from, pointAt(moveEvent.clientX, moveEvent.clientY));
+      setMarquee(drawn);
+    };
+
+    const onUp = () => {
+      setMarquee(null);
+      if (!drawn) {
+        // Never became a marquee: a plain click on bare canvas, which puts the
+        // current selection down.
+        if (!additive) setSelectedIds(new Set());
+        return;
+      }
+
+      const caught = caughtBy(elements, drawn);
+      setSelectedIds((current) => (additive ? new Set([...current, ...caught]) : new Set(caught)));
+    };
+
+    trackPointer(onMove, onUp);
+  };
 
   /*
     The optimistic copy applies the patch as typed; the action re-sanitises it
@@ -202,6 +498,37 @@ export function PortfolioCanvas({
     if (event.button !== 0) {
       event.stopPropagation();
       return;
+    }
+
+    /*
+      Shift adds an element to the selection, or takes it out again, and starts
+      nothing else. It is answered before anything below because the rest of
+      this function brings the element to the front and begins a drag, neither
+      of which a shift-click asks for.
+    */
+    if (event.shiftKey && mode === "move") {
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedTextId(null);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        if (!next.delete(element.id)) next.add(element.id);
+        return next;
+      });
+      return;
+    }
+
+    /*
+      Pressing a member of a group drags the whole group; pressing anything
+      outside it puts the selection down first, so what follows is the ordinary
+      single-element gesture it has always been.
+    */
+    if (mode === "move" && isGroup) {
+      if (selectedIds.has(element.id)) {
+        beginGroup(event, "move");
+        return;
+      }
+      setSelectedIds(new Set());
     }
 
     event.preventDefault();
@@ -446,7 +773,34 @@ export function PortfolioCanvas({
     });
   };
 
+  /**
+   * The menu for a whole selection.
+   *
+   * Right-clicking one member of a group offers what applies to the group, not
+   * what applies to the element under the pointer: "Edit details" on one of
+   * six selected pieces would be answering a question the artist did not ask.
+   */
+  const openGroupMenu = (clientX: number, clientY: number) => {
+    setMenu({
+      x: clientX,
+      y: clientY,
+      entries: [
+        {
+          label: `Delete ${selectedElements.length} items`,
+          icon: Icons.trash,
+          danger: true,
+          onSelect: () => setPendingGroupDelete(selectedElements),
+        },
+      ],
+    });
+  };
+
   const openItemMenu = (clientX: number, clientY: number, item: PortfolioItem) => {
+    if (isGroup && selectedIds.has(item.id)) {
+      openGroupMenu(clientX, clientY);
+      return;
+    }
+
     setMenu({
       x: clientX,
       y: clientY,
@@ -476,6 +830,11 @@ export function PortfolioCanvas({
   };
 
   const openTextMenu = (clientX: number, clientY: number, text: WallText) => {
+    if (isGroup && selectedIds.has(text.id)) {
+      openGroupMenu(clientX, clientY);
+      return;
+    }
+
     setMenu({
       x: clientX,
       y: clientY,
@@ -522,6 +881,20 @@ export function PortfolioCanvas({
     }, LONG_PRESS_MS);
   };
 
+  /*
+    Escape puts a selection down. Nothing else on the canvas listens for it —
+    the formatting panel's size list stops the key in the capture phase, and a
+    text box being edited and a multi-selection cannot both be open.
+  */
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedIds(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedIds]);
+
   const grip = (dragging: boolean) =>
     `absolute right-0 bottom-0 h-7 w-7 cursor-nwse-resize touch-none transition-opacity ${
       dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
@@ -532,15 +905,28 @@ export function PortfolioCanvas({
       <p className="text-graphite mb-3 h-5 text-xs" aria-live="polite">
         {saving
           ? "Saving…"
-          : snapEnabled
-            ? "Drag to move, drag the bottom-right corner to resize, tap to edit. Edges snap — hold Alt to place freely."
-            : "Drag to move, drag the bottom-right corner to resize, tap to edit."}
+          : isGroup
+            ? "Drag any of them to move the group, or its corner to scale. Shift-click to add and remove."
+            : snapEnabled
+              ? "Drag to move, drag the bottom-right corner to resize, tap to edit. Drag a box over several, or shift-click them, to work on a group. Edges snap — hold Alt to place freely."
+              : "Drag to move, drag the bottom-right corner to resize, tap to edit. Drag a box over several, or shift-click them, to work on a group."}
       </p>
+
+      {isGroup && (
+        <SelectionToolbar
+          count={selectedElements.length}
+          onAlign={(mode) => applyAndSave(alignSelection(selectedElements, mode))}
+          onDistribute={(axis) => applyAndSave(distributeSelection(selectedElements, axis))}
+          onDelete={() => setPendingGroupDelete(selectedElements)}
+          onClear={() => setSelectedIds(new Set())}
+        />
+      )}
 
       <div
         ref={canvasRef}
         onPointerDown={(e) => {
           setSelectedTextId(null);
+          beginMarquee(e);
           armLongPress(e, openCanvasMenu);
         }}
         onPointerUp={cancelLongPress}
@@ -556,6 +942,7 @@ export function PortfolioCanvas({
         {texts.map((text) => {
           const dragging = activeId === text.id;
           const selected = selectedTextId === text.id;
+          const inSelection = selectedIds.has(text.id);
 
           return (
             <div
@@ -576,7 +963,7 @@ export function PortfolioCanvas({
                     : dragging
                       ? "border-accent"
                       : "border-line/50 hover:border-accent/60"
-                }`}
+                } ${inSelection ? "shadow-[0_0_0_2px_var(--color-accent)]" : ""}`}
               >
                 {selected ? (
                   /*
@@ -622,15 +1009,18 @@ export function PortfolioCanvas({
                 )}
               </div>
 
-              <div
-                role="button"
-                tabIndex={-1}
-                aria-label="Resize text"
-                onPointerDown={(e) => begin(e, "text", text, "resize", 0, text.height)}
-                className={grip(dragging)}
-              >
-                <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
-              </div>
+              {/* A group has one handle of its own; two would compete. */}
+              {!isGroup && (
+                <div
+                  role="button"
+                  tabIndex={-1}
+                  aria-label="Resize text"
+                  onPointerDown={(e) => begin(e, "text", text, "resize", 0, text.height)}
+                  className={grip(dragging)}
+                >
+                  <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
+                </div>
+              )}
             </div>
           );
         })}
@@ -639,6 +1029,7 @@ export function PortfolioCanvas({
           const cover = coverImage(item);
           const dragging = activeId === item.id;
           const aspect = aspectOf(item);
+          const inSelection = selectedIds.has(item.id);
 
           return (
             <div
@@ -670,7 +1061,7 @@ export function PortfolioCanvas({
                 }}
                 className={`relative block w-full cursor-grab overflow-hidden border ${
                   dragging ? "border-accent shadow-xl" : "border-line/70 hover:border-accent/60"
-                }`}
+                } ${inSelection ? "shadow-[0_0_0_2px_var(--color-accent)]" : ""}`}
               >
                 {cover ? (
                   <Image
@@ -695,18 +1086,78 @@ export function PortfolioCanvas({
                 )}
               </div>
 
-              <div
-                role="button"
-                tabIndex={-1}
-                aria-label={`Resize ${item.name}`}
-                onPointerDown={(e) => begin(e, "item", item, "resize", aspect, item.width * aspect)}
-                className={grip(dragging)}
-              >
-                <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
-              </div>
+              {!isGroup && (
+                <div
+                  role="button"
+                  tabIndex={-1}
+                  aria-label={`Resize ${item.name}`}
+                  onPointerDown={(e) =>
+                    begin(e, "item", item, "resize", aspect, item.width * aspect)
+                  }
+                  className={grip(dragging)}
+                >
+                  <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
+                </div>
+              )}
             </div>
           );
         })}
+
+        {selectionBounds && (
+          /*
+            The selection's own box, above everything. Wall elements carry
+            their own z-index — some in the thousands after the heading
+            migration — so a modest number here would be painted underneath the
+            artwork it is meant to describe.
+          */
+          <div
+            className="pointer-events-none absolute z-[9000]"
+            style={{
+              left: `${selectionBounds.x}%`,
+              top: `${(selectionBounds.y / ratio) * 100}%`,
+              width: `${selectionBounds.width}%`,
+              height: `${(selectionBounds.height / ratio) * 100}%`,
+            }}
+          >
+            <div className="border-accent/70 absolute inset-0 border border-dashed" />
+          </div>
+        )}
+
+        {selectionBounds && (
+          /*
+            The handle is a sibling of the box rather than a corner of it, and
+            its position is clamped to the canvas. Work is allowed to bleed
+            past the wall's edges — the layout clamps run to -25% and 125% —
+            and the canvas clips, so a handle hung off the true corner of the
+            selection was simply not there whenever the artist had selected
+            something that bled. It scales from the real bounds either way.
+          */
+          <div
+            role="button"
+            tabIndex={-1}
+            aria-label="Resize the selection"
+            onPointerDown={(e) => beginGroup(e, "scale")}
+            className="absolute z-[9000] h-7 w-7 -translate-x-full -translate-y-full cursor-nwse-resize touch-none"
+            style={{
+              left: `${Math.min(Math.max(selectionBounds.x + selectionBounds.width, 0), 100)}%`,
+              top: `${(Math.min(Math.max(selectionBounds.y + selectionBounds.height, 0), ratio) / ratio) * 100}%`,
+            }}
+          >
+            <span className="bg-accent border-paper absolute right-0 bottom-0 block h-5 w-5 border-2" />
+          </div>
+        )}
+
+        {marquee && (
+          <div
+            className="border-accent bg-accent/10 pointer-events-none absolute z-[9000] border border-dashed"
+            style={{
+              left: `${marquee.x}%`,
+              top: `${(marquee.y / ratio) * 100}%`,
+              width: `${marquee.width}%`,
+              height: `${(marquee.height / ratio) * 100}%`,
+            }}
+          />
+        )}
 
         {shown.vertical !== null && (
           <div
@@ -775,6 +1226,31 @@ export function PortfolioCanvas({
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />
       )}
+
+      <ConfirmDialog
+        open={pendingGroupDelete !== null}
+        title={`Delete ${pendingGroupDelete?.length ?? 0} items?`}
+        body="The selected images, their photographs and the selected text will be removed for good. This cannot be undone."
+        confirmLabel="Delete"
+        onCancel={() => setPendingGroupDelete(null)}
+        onConfirm={() => {
+          const going = pendingGroupDelete;
+          setPendingGroupDelete(null);
+          if (!going) return;
+
+          const doomed = new Set(going.map((element) => element.id));
+          setItems((current) => current.filter((item) => !doomed.has(item.id)));
+          setTexts((current) => current.filter((text) => !doomed.has(text.id)));
+          setSelectedIds(new Set());
+          run(
+            deleteWallSelection({
+              items: going.filter((e) => e.kind === "item").map((e) => e.id),
+              texts: going.filter((e) => e.kind === "text").map((e) => e.id),
+            }),
+            "Deleting the selection",
+          );
+        }}
+      />
 
       <ConfirmDialog
         open={pendingDelete !== null}

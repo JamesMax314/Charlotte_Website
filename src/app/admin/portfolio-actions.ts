@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
@@ -9,7 +10,14 @@ import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { docFromPlain, docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { requireSession } from "@/lib/auth";
-import { HOME_WALL, WALL_TEXT_CQW, scopeColumns, type WallScope } from "@/lib/portfolio";
+import {
+  clampTo,
+  HOME_WALL,
+  WALL_LIMITS,
+  WALL_TEXT_CQW,
+  scopeColumns,
+  type WallScope,
+} from "@/lib/portfolio";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 
 /**
@@ -197,9 +205,9 @@ export async function savePortfolioLayout(
       // give a piece a zero width or strand it far off the wall. Overlap and a
       // little bleed past the edges are allowed on purpose — the artist asked
       // to place work freely.
-      x: Math.min(Math.max(layout.x, -25), 125),
+      x: clampTo(layout.x, WALL_LIMITS.x),
       y: Math.max(layout.y, 0),
-      width: Math.min(Math.max(layout.width, 5), 120),
+      width: clampTo(layout.width, WALL_LIMITS.width),
       ...(layout.z === undefined ? {} : { z: Math.round(layout.z) }),
       updatedAt: new Date(),
     })
@@ -358,10 +366,10 @@ export async function saveWallTextLayout(
   await db
     .update(schema.wallTexts)
     .set({
-      x: Math.min(Math.max(layout.x, -25), 125),
+      x: clampTo(layout.x, WALL_LIMITS.x),
       y: Math.max(layout.y, 0),
-      width: Math.min(Math.max(layout.width, 5), 120),
-      height: Math.min(Math.max(layout.height, 2), 200),
+      width: clampTo(layout.width, WALL_LIMITS.width),
+      height: clampTo(layout.height, WALL_LIMITS.height),
       ...(layout.z === undefined ? {} : { z: Math.round(layout.z) }),
       updatedAt: new Date(),
     })
@@ -417,5 +425,105 @@ export async function deletePortfolioImage(id: string): Promise<void> {
   await releaseMedia([rows[0]?.storageKey]);
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.id, id));
+  refresh();
+}
+
+// ---------------------------------------------------------------- selections
+
+/**
+ * Persists a group move, scale, align or distribute.
+ *
+ * One D1 round trip for the whole selection, for the reason the reorder
+ * `CASE` statement exists: a group is a set of related changes, and a dropped
+ * connection halfway through a write-per-element would leave the arrangement
+ * half moved — worse than not having moved at all, because the artist cannot
+ * see which half. `db.batch` runs the statements in a single transaction.
+ *
+ * Every field is clamped exactly as the single-element actions clamp it. This
+ * is a public endpoint like any other server action, and the browser's maths
+ * is a suggestion.
+ */
+export async function saveWallLayouts(layout: {
+  items: { id: string; x: number; y: number; width: number }[];
+  texts: { id: string; x: number; y: number; width: number; height: number; fontSize: number }[];
+}): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+  const now = new Date();
+
+  const statements: BatchItem<"sqlite">[] = [
+    ...layout.items.map((item) =>
+      db
+        .update(schema.portfolioItems)
+        .set({
+          x: clampTo(item.x, WALL_LIMITS.x),
+          y: Math.max(item.y, 0),
+          width: clampTo(item.width, WALL_LIMITS.width),
+          updatedAt: now,
+        })
+        .where(eq(schema.portfolioItems.id, item.id)),
+    ),
+    ...layout.texts.map((text) =>
+      db
+        .update(schema.wallTexts)
+        .set({
+          x: clampTo(text.x, WALL_LIMITS.x),
+          y: Math.max(text.y, 0),
+          width: clampTo(text.width, WALL_LIMITS.width),
+          height: clampTo(text.height, WALL_LIMITS.height),
+          // A group scale carries the type with the box, so this arrives on a
+          // layout save rather than only from the formatting panel.
+          fontSize: clampTo(text.fontSize, WALL_TEXT_CQW),
+          updatedAt: now,
+        })
+        .where(eq(schema.wallTexts.id, text.id)),
+    ),
+  ];
+
+  if (statements.length === 0) return;
+
+  // `batch` is typed as a non-empty tuple; the guard above is what makes this
+  // true, and there is no way to express that to TypeScript.
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+  refresh();
+}
+
+/**
+ * Deletes everything in a selection.
+ *
+ * The R2 sweep is the whole reason this cannot be a loop over
+ * `deletePortfolioItem`: each piece may own a page of its own whose elements
+ * carry objects, and those children cascade at the row level but not in the
+ * bucket. One `inArray` collects the whole family across every selected piece.
+ */
+export async function deleteWallSelection(selection: {
+  items: string[];
+  texts: string[];
+}): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  if (selection.items.length > 0) {
+    const family = await db
+      .select({ id: schema.portfolioItems.id })
+      .from(schema.portfolioItems)
+      .where(inArray(schema.portfolioItems.parentId, selection.items));
+    const ids = [...selection.items, ...family.map((f) => f.id)];
+
+    const images = await db
+      .select({ storageKey: schema.portfolioImages.storageKey })
+      .from(schema.portfolioImages)
+      .where(inArray(schema.portfolioImages.itemId, ids));
+
+    await releaseMedia(images.map((i) => i.storageKey));
+    await db
+      .delete(schema.portfolioItems)
+      .where(inArray(schema.portfolioItems.id, selection.items));
+  }
+
+  if (selection.texts.length > 0) {
+    await db.delete(schema.wallTexts).where(inArray(schema.wallTexts.id, selection.texts));
+  }
+
   refresh();
 }

@@ -395,3 +395,23 @@ export const canvasHeightRatio = (items: PortfolioItem[], texts: WallText[] = []
   // dragged down, which shifted every other piece and fought the drag.
   return Math.max(80, ...bottoms) + WALL_HEADROOM;
 };
+
+/**
+ * The bounds every wall element is held to, in canvas-width percent.
+ *
+ * These numbers were written out three times over — in the canvas as it
+ * dragged, in the layout actions as they saved, and now a fourth time in the
+ * group maths. Overlap and a little bleed past the edges are deliberate: the
+ * artist asked to place work freely. What the limits stop is a zero-width
+ * element, or one stranded so far off the wall she cannot get it back.
+ */
+export const WALL_LIMITS = {
+  x: { min: -25, max: 125 },
+  width: { min: 5, max: 120 },
+  /** Text boxes only; a piece's height follows its cover image. */
+  height: { min: 2, max: 200 },
+} as const;
+
+/** Holds `value` inside `bounds`. */
+export const clampTo = (value: number, bounds: { min: number; max: number }): number =>
+  Math.min(Math.max(value, bounds.min), bounds.max);

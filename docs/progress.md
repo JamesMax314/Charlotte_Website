@@ -29,6 +29,12 @@ The product specification is `docs/project-brief.md`.
   cycling every zoomable image on that wall. It is on by default and switched off per
   image, which is how a decorative mark stays silent.
 
+- **Work is arranged one piece at a time or several at once.** A rectangle dragged over
+  the wall, or shift-clicking, gathers images and text into a selection that moves and
+  scales as one body — type scaling with its box — and can be aligned, spaced evenly or
+  deleted together. It is the same on every free-form wall: the home page, the artist's
+  own pages, and a piece's page.
+
 - **The artist adds her own pages**, linked from the middle of the top bar behind Home.
   Each is the same free-form wall as the home page — work placed on one is clickable and
   keeps a page of its own — and the studio's top bar is the whole interface for them: drag
@@ -126,6 +132,7 @@ The product specification is `docs/project-brief.md`.
 | 26    | The size list scrolls itself to the size in force instead of asking the browser to, so opening it in the settings form no longer scrolls the page under the artist                                                                                                                                                                                               |
 | 27    | An image with nowhere to go opens full screen. Every unclickable piece on every wall is zoomable by default, in the shop's own lightbox — now one shared component — and cycles the whole wall in reading order. A new per-image toggle turns it off for a decorative mark                                                                                       |
 | 28    | Clicking beside the enlarged picture closes it — the dialog fills the viewport, so the grey a visitor takes for the backdrop is inside it. The lightbox image is eager too: `w-auto` before load is 0px, and a zero-sized element never intersects, so lazy never fired                                                                                          |
+| 29    | Multi-select on every free-form wall: a marquee or shift-click gathers images and text, and the group moves, scales — carrying its type — aligns, spaces evenly and deletes as one. Layout saves for a selection land in a single `db.batch`. The artist works at a desktop, not an iPad, which is what settled the gesture                                      |
 
 ---
 
@@ -615,11 +622,33 @@ Non-obvious decisions that the code alone does not explain.
   moved — and pointerup then read it as a tap and opened the editor behind the context
   menu.
 
-- **Long-press stands in for right-click, and is not optional.** iPadOS has no
-  right-click and the artist works on a tablet, so without the 500ms press the context
-  menu — and therefore adding anything to the wall at all — would be unreachable on her
-  main device. It cancels the moment a gesture becomes a drag, so pressing and moving
-  still repositions a piece.
+- **Superseded: long-press stands in for right-click, and is not optional.** It was
+  written when the artist was believed to work on an iPad. She does not — she works at a
+  desktop computer, with a mouse and a keyboard, and the brief is corrected at v0.4. The
+  long-press is still there and still works; it is simply no longer the only route to the
+  context menu, and no feature need be compromised to keep a touch gesture available. It
+  still cancels the moment a gesture becomes a drag.
+
+- **The marquee is mouse-and-pen only, and that is the whole answer to the touch
+  question.** A finger drag on bare canvas is how a long wall is scrolled, and the wall's
+  container deliberately has no `touch-none`. Claiming that gesture for a rubber band
+  would cost a real behaviour to add one whose other half — shift-click — needs a
+  keyboard anyway. `beginMarquee` returns on `pointerType === "touch"`, which is why the
+  page still scrolls under a finger and why nothing here needed a mode switch.
+
+- **A group's scale handle is clamped inside the canvas, and is not a corner of the
+  selection box.** Work may bleed past the wall's edges on purpose — the layout clamps run
+  to -25% and 125% — and the canvas is `overflow-hidden`, so a handle hung off the true
+  bottom-right corner is clipped away entirely whenever the artist has selected something
+  that bleeds. The failure is total and silent: the selection looks right and cannot be
+  scaled. The handle is a sibling of the dashed box, positioned at the bounds clamped into
+  [0, 100] and [0, ratio]; the scale itself is still computed from the real bounds. Do not
+  tidy it back onto the box.
+
+- **A layout save for a selection is one `db.batch`, not a write per element.** Same
+  reasoning as the reorder `CASE` statement: a group move is a set of related changes, and
+  a dropped connection halfway through would leave the arrangement half moved — worse than
+  not having moved at all, because the artist cannot see which half is which.
 
 - **Destructive confirmation uses `<dialog>`, never `window.confirm`.** The platform
   supplies focus trapping, page inertness and Escape-to-close; a native confirm blocks
