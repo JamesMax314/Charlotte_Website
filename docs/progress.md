@@ -120,6 +120,7 @@ The product specification is `docs/project-brief.md`.
 | 23    | Type sizes are chosen from a list, not typed into a spinner. One scrolling list of point sizes serves both the box and the run, and a span's size style is rebased against what it nests inside so the editor finally paints the size it reports                                                                                                                 |
 | 24    | Alignment moved into the text box's own format bar, where it aligns the paragraph the caret is in rather than the whole box — so the settings copy fields get it too. The right-click menu's "Edit format" panel is gone, and with it every box-wide font, size, mark and colour it carried                          |
 | 25    | A mark now replaces the marks of its own kind inside the selection, so a colour applied over coloured text takes; and "Clear" strips the data attributes `removeFormat` leaves behind, so it no longer clears the screen while publishing the old marks                                                              |
+| 26    | The size list scrolls itself to the size in force instead of asking the browser to, so opening it in the settings form no longer scrolls the page under the artist                                                                                                                                                   |
 
 ---
 
@@ -414,6 +415,19 @@ Non-obvious decisions that the code alone does not explain.
   what makes a browser command that only knows about styles unable to finish the job.
   `clearMarksInRange` strips both halves from everything the selection touches, and the
   editor calls it after every `removeFormat`.
+
+- **`scrollIntoView` cannot be told where to stop, so the size list does the sum itself.**
+  It scrolls every scrollable ancestor, which is right for the list and wrong for
+  everything above it: in the settings form, where the control sits in the document flow,
+  opening the dropdown scrolled the page to centre it and the page jumped. The wall never
+  showed this and could not have — its formatting panel is `position: fixed`, and a fixed
+  element's chain of scrollable ancestors ends at the viewport, so the identical call was
+  correct there. `src/lib/list-scroll.ts` holds the arithmetic, pure and unit-tested
+  because jsdom has no layout, and `focus` takes `preventScroll` for the same reason. A
+  row's offset is measured against the list rather than read from `offsetTop`, which is
+  relative to the nearest *positioned* ancestor: that is this list today only because it
+  is absolutely positioned, and the failure if it ever stopped being so is every row
+  scrolling to the end of the ladder.
 
 - **A size the artist cannot get is never offered.** Both point fields derive their bounds
   the same way they always did — from `WALL_TEXT_CQW` for a box and from
