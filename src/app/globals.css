@@ -97,34 +97,44 @@ html {
 /*
   The alignment grid in the studio's wall editor.
 
-  A gradient, not a dashed border, and that is a performance decision rather
-  than a stylistic one. The wall's canvas runs to several thousand pixels
-  tall, so a `border-dashed` rule the height of it is hundreds of separate
-  dash segments to paint: on the home wall that measured about 17,500 segments
-  at twelve columns and roughly twice that at twenty-four, and the artist
-  reported the editor as unusably slow. A repeating gradient is rasterised
-  once as a small tile and repeated, so the cost stops scaling with how tall
-  the wall has grown.
+  Two elements for the whole grid, each a repeating gradient, plus one div per
+  emphasised column. It was one div per line, and that is what made the editor
+  crawl: the canvas runs to 1620x4426 CSS pixels — twice that on a retina
+  screen — so every line spanned the whole of it, and roughly twenty-five of
+  them crossed each raster tile the compositor drew while scrolling. Two fills
+  per tile is the point of this, not the tidiness.
 
-  It is also what makes the grid render outside Chrome. The rule before this
-  hung a one-pixel dashed border on a box with no width, which Safari declined
-  to paint at all below two pixels; these are boxes with a real size and a
-  background, which every engine draws the same way.
+  The lines are solid because a gradient varies in one direction only, so it
+  cannot dash a line: dashing needs variation both along the line and across
+  it, which is exactly what forced one element per line before. Dashed borders
+  were the first attempt and cost tens of thousands of dash segments to paint;
+  a tiled SVG image would keep the dashes at this speed, at the price of
+  measuring the canvas in pixels to hold strokes at 1px.
+
+  `--wall-grid-cell` is the gap between lines: a percentage of the width for
+  the columns and of the height for the rows, which is what keeps the cells
+  square while both are driven by one spacing.
 */
-.wall-rule-v {
-  width: 1px;
-  background-image: repeating-linear-gradient(to bottom, var(--line) 0 3px, transparent 3px 7px);
+.wall-grid-columns {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line) 0 1px,
+    transparent 1px var(--wall-grid-cell)
+  );
 }
 
-.wall-rule-h {
-  height: 1px;
-  background-image: repeating-linear-gradient(to right, var(--line) 0 3px, transparent 3px 7px);
+.wall-grid-rows {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--line) 0 1px,
+    transparent 1px var(--wall-grid-cell)
+  );
 }
 
-/* The quarters and the centre of the width, drawn heavier and dashed longer. */
-.wall-rule-v.wall-rule-major {
+/* The quarters and the centre of the width, drawn heavier. */
+.wall-grid-major {
   width: 2px;
-  background-image: repeating-linear-gradient(to bottom, var(--line) 0 6px, transparent 6px 11px);
+  background-color: var(--line);
 }
 
 /*

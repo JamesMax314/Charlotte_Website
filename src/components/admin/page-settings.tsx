@@ -119,7 +119,7 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
         <div className="flex flex-col gap-2">
           <Toggle
             label="Show a grid"
-            hint="Dashed guide lines over the wall while you arrange it. Never seen by a visitor."
+            hint="Fine guide lines over the wall while you arrange it. Never seen by a visitor."
             checked={value.gridEnabled}
             onChange={(gridEnabled) => apply({ gridEnabled })}
           />
