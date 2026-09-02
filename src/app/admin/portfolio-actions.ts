@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
+import { resolveGridColumns } from "@/lib/grid";
 import { docFromPlain, docToPlain, sanitiseDoc, serialiseDoc } from "@/lib/rich-text";
 import { requireSession } from "@/lib/auth";
 import {
@@ -55,6 +56,9 @@ export async function updatePageSettings(patch: {
   gutterEnabled?: boolean;
   gutter?: number;
   snapEnabled?: boolean;
+  gridEnabled?: boolean;
+  gridColumns?: number;
+  gridSnap?: boolean;
   showNamesOnHover?: boolean;
   contentFadeIn?: boolean;
 }): Promise<void> {
@@ -65,6 +69,13 @@ export async function updatePageSettings(patch: {
     // A gutter wider than a fifth of the wall is not a gutter any more.
     ...(patch.gutter === undefined ? {} : { gutter: Math.min(Math.max(patch.gutter, 0), 20) }),
     ...(patch.snapEnabled === undefined ? {} : { snapEnabled: patch.snapEnabled }),
+    ...(patch.gridEnabled === undefined ? {} : { gridEnabled: patch.gridEnabled }),
+    // A column count off the list is no grid at all — the quarter lines would
+    // fall between the lines they are meant to emphasise.
+    ...(patch.gridColumns === undefined
+      ? {}
+      : { gridColumns: resolveGridColumns(patch.gridColumns) }),
+    ...(patch.gridSnap === undefined ? {} : { gridSnap: patch.gridSnap }),
     ...(patch.showNamesOnHover === undefined ? {} : { showNamesOnHover: patch.showNamesOnHover }),
     ...(patch.contentFadeIn === undefined ? {} : { contentFadeIn: patch.contentFadeIn }),
   };

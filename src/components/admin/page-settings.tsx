@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { updatePageSettings } from "@/app/admin/portfolio-actions";
+import { GRID_COLUMN_CHOICES } from "@/lib/grid";
 import { useAction } from "./use-action";
 
 export interface PageSettings {
   gutterEnabled: boolean;
   gutter: number;
   snapEnabled: boolean;
+  gridEnabled: boolean;
+  gridColumns: number;
+  gridSnap: boolean;
   showNamesOnHover: boolean;
   contentFadeIn: boolean;
 }
@@ -70,7 +74,7 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
         </p>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-2">
           <Toggle
             label="Keep a gap between pieces"
@@ -110,6 +114,41 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
           hint="Visitors see the piece's name over the image when they point at it."
           checked={value.showNamesOnHover}
           onChange={(showNamesOnHover) => apply({ showNamesOnHover })}
+        />
+
+        <div className="flex flex-col gap-2">
+          <Toggle
+            label="Show a grid"
+            hint="Dashed guide lines over the wall while you arrange it. Never seen by a visitor."
+            checked={value.gridEnabled}
+            onChange={(gridEnabled) => apply({ gridEnabled })}
+          />
+          <label
+            className={`text-graphite flex items-center gap-2 pl-7 text-xs transition-opacity ${
+              value.gridEnabled ? "opacity-100" : "opacity-40"
+            }`}
+          >
+            Spacing
+            <select
+              value={value.gridColumns}
+              disabled={!value.gridEnabled}
+              onChange={(e) => apply({ gridColumns: Number(e.target.value) })}
+              className="border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none disabled:cursor-not-allowed"
+            >
+              {GRID_COLUMN_CHOICES.map((columns) => (
+                <option key={columns} value={columns}>
+                  {columns} columns
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <Toggle
+          label="Snap to grid"
+          hint="Edges land on the grid lines as you drag. Works alongside Snap to align — whichever is nearer wins. Hold Alt to override."
+          checked={value.gridSnap}
+          onChange={(gridSnap) => apply({ gridSnap })}
         />
 
         <Toggle

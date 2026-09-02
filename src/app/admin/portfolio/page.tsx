@@ -35,6 +35,9 @@ export default async function PortfolioAdminPage() {
           gutterEnabled: settings.gutterEnabled,
           gutter: settings.gutter,
           snapEnabled: settings.snapEnabled,
+          gridEnabled: settings.gridEnabled,
+          gridColumns: settings.gridColumns,
+          gridSnap: settings.gridSnap,
           showNamesOnHover: settings.showNamesOnHover,
           contentFadeIn: settings.contentFadeIn,
         }}
@@ -46,6 +49,9 @@ export default async function PortfolioAdminPage() {
         texts={texts}
         snapEnabled={settings.snapEnabled}
         gutter={settings.gutterEnabled ? settings.gutter : 0}
+        gridEnabled={settings.gridEnabled}
+        gridColumns={settings.gridColumns}
+        gridSnap={settings.gridSnap}
         fonts={mergeFonts(fonts)}
       />
 

@@ -60,7 +60,7 @@ The product specification is `docs/project-brief.md`.
   browser at upload — there is no image optimiser on Workers.
 
 - **The admin.** Passphrase sign-in; a Home page editor with page settings — gap,
-  snapping, hover names and an optional content fade-in — plus right-click menus, an
+  snapping, an alignment grid, hover names and an optional content fade-in — plus right-click menus, an
   image details dialog and text formatting at the pointer; a per-piece page editor; and a
   store grid where a piece is added and edited in a dialog over the arrangement, with
   right-click for sold out, draft, archive and delete.
@@ -133,6 +133,7 @@ The product specification is `docs/project-brief.md`.
 | 27    | An image with nowhere to go opens full screen. Every unclickable piece on every wall is zoomable by default, in the shop's own lightbox — now one shared component — and cycles the whole wall in reading order. A new per-image toggle turns it off for a decorative mark                                                                                       |
 | 28    | Clicking beside the enlarged picture closes it — the dialog fills the viewport, so the grey a visitor takes for the backdrop is inside it. The lightbox image is eager too: `w-auto` before load is 0px, and a zero-sized element never intersects, so lazy never fired                                                                                          |
 | 29    | Multi-select on every free-form wall: a marquee or shift-click gathers images and text, and the group moves, scales — carrying its type — aligns, spaces evenly and deletes as one. Layout saves for a selection land in a single `db.batch`. The artist works at a desktop, not an iPad, which is what settled the gesture                                      |
+| 30    | An alignment grid over every free-form wall, switched on in page settings and spaced in columns across the width. Its lines are snap targets in their own right, merged with the edge guides so the nearer of the two wins. Editor only — no visitor ever sees it                                                                                                |
 
 ---
 

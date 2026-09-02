@@ -9,6 +9,7 @@ import type { Timeless } from "./site-snapshot";
 import { DEFAULT_ACCENT } from "./colour";
 import { HEADER_DEFAULTS } from "./header-style";
 import { DEFAULT_FONT_ID, DISPLAY_FONT_ID } from "./fonts";
+import { DEFAULT_GRID_COLUMNS } from "./grid";
 import {
   DEFAULT_ABOUT_COPY,
   DEFAULT_CONTACT_COPY,
@@ -177,6 +178,11 @@ const SETTINGS_FALLBACK = {
   gutterEnabled: false,
   gutter: 2,
   snapEnabled: true,
+  // Editor-only, and absent from every snapshot written before they existed —
+  // which is why the fallback matters more than the column default here.
+  gridEnabled: false,
+  gridColumns: DEFAULT_GRID_COLUMNS,
+  gridSnap: false,
   showNamesOnHover: true,
   contentFadeIn: false,
   etsyShopUrl: "https://www.etsy.com/",
