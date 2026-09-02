@@ -68,12 +68,24 @@ The product specification is `docs/project-brief.md`.
   both the circular badge in the header and the browser-tab icon, and she picks the body
   and heading typefaces the public site is set in.
 
+- **The site describes itself to search engines.** Every page carries its own
+  canonical, description, Open Graph block and Twitter card, and cannot render without
+  an `<h1>`. Home and About declare who the artist is — `Person` and `WebSite`, with
+  `sameAs` to her Instagram and Etsy — and the artwork pages refer to that entity by
+  `@id`. She owns the description and the share image from settings.
+
 - **Not yet built:** link-health cron, outbound click tracking, contact form delivery.
   The custom 404 does not render — see the invariants below.
 
-- **Not yet deployed.** Needs a Cloudflare account, two R2 buckets, a D1 database and two
-  secrets. DNS for charlottewilkinsonart.co.uk is not cut over yet, so the first deploy
-  answers on workers.dev — which `robots.txt` keeps out of the index. See _Deploying for the first time_ below.
+- **Live at charlottewilkinsonart.co.uk.** DNS is cut over: the apex resolves to
+  Cloudflare, the worker answers on it, and `robots.txt` allows indexing there while
+  refusing every other origin the worker also answers on. Publishing changes still needs
+  "Make live" — a settings change is not visible to a visitor until then.
+
+- **Still the artist's to do, and no amount of code substitutes for it:** the About copy
+  and wall text are all placeholder, image alt text is seeded from titles rather than
+  written, and the site needs verifying in Google Search Console (a DNS TXT record on the
+  zone Cloudflare already owns — no code, no deploy) with the sitemap submitted.
 
 ---
 
@@ -103,12 +115,50 @@ The product specification is `docs/project-brief.md`.
 | 19    | Deployed to Cloudflare on the artist's own account: two R2 buckets, a D1 database in WEUR, all migrations, both secrets, and the apex bound as a custom domain in `wrangler.jsonc`. Guarded reads now rethrow Next's control-flow errors, which the session check had started swallowing                                                                         |
 | 20    | Wall text sizes are typed in points. Storage stays `cqw` so type still scales with the wall; `cqwToPt` converts at the edge against a documented reference width, and the studio, the derived pt bounds and the server clamp now share one pair of limits. The run-level Small/Normal/Large dropdown is a points input too, converted against the box it sits in |
 | 21    | CI generates `cloudflare-env.d.ts` before it typechecks. The Worker's bindings live only in that generated file, so `env.DB` and `env.MEDIA` were TS2339 on every run while a developer machine stayed clean                                                                                                                                                     |
+| 22    | Search and sharing. Canonicals, Open Graph and Twitter cards on every page; `Person`/`WebSite` entity markup with `sameAs`; breadcrumbs; a heading fallback so no page renders without an `<h1>`; an artist-owned description and share image; `lastModified` in the sitemap                                                                                     |
 
 ---
 
 ## Architectural Invariants
 
 Non-obvious decisions that the code alone does not explain.
+
+- **A canonical URL belongs in the root layout, and only as `"./"`.** Next's
+  `mergeMetadata` clones the parent's resolved metadata and overwrites only the keys a
+  page actually declares, so an absolute canonical there is inherited verbatim by every
+  page that sets none — stamping the home page's address on `/about` and `/privacy` and
+  telling Google they are duplicates of it. A `./` is resolved against the request's own
+  pathname instead, and `/` comes out as the bare origin, matching the sitemap. Verified
+  against the worker, not assumed.
+
+- **`openGraph` and `twitter` are replaced wholesale, never merged.** Same rule from the
+  other side: a page that declares two keys of an `openGraph` block loses the site name,
+  the locale, the type and the image the layout supplied. That is why `siteOpenGraph` and
+  `siteTwitter` exist and why every route builds the whole object through them — declaring
+  one inline is a card that silently degrades on the pages most worth sharing.
+
+- **`snapshotMediaKeys` must name every image column in settings.** A key it omits is one
+  `publishSite`'s sweep treats as unreferenced, so the object is deleted the first time the
+  artist publishes after uploading it — and the breakage surfaces days later with nothing
+  in any log. `shareImageKey` is listed there and has a test that says why.
+
+- **There is no `<meta name="keywords">`, and that is deliberate.** Google has ignored it
+  since 2009 and Bing reads it as a spam signal. The artist asked for one; the terms are
+  placed where they work instead — `alternateName` for her name variants, `knowsAbout` for
+  the subjects, and the title and description defaults for the disciplines. Do not add the
+  tag back to look responsive to the request.
+
+- **JSON-LD is escaped before it reaches a `<script>`.** The body of a script element is
+  not parsed for entities but is scanned for `</script`, and `JSON.stringify` does nothing
+  to `<` — so a piece the artist titled `</script><img onerror=…>` ended the element and
+  had the rest parsed as markup. `jsonLdScriptContent` escapes `<` to `\u003c`: valid JSON,
+  parses back to the same string, cannot close a tag.
+
+- **The sitemap's `lastModified` is the publish time, one date for every URL.** Publishing
+  writes the whole public site as a single revision, so a per-URL date is not a thing this
+  site knows — and a snapshot strips `updatedAt` deliberately, so there is nothing else to
+  read. Omitted entirely before the first publish, because then the draft is being served.
+  Never `new Date()`, which would claim the whole site changed on every crawl.
 
 - **A catch-all around a read must call `unstable_rethrow` first.** Next signals
   "this route cannot be static" by _throwing_ `DYNAMIC_SERVER_USAGE` out of `cookies()`,
