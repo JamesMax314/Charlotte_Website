@@ -80,7 +80,25 @@ export function ImageLightbox({
       className="text-paper max-h-dvh max-w-none bg-transparent p-0 backdrop:cursor-zoom-out"
       aria-label={label}
     >
-      <div className="flex h-dvh w-dvw flex-col">
+      {/*
+        Clicking beside the photograph closes it.
+
+        Not the `::backdrop` doing this work: the dialog is sized to the whole
+        viewport, so there is no backdrop left for a visitor to reach, and the
+        grey the visitor reads as "outside" is the empty space inside this
+        element. `backdrop:cursor-zoom-out` on the dialog therefore never shows
+        either, which is why the cursor is declared again here.
+
+        Anything that is not the picture or a control counts as outside, the
+        caption included — a title is not a thing to click, and the alternative
+        is a dead zone across the top of the screen.
+      */}
+      <div
+        className="flex h-dvh w-dvw cursor-zoom-out flex-col"
+        onClick={(event) => {
+          if (!(event.target as HTMLElement).closest("img, button")) onClose();
+        }}
+      >
         <div className="flex shrink-0 items-center justify-between px-5 py-4">
           {/*
             The separator belongs to the counter, not to the caption: an
@@ -105,13 +123,27 @@ export function ImageLightbox({
         </div>
 
         <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-5">
+          {/*
+            Eager, and it has to be.
+
+            `w-auto` on an image that has not loaded computes to 0px, and an
+            element of zero size never intersects the viewport — so the lazy
+            observer never fires, the image never loads, and it stays 0px. The
+            deadlock only broke when something else forced a re-layout, which
+            is why it looked like an intermittently slow image rather than a
+            bug. Nothing is preloaded by this: a dialog that is never opened
+            never renders, and by the time it does the visitor has asked for
+            this exact picture. `priority` would be the wrong tool — that
+            preloads from the page that owns the lightbox.
+          */}
           <Image
             src={active.src}
             alt={active.alt}
             width={active.width}
             height={active.height}
+            loading="eager"
             sizes="100vw"
-            className="max-h-full w-auto max-w-full object-contain"
+            className="max-h-full w-auto max-w-full cursor-default object-contain"
           />
         </div>
 
