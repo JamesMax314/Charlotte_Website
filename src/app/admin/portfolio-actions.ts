@@ -6,6 +6,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
+import { deletePiecesWithPages } from "@/lib/portfolio-deletes";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { resolveGridColumns } from "@/lib/grid";
@@ -246,8 +247,8 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   const db = await getDb();
 
   // Remove the R2 objects too, or the bucket accumulates orphans forever.
-  // Children cascade at the row level, but their objects do not, so sweep the
-  // whole family here.
+  // Neither the rows nor the objects cascade, so the whole family is collected
+  // here: swept from the bucket below, and deleted by `deletePiecesWithPages`.
   const family = await db
     .select({ id: schema.portfolioItems.id })
     .from(schema.portfolioItems)
@@ -261,7 +262,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 
   await releaseMedia(images.map((i) => i.storageKey));
 
-  await db.delete(schema.portfolioItems).where(eq(schema.portfolioItems.id, id));
+  await deletePiecesWithPages([id]);
   refresh();
   // No redirect: this is called from the wall, where cancelling a new image
   // must not navigate the artist away from what she was doing.
@@ -504,8 +505,8 @@ export async function saveWallLayouts(layout: {
  *
  * The R2 sweep is the whole reason this cannot be a loop over
  * `deletePortfolioItem`: each piece may own a page of its own whose elements
- * carry objects, and those children cascade at the row level but not in the
- * bucket. One `inArray` collects the whole family across every selected piece.
+ * carry objects. One `inArray` collects the whole family across every selected
+ * piece, in one round trip rather than one per piece.
  */
 export async function deleteWallSelection(selection: {
   items: string[];
@@ -527,9 +528,7 @@ export async function deleteWallSelection(selection: {
       .where(inArray(schema.portfolioImages.itemId, ids));
 
     await releaseMedia(images.map((i) => i.storageKey));
-    await db
-      .delete(schema.portfolioItems)
-      .where(inArray(schema.portfolioItems.id, selection.items));
+    await deletePiecesWithPages(selection.items);
   }
 
   if (selection.texts.length > 0) {

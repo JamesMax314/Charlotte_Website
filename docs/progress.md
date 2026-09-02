@@ -133,6 +133,7 @@ The product specification is `docs/project-brief.md`.
 | 27    | An image with nowhere to go opens full screen. Every unclickable piece on every wall is zoomable by default, in the shop's own lightbox — now one shared component — and cycles the whole wall in reading order. A new per-image toggle turns it off for a decorative mark                                                                                                                                                                                                                                                    |
 | 28    | Clicking beside the enlarged picture closes it — the dialog fills the viewport, so the grey a visitor takes for the backdrop is inside it. The lightbox image is eager too: `w-auto` before load is 0px, and a zero-sized element never intersects, so lazy never fired                                                                                                                                                                                                                                                       |
 | 29    | Multi-select on every free-form wall: a marquee or shift-click gathers images and text, and the group moves, scales — carrying its type — aligns, spaces evenly and deletes as one. Layout saves for a selection land in a single `db.batch`. The artist works at a desktop, not an iPad, which is what settled the gesture                                                                                                                                                                                                   |
+| 31    | Deleting a piece works again. `parent_id` never had the `ON DELETE CASCADE` its schema declares, so deleting any of the 13 pieces that owned a page of their own raised a foreign-key error the artist saw only as React #441. D1 cannot be given the clause, so the cascade moved into the application — in the piece, selection and page deletes alike                                                                                                                                                                      |
 | 30    | An alignment grid over every free-form wall, switched on in page settings and spaced in columns across the width. Its lines are snap targets in their own right, merged with the edge guides so the nearer of the two wins. Editor only — no visitor ever sees it. Drawn as two repeating gradients and three heavier columns — five elements at any spacing. One element per line, first as dashed borders and then as gradients, put twenty-five full-height fills in every raster tile and made scrolling the editor crawl |
 
 ---
@@ -564,6 +565,40 @@ Non-obvious decisions that the code alone does not explain.
   behind pointing at a row that no longer exists — invisible, because every wall read
   requires a scope that now matches nothing. Regenerate that migration and you must put
   the clause back.
+
+- **Both `parent_id` columns hit that same defect, were never repaired, and now
+  cannot be.** `migrations/0005_piece-pages.sql` emitted a bare
+  `REFERENCES portfolio_items(id)` on `portfolio_items` and on `wall_texts`, while
+  `src/db/schema.ts` has always declared `onDelete: "cascade"` on both. The model and the
+  database disagreed for fifteen phases, and the bill arrived as `FOREIGN KEY constraint
+failed` on every attempt to delete one of the 13 pieces (of 47) that owned elements on
+  a page of their own. React redacts a server exception in production, so what reached
+  the artist was `Minified React error #441` — a number that decodes to "an error
+  occurred", naming neither the table nor the constraint.
+
+  The repair is not available. SQLite cannot alter a foreign key in place, and the
+  table-rebuild it demands is impossible on D1 from either direction: migrations run
+  inside a transaction, SQLite ignores `PRAGMA foreign_keys` inside one, and
+  `PRAGMA defer_foreign_keys` is not a substitute — it postpones the _checking_ of
+  constraints but not the _firing_ of actions, and `DROP TABLE` performs an implicit
+  delete of every row, which would cascade through `portfolio_images.item_id` and take
+  every image row in the site with it. Both routes were tried against a restore of the
+  production database and both were refused, cleanly, changing nothing.
+
+  So the cascade lives in `src/lib/portfolio-deletes.ts` instead, and all three delete
+  paths go through it. **`src/db/schema.ts` is lying about these two columns** — the
+  declaration is kept because it states the intent, and because removing it would make
+  `drizzle-kit generate` emit a migration nobody can apply. Do not "simplify" the child
+  statements away on the strength of reading the schema; `portfolio-deletes.test.ts` is
+  there to stop you.
+
+- **A delete that sweeps R2 must sweep before it deletes, and that ordering has a cost.**
+  `releaseMedia` runs first in all three paths, so a delete that then fails at the row
+  level has already given up the objects: the piece stays on the wall with a broken image
+  and no way back. That is the state repeated attempts left behind while the cascade was
+  missing. The ordering is still right — the alternative loses the keys altogether when
+  the row goes and the sweep fails — but it is why a failing delete is not a no-op, and
+  why the fix had to make the row delete unable to fail rather than merely report better.
 
 - **`parent_id` is what scopes a wall.** NULL is the home page; an id is that piece's own
   page. Every read of `portfolio_items` or `wall_texts` must filter on it, or elements

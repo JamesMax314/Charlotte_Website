@@ -5,6 +5,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
+import { deletePiecesWithPages } from "@/lib/portfolio-deletes";
 import { toSlug } from "@/lib/artworks";
 import { requireSession } from "@/lib/auth";
 import { isReservedPageSlug, UNTITLED_PAGE_TITLE } from "@/lib/site-pages";
@@ -129,10 +130,13 @@ export async function reorderSitePages(ids: string[]): Promise<void> {
 /**
  * Deletes a page and everything arranged on it.
  *
- * The rows cascade — content by `page_id`, and each piece's own sub-page by
- * `parent_id` — but R2 objects do not, so the whole family's images are swept
- * here first. Missing this leaves the bucket holding artwork nothing can ever
- * reference again.
+ * Content on the page cascades by `page_id`, which the database really does
+ * carry. What it does not carry is `parent_id`, so a piece's own sub-page has
+ * to be deleted here — and before the page is, or the cascade tries to remove
+ * a piece that still has elements hanging off it and the whole delete fails.
+ *
+ * R2 objects cascade nowhere, so the family's images are swept first. Missing
+ * that leaves the bucket holding artwork nothing can ever reference again.
  */
 export async function deleteSitePage(id: string): Promise<void> {
   await requireSession();
@@ -167,6 +171,7 @@ export async function deleteSitePage(id: string): Promise<void> {
     await releaseMedia(images.map((i) => i.storageKey));
   }
 
+  await deletePiecesWithPages(onPage.map((item) => item.id));
   await db.delete(schema.sitePages).where(eq(schema.sitePages.id, id));
   refresh();
 }
