@@ -41,10 +41,7 @@ export function SizeSelect({
       aria-label={label}
       value={valuePt}
       onChange={(e) => onChange(Number(e.target.value))}
-      // `size-select` is what bounds the open list to a scrolling box rather
-      // than the whole ladder at once; it lives in globals.css because no
-      // utility can reach `::picker(select)`.
-      className={`size-select border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none ${className}`}
+      className={`border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none ${className}`}
     >
       {ptOptions(valuePt, minPt, maxPt).map((pt) => (
         // The unit is on every option, which is what lets the old absolutely
