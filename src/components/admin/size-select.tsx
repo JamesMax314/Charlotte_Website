@@ -1,21 +1,31 @@
 "use client";
 
+import { useEffect, useId, useRef, useState } from "react";
 import { ptOptions } from "@/lib/type-scale";
 
 /**
- * The point size control, shared by the box's toolbar and the run panel.
+ * The point size control: a button, and a scrolling list of sizes.
  *
- * Native rather than a custom listbox, for the reason already written beside
- * the typeface control: it is reliable on a tablet — where it opens as the
- * system wheel picker — and it needs no dismissal handling inside a panel that
- * is already floating.
+ * It was a native `<select>` first, and that is worth recording because the
+ * reasoning looked sound. A native control is reliable on a tablet and needs
+ * no dismissal handling — but its popup is drawn by the operating system, and
+ * with a rung for every point from 5 to 40 macOS renders all forty-three of
+ * them from the top of the screen to the bottom. No CSS reaches that menu:
+ * `appearance: base-select` is the only hook, and it did nothing here. A list
+ * that cannot be told how tall it is cannot be the answer, so this owns its
+ * own.
  *
- * It replaced a number input with a spinner, which had two faults a list
- * cannot have. Typing committed on every keystroke, and in the run panel that
- * commit moves focus back into the text, so the first digit threw the artist
- * out of the field. And a spinner invites repeated small commits, each one
- * another span written into her document.
+ * It is deliberately not a `FloatingLayer`. That closes on any pointerdown
+ * outside itself, and this control sits *inside* one — the wall's formatting
+ * panel — so a portalled list would read as a click elsewhere and take the
+ * whole toolbar down with it on the way to picking a size. Rendered inline and
+ * absolutely positioned, a click on an option is a click inside the panel,
+ * which is what `ColourControl` beside it already relies on.
  */
+/** `max-h-48`, and roughly what one row of `py-1.5 text-xs` measures. */
+const LIST_MAX_HEIGHT = 192;
+const ROW_HEIGHT = 27;
+
 export function SizeSelect({
   valuePt,
   minPt,
@@ -36,20 +46,179 @@ export function SizeSelect({
   label: string;
   className?: string;
 }) {
+  const options = ptOptions(valuePt, minPt, maxPt);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  /** Opens upward when there is no room below; measured, never guessed. */
+  const [dropUp, setDropUp] = useState(false);
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listId = useId();
+
+  const close = (focusButton = true) => {
+    setOpen(false);
+    if (focusButton) buttonRef.current?.focus();
+  };
+
+  const commit = (pt: number) => {
+    onChange(pt);
+    setOpen(false);
+    /*
+      Focus is deliberately not returned to the button. On the wall, choosing a
+      size puts the caret back in the artist's text — that is what `span` does
+      — and stealing it back here would undo the one thing she wants next.
+    */
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    /*
+      Capture, and on the window, for the same reason FloatingLayer does it:
+      the canvas swallows pointerdown to begin a drag. A click inside the list
+      is left alone so it can land on an option.
+    */
+    const onDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    /*
+      Escape closes the list and stops there. Without the capture phase and the
+      stop, the panel this sits inside sees the same key on the window and
+      closes too, so one press dismissed the formatting panel entirely.
+    */
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      close();
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const list = listRef.current;
+    if (!list) return;
+    list.querySelector<HTMLElement>('[data-current="true"]')?.scrollIntoView({ block: "center" });
+    list.focus();
+  }, [open]);
+
+  /*
+    Decided from the button, before the list exists.
+
+    Measuring the rendered list would mean a layout effect — which React warns
+    about on the server, since this component is server-rendered like every
+    client component here — or a frame with the list in the wrong place. The
+    height is a known constant, so the button's own position is enough.
+  */
+  const opensUpward = (): boolean => {
+    const button = buttonRef.current;
+    if (!button) return false;
+    const height = Math.min(LIST_MAX_HEIGHT, options.length * ROW_HEIGHT);
+    return window.innerHeight - button.getBoundingClientRect().bottom < height + 16;
+  };
+
+  const move = (to: number) => setActive(Math.max(0, Math.min(options.length - 1, to)));
+
+  const onListKey = (e: React.KeyboardEvent) => {
+    const keys: Record<string, () => void> = {
+      ArrowDown: () => move(active + 1),
+      ArrowUp: () => move(active - 1),
+      PageDown: () => move(active + 5),
+      PageUp: () => move(active - 5),
+      Home: () => move(0),
+      End: () => move(options.length - 1),
+      Enter: () => commit(options[active]),
+      " ": () => commit(options[active]),
+      Tab: () => close(),
+    };
+    const handler = keys[e.key];
+    if (!handler) return;
+    e.preventDefault();
+    handler();
+  };
+
+  // Keeps the highlighted row in view as the arrows walk past the edge.
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.children[active]?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
+
   return (
-    <select
-      aria-label={label}
-      value={valuePt}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className={`border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none ${className}`}
-    >
-      {ptOptions(valuePt, minPt, maxPt).map((pt) => (
-        // The unit is on every option, which is what lets the old absolutely
-        // positioned "pt" suffix and the padding it needed disappear.
-        <option key={pt} value={pt}>
-          {pt} pt
-        </option>
-      ))}
-    </select>
+    <div ref={wrapRef} className={`relative ${className}`}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          if (open) return setOpen(false);
+          setActive(Math.max(0, options.indexOf(valuePt)));
+          setDropUp(opensUpward());
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+          e.preventDefault();
+          setActive(Math.max(0, options.indexOf(valuePt)));
+          setDropUp(opensUpward());
+          setOpen(true);
+        }}
+        className="border-line focus:border-ink flex w-full items-center justify-between gap-2 border bg-transparent px-2 py-1 text-xs outline-none"
+      >
+        <span>{valuePt} pt</span>
+        <span aria-hidden className="text-graphite/70 text-[9px]">
+          ▼
+        </span>
+      </button>
+
+      {open && (
+        <div
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          aria-activedescendant={`${listId}-${options[active]}`}
+          tabIndex={-1}
+          onKeyDown={onListKey}
+          /*
+            The height that made this control worth building. Roughly seven
+            rows of the ladder, and the rest scrolls.
+          */
+          className={`border-line bg-paper absolute right-0 left-0 z-50 max-h-48 min-w-20 overflow-y-auto border shadow-lg outline-none ${
+            dropUp ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
+        >
+          {options.map((pt, i) => (
+            <div
+              key={pt}
+              id={`${listId}-${pt}`}
+              role="option"
+              aria-selected={pt === valuePt}
+              data-current={pt === valuePt}
+              onPointerDown={(e) => {
+                // The list has focus; taking it on pointerdown would blur and
+                // unmount the row before the click could land on it.
+                e.preventDefault();
+                commit(pt);
+              }}
+              onPointerEnter={() => setActive(i)}
+              className={`cursor-pointer px-2 py-1.5 text-xs ${
+                i === active ? "bg-paper-sunk" : ""
+              } ${pt === valuePt ? "font-semibold" : ""}`}
+            >
+              {pt} pt
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

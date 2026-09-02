@@ -269,7 +269,7 @@ export function RichTextEditor({
         minPt={Math.ceil(runSizeInPt(basePt, RICH_LIMITS.size.min))}
         maxPt={Math.floor(runSizeInPt(basePt, RICH_LIMITS.size.max))}
         onChange={(pt) => span({ size: runSizeFromPt(basePt, pt) })}
-        className={layout === "top" ? "" : "w-full"}
+        className={layout === "top" ? "w-20" : "w-full"}
       />
 
       <span

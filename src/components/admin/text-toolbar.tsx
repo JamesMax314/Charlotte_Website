@@ -158,6 +158,7 @@ export function TextToolbar({
           minPt={minPt}
           maxPt={maxPt}
           onChange={(pt) => onChange({ fontSize: ptToCqw(pt) })}
+          className="w-20"
         />
       </label>
 
