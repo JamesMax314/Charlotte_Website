@@ -95,6 +95,49 @@ html {
 }
 
 /*
+  The alignment grid in the studio's wall editor.
+
+  Two elements for the whole grid, each a repeating gradient, plus one div per
+  emphasised column. It was one div per line, and that is what made the editor
+  crawl: the canvas runs to 1620x4426 CSS pixels — twice that on a retina
+  screen — so every line spanned the whole of it, and roughly twenty-five of
+  them crossed each raster tile the compositor drew while scrolling. Two fills
+  per tile is the point of this, not the tidiness.
+
+  The lines are solid because a gradient varies in one direction only, so it
+  cannot dash a line: dashing needs variation both along the line and across
+  it, which is exactly what forced one element per line before. Dashed borders
+  were the first attempt and cost tens of thousands of dash segments to paint;
+  a tiled SVG image would keep the dashes at this speed, at the price of
+  measuring the canvas in pixels to hold strokes at 1px.
+
+  `--wall-grid-cell` is the gap between lines: a percentage of the width for
+  the columns and of the height for the rows, which is what keeps the cells
+  square while both are driven by one spacing.
+*/
+.wall-grid-columns {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line) 0 1px,
+    transparent 1px var(--wall-grid-cell)
+  );
+}
+
+.wall-grid-rows {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--line) 0 1px,
+    transparent 1px var(--wall-grid-cell)
+  );
+}
+
+/* The quarters and the centre of the width, drawn heavier. */
+.wall-grid-major {
+  width: 2px;
+  background-color: var(--line);
+}
+
+/*
   The wall renders once, and CSS decides how it is laid out.
 
   It used to render twice — a stack for phones and an arrangement for wider

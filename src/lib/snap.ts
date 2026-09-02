@@ -49,7 +49,7 @@ export const SNAP_THRESHOLD = 1.2;
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Merges guides that land on the same line, unioning the edges they accept. */
-function collapse(guides: Guide[]): Guide[] {
+export function collapse(guides: Guide[]): Guide[] {
   const byPosition = new Map<number, Set<EdgeRole>>();
   for (const guide of guides) {
     const at = round(guide.at);
@@ -62,6 +62,22 @@ function collapse(guides: Guide[]): Guide[] {
     .map(([at, edges]) => ({ at, edges: [...edges] }))
     .sort((a, b) => a.at - b.at);
 }
+
+/** No guides at all — what a wall with its snapping switched off offers. */
+export const NO_GUIDES: Guides = { vertical: [], horizontal: [] };
+
+/**
+ * Combines two sets of guides into one, so a wall with both edge snapping and
+ * the alignment grid on offers every line and the nearest simply wins.
+ *
+ * Lines that coincide are merged and their edge roles unioned, which is why a
+ * grid line landing on a neighbour's edge widens what may reach it rather than
+ * competing with it.
+ */
+export const mergeGuides = (a: Guides, b: Guides): Guides => ({
+  vertical: collapse([...a.vertical, ...b.vertical]),
+  horizontal: collapse([...a.horizontal, ...b.horizontal]),
+});
 
 export const rectOf = (item: { x: number; y: number; width: number }, aspect: number): Rect => ({
   x: item.x,

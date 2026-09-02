@@ -17,6 +17,8 @@ import {
 import type { RichDoc } from "@/lib/rich-text";
 import {
   collectGuides,
+  mergeGuides,
+  NO_GUIDES,
   rectOf,
   snapMove,
   snapResize,
@@ -24,6 +26,7 @@ import {
   type Guides,
   type Rect,
 } from "@/lib/snap";
+import { DEFAULT_GRID_COLUMNS, gridGuides } from "@/lib/grid";
 import {
   alignSelection,
   boundsOf,
@@ -56,6 +59,7 @@ import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImageDialog, type ImageDetails } from "./image-dialog";
 import { SelectionToolbar } from "./selection-toolbar";
+import { WallGrid } from "./wall-grid";
 import { uploadImage } from "@/lib/client-upload";
 
 /**
@@ -138,6 +142,9 @@ export function PortfolioCanvas({
   texts: initialTexts,
   snapEnabled,
   gutter,
+  gridEnabled = false,
+  gridColumns = DEFAULT_GRID_COLUMNS,
+  gridSnap = false,
   scope = HOME_WALL,
   fonts = BUILT_IN_FONTS,
 }: {
@@ -146,6 +153,11 @@ export function PortfolioCanvas({
   snapEnabled: boolean;
   /** Already resolved to 0 when the artist has the gap turned off. */
   gutter: number;
+  /** Draw the alignment grid. Editor only — the public wall has no such thing. */
+  gridEnabled?: boolean;
+  gridColumns?: number;
+  /** Snap to the grid's lines, independently of whether they are drawn. */
+  gridSnap?: boolean;
   /** Built-ins plus the artist's uploads, for the canvas and the toolbar alike. */
   fonts?: FontOption[];
   /**
@@ -227,6 +239,28 @@ export function PortfolioCanvas({
     const width = canvasRef.current?.offsetWidth ?? 1;
     return (px / width) * 100;
   }, []);
+
+  /** Either kind of snapping is enough to make a gesture snap at all. */
+  const snapsAtAll = snapEnabled || gridSnap;
+
+  /**
+   * Every line the gesture about to start may snap to.
+   *
+   * The two kinds are merged into one set rather than tried in turn, so the
+   * nearest simply wins and neither feature has to defer to the other. A grid
+   * line that lands on a neighbour's edge collapses into it, widening the
+   * edges it accepts instead of competing with it.
+   *
+   * Note what the grid does *not* carry: the leading/trailing distinction that
+   * makes a gutter mean something. A grid line is a place to put an edge —
+   * any edge — so the gutter still governs contact between two pieces while
+   * the grid governs where a piece sits on the wall.
+   */
+  const guidesFor = (others: Rect[]): Guides =>
+    mergeGuides(
+      snapEnabled ? collectGuides(others, ratio, gutter) : NO_GUIDES,
+      gridSnap ? gridGuides(gridColumns, ratio) : NO_GUIDES,
+    );
 
   /**
    * Both kinds of wall element in one list, in the shape the group maths wants.
@@ -369,13 +403,12 @@ export function PortfolioCanvas({
       start: selectedElements,
       bounds,
       // Guides come from what is *not* selected. A member snapping to another
-      // member would fight the gesture and pull the group apart.
-      guides: collectGuides(
+      // member would fight the gesture and pull the group apart. The grid is
+      // exempt from that — it belongs to the wall, not to any element.
+      guides: guidesFor(
         elements
           .filter((element) => !selectedIds.has(element.id))
           .map(({ x, y, width, height }) => ({ x, y, width, height })),
-        ratio,
-        gutter,
       ),
       moved: false,
       latest: selectedElements,
@@ -390,7 +423,7 @@ export function PortfolioCanvas({
 
       const dx = asPercent(rawX);
       const dy = asPercent(rawY);
-      const snapping = snapEnabled && !moveEvent.altKey;
+      const snapping = snapsAtAll && !moveEvent.altKey;
 
       if (group.mode === "move") {
         const loose = {
@@ -574,7 +607,7 @@ export function PortfolioCanvas({
       aspect,
       moved: false,
       latest: { x: element.x, y: element.y, width: element.width, height },
-      guides: collectGuides(others, ratio, gutter),
+      guides: guidesFor(others),
     };
     dragRef.current = drag;
     setActiveId(element.id);
@@ -593,7 +626,7 @@ export function PortfolioCanvas({
 
       const dx = asPercent(rawX);
       const dy = asPercent(rawY);
-      const snapping = snapEnabled && !moveEvent.altKey;
+      const snapping = snapsAtAll && !moveEvent.altKey;
 
       if (drag.mode === "move") {
         const loose = {
@@ -917,7 +950,7 @@ export function PortfolioCanvas({
           ? "Saving…"
           : isGroup
             ? "Drag any of them to move the group, or its corner to scale. Shift-click to add and remove."
-            : snapEnabled
+            : snapsAtAll
               ? "Drag to move, drag the bottom-right corner to resize, tap to edit. Drag a box over several, or shift-click them, to work on a group. Edges snap — hold Alt to place freely."
               : "Drag to move, drag the bottom-right corner to resize, tap to edit. Drag a box over several, or shift-click them, to work on a group."}
       </p>
@@ -949,6 +982,14 @@ export function PortfolioCanvas({
         // container-type lets text sizes resolve in cqw, exactly as on the site.
         style={{ aspectRatio: `100 / ${ratio}`, containerType: "inline-size" }}
       >
+        {/*
+          First child, so it sits under the work. Every element carries its own
+          z from the database, and the lowest of those is 0 — a grid painted
+          later in the tree would draw over anything sitting at the bottom of
+          the stack.
+        */}
+        {gridEnabled && <WallGrid columns={gridColumns} ratio={ratio} />}
+
         {texts.map((text) => {
           const dragging = activeId === text.id;
           const selected = selectedTextId === text.id;

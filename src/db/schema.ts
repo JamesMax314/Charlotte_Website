@@ -302,6 +302,18 @@ export const siteSettings = sqliteTable("site_settings", {
   gutter: real("gutter").notNull().default(2),
   snapEnabled: integer("snap_enabled", { mode: "boolean" }).notNull().default(true),
   showNamesOnHover: integer("show_names_on_hover", { mode: "boolean" }).notNull().default(true),
+  /**
+   * The alignment grid laid over the wall in the editor.
+   *
+   * Editor only — it is never drawn for a visitor and never published, so it
+   * is stored beside the other wall behaviours purely because that is where
+   * the artist reaches for it. `gridColumns` is a count across the width; the
+   * rows down the wall use the same spacing, which is what makes the cells
+   * square given that both axes are measured in canvas width.
+   */
+  gridEnabled: integer("grid_enabled", { mode: "boolean" }).notNull().default(false),
+  gridColumns: integer("grid_columns").notNull().default(12),
+  gridSnap: integer("grid_snap", { mode: "boolean" }).notNull().default(false),
   /** Fade images in as a visitor scrolls. Site only; the editor never fades. */
   contentFadeIn: integer("content_fade_in", { mode: "boolean" }).notNull().default(false),
   etsyShopUrl: text("etsy_shop_url").notNull().default(""),
