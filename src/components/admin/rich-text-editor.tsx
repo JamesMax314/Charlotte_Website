@@ -62,6 +62,43 @@ const SWATCHES = [INK, "#6d6a66", DEFAULT_ACCENT, PAPER, "#2140d6"];
  * `<strong>`, which `marksOf` does not read and which would therefore save as
  * unformatted text. `alignOfBlock` reads both forms instead.
  */
+/**
+ * Closes a popover when the pointer goes down outside it, or on Escape.
+ *
+ * The same shape `SizeSelect` uses, and for the same two reasons. The listener
+ * is on the window in the capture phase because the wall's canvas swallows
+ * pointerdown to begin a drag, so a bubbling listener never hears the click
+ * that should dismiss this. And Escape is stopped rather than left to bubble,
+ * so one press closes the popover and not the formatting panel behind it.
+ *
+ * The ref goes on a wrapper holding the trigger *and* the popover, so clicking
+ * the trigger is not an outside click — otherwise it would close here and
+ * reopen on the button's own handler, and the popover would never shut.
+ */
+function useDismissOnOutside(open: boolean, setOpen: (open: boolean) => void) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open, setOpen]);
+
+  return ref;
+}
+
 const ALIGNMENTS: { value: TextAlign; command: string; label: string; path: string }[] = [
   {
     value: "left",
@@ -126,6 +163,8 @@ export function RichTextEditor({
   const [colourOpen, setColourOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState("");
+  const colourRef = useDismissOnOutside(colourOpen, setColourOpen);
+  const linkRef = useDismissOnOutside(linkOpen, setLinkOpen);
 
   /*
     What we last handed upward. The parent echoes its own state back as
@@ -416,7 +455,7 @@ export function RichTextEditor({
       />
 
       <div className={layout === "side" ? "flex items-center gap-1" : "contents"}>
-        <div className="relative">
+        <div className="relative" ref={colourRef}>
           <button
             type="button"
             aria-label="Text colour"
@@ -451,7 +490,7 @@ export function RichTextEditor({
           )}
         </div>
 
-        <div className="relative">
+        <div className="relative" ref={linkRef}>
           <button
             type="button"
             aria-label="Add a link"
