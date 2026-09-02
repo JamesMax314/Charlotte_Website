@@ -246,3 +246,42 @@ dialog::backdrop {
   background: var(--ink);
   cursor: grab;
 }
+
+/*
+  The size picker's list, which is a scrolling box rather than a full-height menu.
+
+  A native `<select>` popup takes its height from the browser, and with a rung
+  for every point from 5 to 40 that is the whole ladder painted down the screen
+  at once — taller than the wall the artist is looking at. `base-select` is the
+  only way to bound it: it opts this one control into Chrome's styleable select
+  so `::picker(select)` can be given a height and told to scroll.
+
+  Progressive, and deliberately so. Where `base-select` is not understood — iOS
+  Safari, which is the artist's iPad — the declaration is dropped and the
+  control stays a plain `<select>`, opening as the system wheel picker. That is
+  already a short scrolling list, so there is nothing to fix there and nothing
+  to fall back to.
+
+  The background is set rather than inherited, for the same reason the context
+  menu sets its own: this opens over her artwork.
+*/
+.size-select {
+  appearance: base-select;
+}
+
+.size-select::picker(select) {
+  max-height: 11rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 0;
+}
+
+.size-select option {
+  padding: 0.25rem 0.625rem;
+}
+
+.size-select option:checked {
+  background: var(--ink);
+  color: var(--paper);
+}
