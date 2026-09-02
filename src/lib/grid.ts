@@ -23,9 +23,6 @@ export const GRID_COLUMN_CHOICES = [4, 8, 12, 16, 20, 24] as const;
 
 export const DEFAULT_GRID_COLUMNS = 12;
 
-/** The fractions of the wall's height drawn heavier, alongside the centre. */
-const MAJOR_FRACTIONS = [0.25, 0.5, 0.75];
-
 export type GridLine = { at: number; major: boolean };
 
 export interface GridLines {
@@ -50,11 +47,12 @@ export const resolveGridColumns = (columns: number): number =>
  * its own border there; a dashed line beneath it would only thicken the frame.
  * `gridGuides` puts the edges back, since they are still worth snapping to.
  *
- * The two axes are emphasised differently, and deliberately so. Across the
- * width, a quarter is a fixed fraction of a fixed span, so 25/50/75 fall on
- * grid lines. Down the wall there is no fixed span — the wall grows to fit the
- * lowest element — so the quarters are taken of the height as it currently
- * stands and will move as the arrangement does.
+ * Only the vertical lines are emphasised. Across the width a quarter is a
+ * fixed fraction of a fixed span, so 25/50/75 always fall on a grid line and
+ * mean something. Down the wall there is no fixed span — it grows to fit its
+ * lowest element — so quarters of the height slid about as the arrangement
+ * changed and marked nothing the artist could use. They were tried and
+ * removed; every row is now an ordinary line.
  */
 export const gridLines = (columns: number, canvasHeight: number): GridLines => {
   const count = resolveGridColumns(columns);
@@ -67,19 +65,11 @@ export const gridLines = (columns: number, canvasHeight: number): GridLines => {
     vertical.push({ at, major: k % (count / 4) === 0 });
   }
 
-  const majors = MAJOR_FRACTIONS.map((f) => round(canvasHeight * f));
-  const horizontal: GridLine[] = majors
-    .filter((at) => at > 0 && at < canvasHeight)
-    .map((at) => ({ at, major: true }));
-
+  const horizontal: GridLine[] = [];
   for (let k = 1; k * spacing < canvasHeight; k += 1) {
-    const at = round(k * spacing);
-    // A minor line that lands on a major one would double its weight.
-    if (majors.some((major) => Math.abs(major - at) < 0.001)) continue;
-    horizontal.push({ at, major: false });
+    horizontal.push({ at: round(k * spacing), major: false });
   }
 
-  horizontal.sort((a, b) => a.at - b.at);
   return { spacing, vertical, horizontal };
 };
 

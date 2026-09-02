@@ -51,11 +51,14 @@ describe("gridLines", () => {
     expect(minors).toContain(37.5);
   });
 
-  it("takes the horizontal quarters of the wall's height, which is not a fixed span", () => {
+  /**
+   * Quarters of the height were tried and taken out again. The wall grows to
+   * fit its lowest element, so they slid about as the arrangement changed and
+   * marked nothing the artist could line work up against.
+   */
+  it("emphasises nothing on the vertical axis", () => {
     const { horizontal } = gridLines(12, 80);
-    expect(at(horizontal, 20)?.major).toBe(true);
-    expect(at(horizontal, 40)?.major).toBe(true);
-    expect(at(horizontal, 60)?.major).toBe(true);
+    expect(horizontal.every((line) => !line.major)).toBe(true);
   });
 
   it("draws no line past the bottom of the wall", () => {
@@ -63,14 +66,12 @@ describe("gridLines", () => {
     expect(horizontal.every((line) => line.at < 40)).toBe(true);
   });
 
-  it("never doubles a minor line onto a major one", () => {
-    // 4 columns is 25 apart, and a height of 100 puts the quarters at 25 too.
+  it("draws each row exactly once", () => {
     const { horizontal } = gridLines(4, 100);
-    expect(horizontal.filter((line) => Math.abs(line.at - 25) < 0.001)).toHaveLength(1);
-    expect(at(horizontal, 25)?.major).toBe(true);
+    expect(horizontal.map((line) => line.at)).toEqual([25, 50, 75]);
   });
 
-  it("returns the lines in order down the wall, majors interleaved", () => {
+  it("returns the rows in order down the wall", () => {
     const { horizontal } = gridLines(12, 90);
     const positions = horizontal.map((line) => line.at);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
