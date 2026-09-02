@@ -207,7 +207,7 @@ export function SizeSelect({
           setDropUp(opensUpward());
           setOpen(true);
         }}
-        className="border-line focus:border-ink flex w-full items-center justify-between gap-2 border bg-transparent px-2 py-1 text-xs outline-none"
+        className="border-line focus:border-ink flex h-7 w-full items-center justify-between gap-2 border bg-transparent px-2 text-xs outline-none"
       >
         <span>{valuePt} pt</span>
         <span aria-hidden className="text-graphite/70 text-[9px]">

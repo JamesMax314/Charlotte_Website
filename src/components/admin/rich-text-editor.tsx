@@ -309,7 +309,7 @@ export function RichTextEditor({
         aria-label="Typeface"
         value={active.font ?? ""}
         onChange={(e) => e.target.value && span({ font: e.target.value })}
-        className={`border-line focus:border-ink w-full border bg-transparent px-1 py-1 text-xs outline-none ${
+        className={`border-line focus:border-ink h-7 w-full border bg-transparent px-1 text-xs outline-none ${
           layout === "top" ? "max-w-36" : ""
         }`}
       >
