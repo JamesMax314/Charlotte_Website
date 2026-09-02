@@ -58,9 +58,9 @@ describe("deletePiecesWithPages", () => {
 
     // Text on the piece's page, then the pieces on it, then the piece. Any
     // other order asks SQLite to remove a row that is still referenced.
-    expect(recorded[0].sql).toMatch(/delete from "wall_texts".*"parent_id"/is);
-    expect(recorded[1].sql).toMatch(/delete from "portfolio_items".*"parent_id"/is);
-    expect(recorded[2].sql).toMatch(/delete from "portfolio_items".*"id"/is);
+    expect(recorded[0].sql).toMatch(/delete from "wall_texts"[\s\S]*"parent_id"/i);
+    expect(recorded[1].sql).toMatch(/delete from "portfolio_items"[\s\S]*"parent_id"/i);
+    expect(recorded[2].sql).toMatch(/delete from "portfolio_items"[\s\S]*"id"/i);
     expect(recorded[2].sql).not.toMatch(/parent_id/i);
 
     for (const statement of recorded) expect(statement.params).toContain("tractor");
