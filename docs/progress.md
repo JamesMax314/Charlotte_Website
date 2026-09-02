@@ -125,6 +125,7 @@ The product specification is `docs/project-brief.md`.
 | 25    | A mark now replaces the marks of its own kind inside the selection, so a colour applied over coloured text takes; and "Clear" strips the data attributes `removeFormat` leaves behind, so it no longer clears the screen while publishing the old marks                                                                                                          |
 | 26    | The size list scrolls itself to the size in force instead of asking the browser to, so opening it in the settings form no longer scrolls the page under the artist                                                                                                                                                                                               |
 | 27    | An image with nowhere to go opens full screen. Every unclickable piece on every wall is zoomable by default, in the shop's own lightbox — now one shared component — and cycles the whole wall in reading order. A new per-image toggle turns it off for a decorative mark                                                                                       |
+| 28    | Clicking beside the enlarged picture closes it — the dialog fills the viewport, so the grey a visitor takes for the backdrop is inside it. The lightbox image is eager too: `w-auto` before load is 0px, and a zero-sized element never intersects, so lazy never fired                                                                                          |
 
 ---
 
@@ -683,6 +684,18 @@ Non-obvious decisions that the code alone does not explain.
   height at a pixel for exactly this reason. The timing and geometry live in
   `src/lib/reveal.ts`, pure and unit-tested, because measuring this in a browser proved
   unreliable.
+
+- **A lazily loaded image that sizes itself from its content never loads.** The
+  lightbox picture is `w-auto` so it can be letterboxed by `max-h-full`, which means it
+  has no width until it has loaded — and an element of zero size never intersects the
+  viewport, so the observer behind `loading="lazy"` never fires and it never loads. The
+  deadlock only broke when something unrelated forced a re-layout, so it read as an
+  intermittently slow image rather than a bug, and it sat in the shop's lightbox from the
+  day it was written. `loading="eager"` is the fix and costs nothing here: a dialog that
+  is never opened never renders its contents. `priority` would be the wrong tool — it
+  preloads from the page that owns the lightbox, for a picture most visitors never ask
+  for. The rule generalises: any image whose box comes from its own content cannot also
+  be lazy.
 
 - **The fade hides before first paint, via an inline script, not from React.** Hiding
   from the component meant the wall painted once, vanished, then faded — a visible
