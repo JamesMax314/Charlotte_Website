@@ -160,6 +160,18 @@ export const portfolioItems = sqliteTable(
     clickable: integer("clickable", { mode: "boolean" }).notNull().default(true),
 
     /**
+     * Whether a piece that is *not* clickable opens full screen when tapped.
+     *
+     * Only ever consulted for a piece `isInteractive` rejects: a clickable
+     * piece already has somewhere to go, and offering both would be two
+     * different answers to one tap. Defaults true so the wall's images behave
+     * as the artist expects without her having to find the switch, and so
+     * every piece that predates this column is zoomable on the day it ships.
+     * Off is the escape hatch for a decorative mark that should do nothing.
+     */
+    zoomable: integer("zoomable", { mode: "boolean" }).notNull().default(true),
+
+    /**
      * Free-form placement on the home wall.
      *
      * All three are percentages of the canvas WIDTH, including `y` — using one

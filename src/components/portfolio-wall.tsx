@@ -9,12 +9,14 @@ import {
   eagerIds,
   inReadingOrder,
   isInteractive,
+  opensFullScreen,
   showsHoverName,
   textStyle,
   type PortfolioItem,
   type WallText,
 } from "@/lib/portfolio";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
+import { WallZoom, ZoomTrigger, type WallZoomImage } from "./wall-zoom";
 
 /**
  * The home page wall.
@@ -88,15 +90,29 @@ function Tile({
   );
 
   /*
-    A piece that is not clickable renders as a plain image: no link, no hover
-    state, no pointer cursor. That is what lets decorative marks and icons sit
-    on the wall without pretending to be interactive, and it is why elements on
-    a piece's own page are inert.
+    Three outcomes, and a piece has exactly one of them.
+
+    Clickable, and it is a link to its own page. Not clickable but zoomable,
+    and it is a button that opens the image full screen — the common case, and
+    the default for a new piece, because an image with nowhere to go is still
+    worth seeing large. Neither, and it renders as a plain image: no link, no
+    button, no pointer cursor. That last case is what still lets decorative
+    marks and icons sit on the wall without pretending to be interactive; it is
+    now the artist's choice rather than the automatic consequence of unticking
+    "Make clickable".
   */
-  return interactive ? (
-    <Link href={`/work/${item.slug}`} className="group relative block overflow-hidden">
+  if (interactive) {
+    return (
+      <Link href={`/work/${item.slug}`} className="group relative block overflow-hidden">
+        {picture}
+      </Link>
+    );
+  }
+
+  return opensFullScreen(item) ? (
+    <ZoomTrigger id={item.id} label={item.name ? `View ${item.name} larger` : "View image larger"}>
       {picture}
-    </Link>
+    </ZoomTrigger>
   ) : (
     <div className="relative block overflow-hidden">{picture}</div>
   );
@@ -213,7 +229,34 @@ export function PortfolioWall({
     "--order": order.get(el.id) ?? 0,
   });
 
-  return (
+  /*
+    Every image the lightbox cycles, in reading order.
+
+    Reading order rather than layer order, because cycling is a way of walking
+    the page: "next" should mean the piece below or to the right, which is what
+    a visitor sees, not whichever element the artist happened to place last.
+    The same order the mobile stack uses, so the two agree.
+
+    Built here rather than inside `WallZoom` so the list stays server-side and
+    the only thing crossing to the browser is the handful of fields the
+    lightbox actually renders.
+  */
+  const zoomable: WallZoomImage[] = inReadingOrder(shown)
+    .filter(opensFullScreen)
+    .map((item) => {
+      // Non-null: `opensFullScreen` already required a cover.
+      const cover = coverImage(item)!;
+      return {
+        id: item.id,
+        src: cover.src,
+        alt: cover.alt,
+        width: cover.width,
+        height: cover.height,
+        caption: item.name,
+      };
+    });
+
+  const wall = (
     <div className="wall" style={{ "--ratio": ratio } as WallVars}>
       {headingId === null && heading && <h1 className="sr-only">{heading}</h1>}
 
@@ -243,4 +286,9 @@ export function PortfolioWall({
       ))}
     </div>
   );
+
+  // A wall with nothing to enlarge ships no lightbox and no client component
+  // at all, which is the common case on a piece's own page and on any wall
+  // whose images all link onward.
+  return zoomable.length === 0 ? wall : <WallZoom images={zoomable}>{wall}</WallZoom>;
 }

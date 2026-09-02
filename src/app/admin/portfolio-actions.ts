@@ -93,6 +93,9 @@ export async function createPortfolioItemDraft(
     // Elements on a piece's own page never link anywhere. A custom page is a
     // wall, not a piece's page, so work shown there is clickable as at home.
     clickable: scope.kind !== "piece",
+    // Written rather than left to the column default, so the row this returns
+    // matches what the dialog is about to show the artist.
+    zoomable: true,
     status: "draft",
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
     y: at ? Math.max(at.y, 0) : 4,
@@ -108,7 +111,7 @@ export async function createPortfolioItemDraft(
 /** Saves the details dialog and publishes the piece. */
 export async function savePortfolioItemDetails(
   id: string,
-  details: { name: string; information: string; clickable: boolean },
+  details: { name: string; information: string; clickable: boolean; zoomable: boolean },
 ): Promise<void> {
   await requireSession();
   const db = await getDb();
@@ -121,6 +124,7 @@ export async function savePortfolioItemDetails(
       slug: await uniqueSlug(name, id, id),
       information: details.information.trim(),
       clickable: details.clickable,
+      zoomable: details.zoomable,
       status: "published",
       updatedAt: new Date(),
     })

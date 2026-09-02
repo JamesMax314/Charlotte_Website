@@ -106,6 +106,13 @@
       "when": 1788337507258,
       "tag": "0015_share-and-description",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788377915431,
+      "tag": "0016_wall-zoom",
+      "breakpoints": true
     }
   ]
 }

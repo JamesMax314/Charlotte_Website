@@ -9,6 +9,8 @@ export interface ImageDetails {
   name: string;
   information: string;
   clickable: boolean;
+  /** Only reaches the site for an image that is not clickable. */
+  zoomable: boolean;
 }
 
 /**
@@ -42,6 +44,7 @@ export function ImageDialog({
   const [name, setName] = useState(initial.name);
   const [information, setInformation] = useState(initial.information);
   const [clickable, setClickable] = useState(initial.clickable);
+  const [zoomable, setZoomable] = useState(initial.zoomable);
   const [preview, setPreview] = useState(imageSrc);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export function ImageDialog({
     setName(initial.name);
     setInformation(initial.information);
     setClickable(initial.clickable);
+    setZoomable(initial.zoomable);
     setPreview(imageSrc);
     setError(null);
   }
@@ -175,6 +179,32 @@ export function ImageDialog({
           </label>
         )}
 
+        {/*
+          Shown only while the image will actually be unclickable — which is
+          always true on a piece's own page, where `allowClickable` is false.
+          A clickable image already has somewhere to go, so offering both would
+          be two answers to one tap; hiding it says so without a paragraph of
+          explanation, and the value is preserved either way, so ticking
+          "Make clickable" and changing her mind does not silently reset it.
+        */}
+        {(!allowClickable || !clickable) && (
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={zoomable}
+              onChange={(e) => setZoomable(e.target.checked)}
+              className="accent-accent mt-0.5 size-4 shrink-0"
+            />
+            <span>
+              <span className="block text-sm">Open full screen when clicked</span>
+              <span className="text-graphite block text-xs">
+                Visitors can click to see this image large, and step through the other images on the
+                page. Leave off for a decorative image that should do nothing.
+              </span>
+            </span>
+          </label>
+        )}
+
         <div className="mt-2 flex items-center justify-between">
           <button
             type="button"
@@ -185,7 +215,7 @@ export function ImageDialog({
           </button>
           <button
             type="button"
-            onClick={() => onSave({ name, information, clickable })}
+            onClick={() => onSave({ name, information, clickable, zoomable })}
             disabled={busy !== null}
             className="bg-accent text-accent-ink hover:bg-ink hover:text-paper px-5 py-2 text-sm transition-colors disabled:opacity-60"
           >

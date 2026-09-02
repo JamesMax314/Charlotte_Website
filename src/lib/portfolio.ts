@@ -87,6 +87,8 @@ export interface PortfolioItem {
   /** NULL for the home wall; set for a piece on that custom page. */
   pageId: string | null;
   clickable: boolean;
+  /** Only consulted when the piece is not clickable. See `opensFullScreen`. */
+  zoomable: boolean;
   images: PortfolioImage[];
 }
 
@@ -165,6 +167,22 @@ export const eagerIds = (items: PortfolioItem[]): Set<string> => {
  */
 export const isInteractive = (item: PortfolioItem): boolean =>
   item.clickable && item.parentId === null;
+
+/**
+ * Whether tapping a piece opens it full screen.
+ *
+ * The complement of `isInteractive`, not a second opinion on top of it: a
+ * clickable piece goes to its own page, so a tap already means something, and
+ * a piece cannot both navigate and zoom. Everything else on a wall — a piece
+ * the artist unclicked, and every element on a piece's own page, which is
+ * inert by construction — is a picture with nowhere to go, and that is exactly
+ * the thing worth seeing large.
+ *
+ * A piece with no photograph yet is excluded because there is nothing to
+ * enlarge; the wall does not render it either.
+ */
+export const opensFullScreen = (item: PortfolioItem): boolean =>
+  !isInteractive(item) && item.zoomable && coverImage(item) !== undefined;
 
 /**
  * Whether the dark hover overlay with the piece's name should appear.
