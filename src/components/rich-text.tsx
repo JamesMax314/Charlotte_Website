@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { resolveFontFamily, type FontOption } from "@/lib/fonts";
-import type { RichDoc, RichParagraph, RichRun } from "@/lib/rich-text";
+import type { RichDoc, RichRun } from "@/lib/rich-text";
 
 /**
  * Renders a rich-text document as React elements.
@@ -59,7 +59,7 @@ function Run({ run, fonts }: { run: RichRun; fonts: FontOption[] }) {
   return node;
 }
 
-const Runs = ({ runs, fonts }: { runs: RichParagraph; fonts: FontOption[] }) => (
+const Runs = ({ runs, fonts }: { runs: RichRun[]; fonts: FontOption[] }) => (
   <>
     {runs.map((run, index) => (
       <Run key={index} run={run} fonts={fonts} />
@@ -70,18 +70,27 @@ const Runs = ({ runs, fonts }: { runs: RichParagraph; fonts: FontOption[] }) => 
 /**
  * A document inside a single element — the wall's text boxes.
  *
- * Paragraphs are separated by line breaks rather than by `<p>`, because the
- * wall promotes its largest box to the page `<h1>` and a heading may not
- * contain paragraphs. The box keeps `whitespace-pre-wrap`, so a blank
- * paragraph is a blank line exactly as it was before rich text.
+ * Paragraphs are spans rather than `<p>`, because the wall promotes its
+ * largest box to the page `<h1>` and a heading may not contain paragraphs.
+ * They are nonetheless laid out as blocks, and that is what alignment needs:
+ * `text-align` on an inline span does nothing at all, so the separating `<br>`
+ * this used to render would have left every per-paragraph alignment silently
+ * inert. A blank paragraph keeps a `<br>` inside it, because an empty block is
+ * zero-high and the blank line the artist typed would close up.
  */
 export function RichTextInline({ doc, fonts }: { doc: RichDoc; fonts: FontOption[] }) {
   return (
     <>
       {doc.map((paragraph, index) => (
-        <span key={index}>
-          {index > 0 && <br />}
-          <Runs runs={paragraph} fonts={fonts} />
+        <span
+          key={index}
+          style={{
+            display: "block",
+            // Absent means the box's own alignment, which it inherits.
+            ...(paragraph.align === undefined ? {} : { textAlign: paragraph.align }),
+          }}
+        >
+          {paragraph.runs.length === 0 ? <br /> : <Runs runs={paragraph.runs} fonts={fonts} />}
         </span>
       ))}
     </>
@@ -106,10 +115,14 @@ export function RichTextBlocks({
   return (
     <>
       {doc
-        .filter((paragraph) => paragraph.length > 0)
+        .filter((paragraph) => paragraph.runs.length > 0)
         .map((paragraph, index) => (
-          <p key={index} className={className}>
-            <Runs runs={paragraph} fonts={fonts} />
+          <p
+            key={index}
+            className={className}
+            style={paragraph.align === undefined ? undefined : { textAlign: paragraph.align }}
+          >
+            <Runs runs={paragraph.runs} fonts={fonts} />
           </p>
         ))}
     </>

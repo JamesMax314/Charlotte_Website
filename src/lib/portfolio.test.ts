@@ -155,6 +155,24 @@ describe("headingTextId", () => {
     expect(id).toBe("real");
   });
 
+  /**
+   * The box's own size is only where its type starts. With no box-level size
+   * control left, every box shares one default and reading `fontSize` alone
+   * would hand the heading to whichever box happened to sit highest.
+   */
+  it("counts the biggest run inside a box, not just the box's own size", () => {
+    const id = headingTextId([
+      text({ id: "plain", fontSize: 2, y: 0 }),
+      text({
+        id: "has-a-big-run",
+        fontSize: 2,
+        y: 40,
+        rich: [{ runs: [{ text: "Big", size: 3 }] }],
+      }),
+    ]);
+    expect(id).toBe("has-a-big-run");
+  });
+
   it("returns null when there is no text at all", () => {
     expect(headingTextId([])).toBeNull();
   });

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ptOptions } from "@/lib/type-scale";
+import { centreScrollTop, nearestScrollTop, type RowBox } from "@/lib/list-scroll";
 
 /**
  * The point size control: a button, and a scrolling list of sizes.
@@ -25,6 +26,25 @@ import { ptOptions } from "@/lib/type-scale";
 /** `max-h-48`, and roughly what one row of `py-1.5 text-xs` measures. */
 const LIST_MAX_HEIGHT = 192;
 const ROW_HEIGHT = 27;
+
+/**
+ * Where a row sits within the list's scrollable content.
+ *
+ * Measured against the list rather than read from `offsetTop`, which is
+ * relative to the nearest *positioned* ancestor. That happens to be this list,
+ * because it is absolutely positioned — but nothing says it must stay that
+ * way, and if it ever stopped being positioned the offsets would silently be
+ * measured from somewhere up the page and every row would scroll to the
+ * bottom of the ladder.
+ */
+const rowBox = (list: HTMLElement, row: HTMLElement): RowBox => ({
+  top:
+    row.getBoundingClientRect().top -
+    list.getBoundingClientRect().top -
+    list.clientTop +
+    list.scrollTop,
+  height: row.offsetHeight,
+});
 
 export function SizeSelect({
   valuePt,
@@ -101,12 +121,24 @@ export function SizeSelect({
     };
   }, [open]);
 
+  /*
+    Opening the list must move the list and nothing else.
+
+    `scrollIntoView` walks every scrollable ancestor, so in the settings form —
+    where this sits in the document flow — opening the dropdown scrolled the
+    page to centre it, and the page appeared to jump. The wall was fine only
+    because its formatting panel is fixed, which ends the ancestor chain at the
+    viewport. `focus` scrolls for the same reason unless told not to.
+  */
   useEffect(() => {
     if (!open) return;
     const list = listRef.current;
     if (!list) return;
-    list.querySelector<HTMLElement>('[data-current="true"]')?.scrollIntoView({ block: "center" });
-    list.focus();
+    const current = list.querySelector<HTMLElement>('[data-current="true"]');
+    if (current) {
+      list.scrollTop = centreScrollTop(rowBox(list, current), list.clientHeight, list.scrollHeight);
+    }
+    list.focus({ preventScroll: true });
   }, [open]);
 
   /*
@@ -144,10 +176,14 @@ export function SizeSelect({
     handler();
   };
 
-  // Keeps the highlighted row in view as the arrows walk past the edge.
+  // Keeps the highlighted row in view as the arrows walk past the edge — and,
+  // like opening, moves only the list.
   useEffect(() => {
     if (!open) return;
-    listRef.current?.children[active]?.scrollIntoView({ block: "nearest" });
+    const list = listRef.current;
+    const row = list?.children[active] as HTMLElement | undefined;
+    if (!list || !row) return;
+    list.scrollTop = nearestScrollTop(rowBox(list, row), list.clientHeight, list.scrollTop);
   }, [active, open]);
 
   return (
@@ -171,7 +207,7 @@ export function SizeSelect({
           setDropUp(opensUpward());
           setOpen(true);
         }}
-        className="border-line focus:border-ink flex w-full items-center justify-between gap-2 border bg-transparent px-2 py-1 text-xs outline-none"
+        className="border-line focus:border-ink flex h-7 w-full items-center justify-between gap-2 border bg-transparent px-2 text-xs outline-none"
       >
         <span>{valuePt} pt</span>
         <span aria-hidden className="text-graphite/70 text-[9px]">

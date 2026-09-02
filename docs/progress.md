@@ -18,9 +18,10 @@ The product specification is `docs/project-brief.md`.
   the top — see Phase 17.
 
 - **Text is rich text, everywhere she types it.** Wall boxes and the About,
-  Contact and Privacy copy all take bold, italic, underline, colour, face, size and links
-  within a single box, with the controls along the top of the box. It is stored as a
-  document, not as HTML — see the invariants.
+  Contact and Privacy copy all take bold, italic, underline, colour, face, size, links and
+  per-line alignment within a single box, with the controls along the top of the box.
+  Those controls are the whole of the formatting interface — a text box has nothing more
+  behind a menu. It is stored as a document, not as HTML — see the invariants.
 
 - **Pieces can have pages of their own**, built with the same wall editor. Elements placed
   on them are inert by construction and never link onward.
@@ -117,6 +118,9 @@ The product specification is `docs/project-brief.md`.
 | 21    | CI generates `cloudflare-env.d.ts` before it typechecks. The Worker's bindings live only in that generated file, so `env.DB` and `env.MEDIA` were TS2339 on every run while a developer machine stayed clean                                                                                                                                                     |
 | 22    | Search and sharing. Canonicals, Open Graph and Twitter cards on every page; `Person`/`WebSite` entity markup with `sameAs`; breadcrumbs; a heading fallback so no page renders without an `<h1>`; an artist-owned description and share image; `lastModified` in the sitemap                                                                                     |
 | 23    | Type sizes are chosen from a list, not typed into a spinner. One scrolling list of point sizes serves both the box and the run, and a span's size style is rebased against what it nests inside so the editor finally paints the size it reports                                                                                                                 |
+| 24    | Alignment moved into the text box's own format bar, where it aligns the paragraph the caret is in rather than the whole box — so the settings copy fields get it too. The right-click menu's "Edit format" panel is gone, and with it every box-wide font, size, mark and colour it carried                          |
+| 25    | A mark now replaces the marks of its own kind inside the selection, so a colour applied over coloured text takes; and "Clear" strips the data attributes `removeFormat` leaves behind, so it no longer clears the screen while publishing the old marks                                                              |
+| 26    | The size list scrolls itself to the size in force instead of asking the browser to, so opening it in the settings form no longer scrolls the page under the artist                                                                                                                                                   |
 
 ---
 
@@ -388,10 +392,42 @@ Non-obvious decisions that the code alone does not explain.
   editor. Nested, they multiply: 30pt applied inside a half-size run painted half of 30
   while storing the full multiple, so the editor and the saved document disagreed and
   every further adjustment drifted from the last. `rebaseSizeStyle` divides the style by
-  what the span inherits and `clearSizeMarks` drops the marks it wrapped around;
+  what the span inherits and `clearMarks` drops the marks it wrapped around;
   `applySpanMark` calls both _after_ insertion, because extracting a selection splits the
   surrounding elements and where the span lands is the only reliable answer to what it
   inherits. This is why the size control could be seen to move the wrong way.
+
+- **A new mark replaces the marks of its own kind inside it — colour and face, not just
+  size.** Size was cleared because a nested `em` multiplies; colour and face were left
+  because they do not. But they do not need to compound to break: nested, the innermost is
+  both what the browser paints and what `marksOf` reads, so a colour laid over text that
+  already had one changed nothing whatsoever. The artist reported it as black not
+  applying. It reads as stale state and is the opposite — the old colour is still there,
+  winning — and it looks intermittent because the failure depends on the gesture: dragging
+  across a coloured word puts the span inside the range and fails, while double-clicking
+  it puts the range inside the span, so the new mark nests within the old one and the
+  innermost is the new one. `clearMarks` now takes the kinds being applied.
+
+- **`removeFormat` clears the styles and leaves the `data-rt-*` attributes.** So "Clear"
+  emptied `style` on every span it touched, the text went plain on screen, and `marksOf`
+  went on reading colour, face and size off the attributes — the box looked cleared and
+  published coloured. The attribute is deliberately the thing that is read back, which is
+  what makes a browser command that only knows about styles unable to finish the job.
+  `clearMarksInRange` strips both halves from everything the selection touches, and the
+  editor calls it after every `removeFormat`.
+
+- **`scrollIntoView` cannot be told where to stop, so the size list does the sum itself.**
+  It scrolls every scrollable ancestor, which is right for the list and wrong for
+  everything above it: in the settings form, where the control sits in the document flow,
+  opening the dropdown scrolled the page to centre it and the page jumped. The wall never
+  showed this and could not have — its formatting panel is `position: fixed`, and a fixed
+  element's chain of scrollable ancestors ends at the viewport, so the identical call was
+  correct there. `src/lib/list-scroll.ts` holds the arithmetic, pure and unit-tested
+  because jsdom has no layout, and `focus` takes `preventScroll` for the same reason. A
+  row's offset is measured against the list rather than read from `offsetTop`, which is
+  relative to the nearest *positioned* ancestor: that is this list today only because it
+  is absolutely positioned, and the failure if it ever stopped being so is every row
+  scrolling to the end of the ladder.
 
 - **A size the artist cannot get is never offered.** Both point fields derive their bounds
   the same way they always did — from `WALL_TEXT_CQW` for a box and from
@@ -540,12 +576,12 @@ Non-obvious decisions that the code alone does not explain.
   uploaded fonts can join without any consumer changing.
 
 - **Two extension points widen when uploaded fonts arrive:** the `fonts` prop on
-  `TextToolbar` (injected, not imported, for this reason) and the `isKnownFontId` guard
+  `RichTextEditor` (injected, not imported, for this reason) and the `isKnownFontId` guard
   in `updateWallText`.
 
 - **Floating surfaces go through `FloatingLayer`.** It portals to `document.body`,
   keeps itself inside the window and closes on Escape or an outside click. Both the
-  context menu and the text formatting panel use it, so the stacking and dismissal
+  context menu and the wall's floating surfaces use it, so the stacking and dismissal
   behaviour cannot drift apart.
 
 - **The formatting panel follows the pointer; it is never a fixed bar.** Pinned above the

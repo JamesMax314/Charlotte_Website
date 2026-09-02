@@ -33,13 +33,11 @@ import {
   saveWallTextLayout,
   updateWallText,
 } from "@/app/admin/portfolio-actions";
-import { TextToolbar } from "./text-toolbar";
 import { RichTextEditor } from "./rich-text-editor";
 import { RichTextInline } from "@/components/rich-text";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { useAction } from "./use-action";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
-import { FloatingLayer } from "./floating-layer";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImageDialog, type ImageDetails } from "./image-dialog";
 import { uploadImage } from "@/lib/client-upload";
@@ -128,14 +126,6 @@ export function PortfolioCanvas({
   });
   const [menu, setMenu] = useState<Menu | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
-  /**
-   * Where the formatting panel is open, and for which text.
-   *
-   * It follows the pointer rather than sitting above the canvas: a bar pinned
-   * to the top of the page is off-screen while editing a text box near the
-   * bottom of a tall wall, so the artist could not see what her changes did.
-   */
-  const [formatting, setFormatting] = useState<{ id: string; x: number; y: number } | null>(null);
 
   /** The details dialog, and the file input that feeds it. */
   const [dialog, setDialog] = useState<{
@@ -178,8 +168,6 @@ export function PortfolioCanvas({
     const width = canvasRef.current?.offsetWidth ?? 1;
     return (px / width) * 100;
   }, []);
-
-  const formatTarget = formatting ? (texts.find((t) => t.id === formatting.id) ?? null) : null;
 
   /*
     The optimistic copy applies the patch as typed; the action re-sanitises it
@@ -491,11 +479,6 @@ export function PortfolioCanvas({
           onSelect: () => setSelectedTextId(text.id),
         },
         {
-          label: "Edit format",
-          icon: Icons.format,
-          onSelect: () => setFormatting({ id: text.id, x: clientX, y: clientY }),
-        },
-        {
           label: "Delete text",
           icon: Icons.trash,
           danger: true,
@@ -784,27 +767,6 @@ export function PortfolioCanvas({
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />
-      )}
-
-      {formatTarget && formatting && (
-        <FloatingLayer
-          x={formatting.x}
-          y={formatting.y}
-          onClose={() => setFormatting(null)}
-          label={`Formatting for ${formatTarget.content.slice(0, 30) || "text"}`}
-        >
-          <TextToolbar
-            fonts={fonts}
-            text={formatTarget}
-            onChange={(patch) => patchText(formatTarget.id, patch)}
-            onDelete={() => {
-              setTexts((c) => c.filter((t) => t.id !== formatTarget.id));
-              if (selectedTextId === formatTarget.id) setSelectedTextId(null);
-              setFormatting(null);
-              run(deleteWallText(formatTarget.id), "Deleting the text");
-            }}
-          />
-        </FloatingLayer>
       )}
 
       <ConfirmDialog
