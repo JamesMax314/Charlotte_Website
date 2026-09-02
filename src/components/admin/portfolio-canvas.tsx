@@ -1001,7 +1001,15 @@ export function PortfolioCanvas({
                       e.stopPropagation();
                       openTextMenu(e.clientX, e.clientY, text);
                     }}
-                    className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap"
+                    /*
+                      `select-none` while the box is not being edited. Dragging
+                      a marquee across the wall otherwise highlights the words
+                      it passes over, so the gesture leaves a trail of selected
+                      text behind it. The editor that replaces this paragraph
+                      when the box is focused is unaffected, which is what keeps
+                      the artist able to select her own words to format them.
+                    */
+                    className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap select-none"
                     style={textStyle(text, { fonts })}
                   >
                     <RichTextInline doc={text.rich} fonts={fonts} />
