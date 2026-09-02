@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Caveat, Fraunces, IBM_Plex_Mono, Inter, Space_Grotesk } from "next/font/google";
 import { getSiteSettings } from "@/lib/catalogue";
 import { DEFAULT_ACCENT, judgeAccent, normaliseHex } from "@/lib/colour";
-import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
+import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { fontFaceCss } from "@/lib/fonts";
-import { siteOpenGraph, siteTwitter, socialImage } from "@/lib/seo";
+import { firstText, siteOpenGraph, siteTwitter, socialImage } from "@/lib/seo";
 import { getSiteFonts } from "@/lib/site-settings";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -58,8 +58,16 @@ const caveat = Caveat({
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   const name = settings.siteName || DEFAULT_SITE_NAME;
-  const description = `Illustrated maps, editorial spreads and sequences by ${name}. Selected prints available.`;
-  const { image, card } = socialImage({ siteName: name, faviconKey: settings.faviconKey });
+  // A stored empty string spreads over the settings fallback, so the default
+  // cannot be reached by the fallback alone — the chain has to be here.
+  const description = firstText(settings.siteDescription, DEFAULT_SITE_DESCRIPTION);
+  const { image, card } = socialImage({
+    siteName: name,
+    shareImageKey: settings.shareImageKey,
+    shareImageWidth: settings.shareImageWidth,
+    shareImageHeight: settings.shareImageHeight,
+    faviconKey: settings.faviconKey,
+  });
 
   return {
     metadataBase: new URL(SITE_URL),

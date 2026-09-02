@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MAX_COPY, normaliseSettings, safeEmail, safeExternalUrl } from "./settings-input";
+import {
+  MAX_COPY,
+  MAX_DESCRIPTION,
+  normaliseSettings,
+  safeEmail,
+  safeExternalUrl,
+} from "./settings-input";
 
 describe("safeExternalUrl", () => {
   it("accepts http and https", () => {
@@ -67,6 +73,16 @@ describe("normaliseSettings", () => {
   it("only touches the fields it is given", () => {
     const { values } = normaliseSettings({ siteName: "Her Name" });
     expect(values).toEqual({ siteName: "Her Name" });
+  });
+
+  it("caps the search description rather than rejecting a long one", () => {
+    // Clearing it is a real instruction, and an over-long one is a paste, not a
+    // mistake worth refusing — a result only renders the first ~155 characters.
+    const long = normaliseSettings({ siteDescription: "word ".repeat(80) });
+    expect(long.values.siteDescription).toHaveLength(MAX_DESCRIPTION);
+    expect(long.rejected).toEqual([]);
+
+    expect(normaliseSettings({ siteDescription: "" }).values.siteDescription).toBe("");
   });
 
   it("normalises the highlight colour and rejects a non-colour", () => {

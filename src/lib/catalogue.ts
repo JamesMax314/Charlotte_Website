@@ -13,6 +13,7 @@ import {
   DEFAULT_ABOUT_COPY,
   DEFAULT_CONTACT_COPY,
   DEFAULT_PRIVACY_COPY,
+  DEFAULT_SITE_DESCRIPTION,
   DEFAULT_SITE_NAME,
 } from "./default-copy";
 import type { Artwork, ArtworkImage, Listing } from "./artworks";
@@ -183,6 +184,10 @@ const SETTINGS_FALLBACK = {
   instagramUrl: "https://www.instagram.com/",
   siteName: DEFAULT_SITE_NAME,
   faviconKey: null as string | null,
+  siteDescription: DEFAULT_SITE_DESCRIPTION,
+  shareImageKey: null as string | null,
+  shareImageWidth: null as number | null,
+  shareImageHeight: null as number | null,
   accentColour: DEFAULT_ACCENT,
   bodyFontId: DEFAULT_FONT_ID,
   headingFontId: DISPLAY_FONT_ID,

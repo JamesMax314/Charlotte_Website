@@ -76,6 +76,37 @@ export async function setAboutPhoto(photo: AboutPhoto | null): Promise<void> {
   refresh();
 }
 
+export interface ShareImage {
+  key: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * The picture a shared link shows. Null clears it back to the mark.
+ *
+ * Kept apart from the mark deliberately: a link preview is 1.91:1 and a mark is
+ * square, so one file cannot be both. Guarded on the key changing for the same
+ * reason `setAboutPhoto` is — keys are content-addressed, so re-uploading the
+ * same bytes returns the same key and an unguarded delete would destroy the
+ * object it had just written.
+ */
+export async function setShareImage(image: ShareImage | null): Promise<void> {
+  await requireSession();
+  if (image !== null && !isSafeKey(image.key)) {
+    throw new Error("That picture could not be stored.");
+  }
+
+  const current = await getSiteSettings();
+  await upsertSiteSettings({
+    shareImageKey: image?.key ?? null,
+    shareImageWidth: image?.width ?? null,
+    shareImageHeight: image?.height ?? null,
+  });
+  await discardAsset(current.shareImageKey, image?.key ?? null);
+  refresh();
+}
+
 /**
  * The highlight colour.
  *
@@ -211,6 +242,7 @@ export interface SettingsFormState {
 
 const FIELDS = [
   "siteName",
+  "siteDescription",
   "instagramUrl",
   "etsyShopUrl",
   "contactEmail",

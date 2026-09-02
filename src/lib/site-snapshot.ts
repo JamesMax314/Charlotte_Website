@@ -142,5 +142,6 @@ export const snapshotMediaKeys = (snapshot: SiteSnapshot): Set<string> => {
   for (const font of snapshot.fonts) keys.add(font.storageKey);
   if (snapshot.settings?.faviconKey) keys.add(snapshot.settings.faviconKey);
   if (snapshot.settings?.aboutPhotoKey) keys.add(snapshot.settings.aboutPhotoKey);
+  if (snapshot.settings?.shareImageKey) keys.add(snapshot.settings.shareImageKey);
   return keys;
 };

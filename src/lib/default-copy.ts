@@ -26,3 +26,14 @@ Visits are counted using aggregate analytics that set no cookies and do not iden
 If you email me, I keep the email so I can reply. Ask and I will delete it.`;
 
 export const DEFAULT_SITE_NAME = "Charlotte Wilkinson";
+
+/**
+ * The sentence a search result shows, until the artist writes her own.
+ *
+ * Reads as prose rather than a list of terms, but it is deliberately built out
+ * of the disciplines she wants to be found for — a description is one of the
+ * few places those words do real work. The rest of that job is her copy, not
+ * this constant: see the keyword note in docs/progress.md.
+ */
+export const DEFAULT_SITE_DESCRIPTION =
+  "Illustration and printmaking by Charlotte Wilkinson — nature, people and children’s books. Original work, prints and commissions.";

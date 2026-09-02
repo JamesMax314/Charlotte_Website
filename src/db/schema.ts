@@ -300,6 +300,21 @@ export const siteSettings = sqliteTable("site_settings", {
   siteName: text("site_name").notNull().default(""),
   faviconKey: text("favicon_key"),
 
+  /** The sentence a search result shows beneath the site's name. */
+  siteDescription: text("site_description").notNull().default(""),
+
+  /*
+    The picture a shared link shows.
+
+    Separate from the mark because the two want opposite shapes: the mark is a
+    square badge, a link preview is 1.91:1. Dimensions are stored because
+    og:image:width and height are what stop a platform having to fetch and
+    measure the file before it can draw the card.
+  */
+  shareImageKey: text("share_image_key"),
+  shareImageWidth: integer("share_image_width"),
+  shareImageHeight: integer("share_image_height"),
+
   /** The one colour the artist controls. Validated as a six-digit hex on write. */
   accentColour: text("accent_colour").notNull().default("#9a5b33"),
 

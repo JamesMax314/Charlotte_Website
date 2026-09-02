@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Container } from "@/components/container";
 import { AboutPhotoField } from "@/components/admin/about-photo-field";
 import { AccentField } from "@/components/admin/accent-field";
+import { ShareImageField } from "@/components/admin/share-image-field";
 import { FaviconField } from "@/components/admin/favicon-field";
 import { HeaderStyleField } from "@/components/admin/header-style-field";
 import { RichCopyField } from "@/components/admin/rich-copy-field";
@@ -49,6 +50,31 @@ export default async function SettingsPage() {
           <Label>Site name</Label>
           <input name="siteName" defaultValue={settings.siteName} className={FIELD} />
         </label>
+      </SettingsForm>
+
+      <SettingsForm
+        title="How the site appears in search and when it is shared"
+        hint="The words under your name in Google, and the picture a shared link shows."
+      >
+        <label className="flex max-w-lg flex-col gap-1.5">
+          <Label>Description</Label>
+          <textarea
+            name="siteDescription"
+            defaultValue={settings.siteDescription}
+            rows={3}
+            className={FIELD}
+          />
+          <span className="text-graphite text-xs">
+            One sentence, around 25 words. Say what you make and who for — these are the words
+            someone reads before deciding whether to click.
+          </span>
+        </label>
+
+        <ShareImageField
+          imageKey={settings.shareImageKey}
+          width={settings.shareImageWidth}
+          height={settings.shareImageHeight}
+        />
       </SettingsForm>
 
       <SettingsForm

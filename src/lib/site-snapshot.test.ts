@@ -133,16 +133,34 @@ describe("snapshotMediaKeys", () => {
         itemImages: [{ storageKey: "portfolio/a.jpg" }, { storageKey: "portfolio/a.jpg" }],
         artworkImages: [{ storageKey: "shop/b.jpg" }],
         fonts: [{ storageKey: "fonts/c.woff2" }],
-        settings: { faviconKey: "assets/d.png", aboutPhotoKey: "assets/e.jpg" },
+        settings: {
+          faviconKey: "assets/d.png",
+          aboutPhotoKey: "assets/e.jpg",
+          shareImageKey: "assets/f.jpg",
+        },
       } as unknown as Partial<SiteSnapshot>),
     );
     expect([...keys].sort()).toEqual([
       "assets/d.png",
       "assets/e.jpg",
+      "assets/f.jpg",
       "fonts/c.woff2",
       "portfolio/a.jpg",
       "shop/b.jpg",
     ]);
+  });
+
+  it("keeps the share image, which publishing would otherwise delete", () => {
+    // Every image column has to be named here. A key this function omits is a
+    // key the sweep in publishSite treats as unreferenced, so the artist's
+    // share picture would vanish the first time she published after uploading
+    // it — and the card would break days later with nothing in any log.
+    const keys = snapshotMediaKeys(
+      snapshot({
+        settings: { shareImageKey: "assets/share.jpg" },
+      } as unknown as Partial<SiteSnapshot>),
+    );
+    expect(keys.has("assets/share.jpg")).toBe(true);
   });
 
   it("copes with a settings row that has no mark or photograph", () => {

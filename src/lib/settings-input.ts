@@ -12,6 +12,8 @@ import { normaliseHex } from "./colour";
 export const MAX_COPY = 8000;
 export const MAX_NAME = 80;
 export const MAX_ALT = 300;
+/** Past what a search result renders; long enough not to feel cramped. */
+export const MAX_DESCRIPTION = 200;
 
 /**
  * An outbound link, or null.
@@ -54,6 +56,7 @@ const clampText = (input: string, max: number): string => input.trim().slice(0, 
 
 export interface SettingsInput {
   siteName?: string;
+  siteDescription?: string;
   instagramUrl?: string;
   etsyShopUrl?: string;
   contactEmail?: string;
@@ -102,6 +105,9 @@ export const normaliseSettings = (raw: SettingsInput): NormalisedSettings => {
   };
 
   if (raw.siteName !== undefined) values.siteName = clampText(raw.siteName, MAX_NAME);
+  if (raw.siteDescription !== undefined) {
+    values.siteDescription = clampText(raw.siteDescription, MAX_DESCRIPTION);
+  }
   if (raw.aboutPhotoAlt !== undefined) values.aboutPhotoAlt = clampText(raw.aboutPhotoAlt, MAX_ALT);
 
   url("instagramUrl", "Instagram address");
