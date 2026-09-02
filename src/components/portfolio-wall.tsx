@@ -160,7 +160,14 @@ export function PortfolioWall({
   fonts?: FontOption[];
 }) {
   const shown = items.filter((item) => coverImage(item));
-  if (shown.length === 0 && texts.length === 0) return null;
+
+  // An empty wall still owes the page a heading. A piece's own page is
+  // routinely empty — the artist adds child elements later, or never — and
+  // returning nothing at all left /work/<slug> with no <h1> even though the
+  // piece has a name.
+  if (shown.length === 0 && texts.length === 0) {
+    return heading ? <h1 className="sr-only">{heading}</h1> : null;
+  }
 
   const ratio = canvasHeightRatio(shown, texts);
   const headingId = headingTextId(texts);
