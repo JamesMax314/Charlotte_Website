@@ -181,9 +181,16 @@ export const showsHoverName = (item: PortfolioItem, showNames: boolean): boolean
 export const coverImage = (item: PortfolioItem): PortfolioImage | undefined => item.images[0];
 
 import { resolveFontFamily, type FontOption } from "./fonts";
-import type { RichDoc } from "./rich-text";
+import type { RichDoc, TextAlign } from "./rich-text";
 
-export type TextAlign = "left" | "center" | "right";
+/**
+ * Re-exported rather than declared twice.
+ *
+ * A box's own alignment and a paragraph's are the same three values, and the
+ * paragraph is the one the artist sets — the box's is the default a paragraph
+ * that expresses no opinion falls back to.
+ */
+export type { TextAlign };
 
 /**
  * Free-floating text on the wall.
@@ -232,12 +239,30 @@ export const headingTextId = (texts: WallText[]): string | null => {
   if (withContent.length === 0) return null;
 
   return withContent.reduce((best, candidate) =>
-    candidate.fontSize > best.fontSize ||
-    (candidate.fontSize === best.fontSize && candidate.y < best.y)
+    largestType(candidate) > largestType(best) ||
+    (largestType(candidate) === largestType(best) && candidate.y < best.y)
       ? candidate
       : best,
   ).id;
 };
+
+/**
+ * The size of the biggest type in a box.
+ *
+ * The box's own `fontSize` is only where its type starts: a run carries a
+ * multiple of it, so a box set at the default holding one run at three times
+ * that is three times the size on screen. Reading `fontSize` alone was right
+ * while the artist set a box's size herself; now that she sizes the words
+ * inside it, every box shares one default size and the heading would be
+ * decided by nothing but which box sits highest.
+ */
+const largestType = (text: WallText): number =>
+  text.fontSize *
+  text.rich.reduce(
+    (largest, paragraph) =>
+      paragraph.runs.reduce((most, run) => Math.max(most, run.size ?? 1), largest),
+    1,
+  );
 
 /**
  * The limits a wall text's size is held between, in `cqw`.

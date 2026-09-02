@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_FONTS } from "./fonts";
 import {
+  activeAlign,
+  alignOfBlock,
   activeSpanMark,
   applyDocToElement,
   applySpanMark,
-  clearSizeMarks,
+  clearMarks,
+  clearMarksInRange,
   docFromElement,
   markSpan,
   rebaseSizeStyle,
@@ -19,19 +22,55 @@ const editable = (html: string): HTMLElement => {
 
 describe("docFromElement", () => {
   it("reads plain typing as one paragraph", () => {
-    expect(docFromElement(editable("<div>Hello there</div>"))).toEqual([[{ text: "Hello there" }]]);
+    expect(docFromElement(editable("<div>Hello there</div>"))).toEqual([
+      { runs: [{ text: "Hello there" }] },
+    ]);
   });
 
   it("reads a block per paragraph", () => {
     expect(docFromElement(editable("<div>One</div><div>Two</div>"))).toEqual([
-      [{ text: "One" }],
-      [{ text: "Two" }],
+      { runs: [{ text: "One" }] },
+      { runs: [{ text: "Two" }] },
     ]);
   });
 
   // A fresh editor holds a bare text node with no block around it.
+  it("reads the alignment written on a block", () => {
+    expect(docFromElement(editable('<div style="text-align: center">Mid</div>'))).toEqual([
+      { runs: [{ text: "Mid" }], align: "center" },
+    ]);
+  });
+
+  /**
+   * execCommand emits the attribute form when styleWithCSS is off, which is
+   * how this editor leaves it — see the note on ALIGNMENTS in the editor.
+   */
+  it("reads the attribute form execCommand can emit instead", () => {
+    expect(docFromElement(editable('<div align="right">End</div>'))).toEqual([
+      { runs: [{ text: "End" }], align: "right" },
+    ]);
+  });
+
+  /**
+   * The root's text-align is the box's own setting, inherited rather than
+   * chosen. Reading it would stamp the box's default onto every paragraph,
+   * turning "follow the box" into a copy that then stops following it.
+   */
+  it("never takes an alignment from the editor root", () => {
+    const el = editable("<div>Words</div>");
+    el.style.textAlign = "center";
+    expect(docFromElement(el)).toEqual([{ runs: [{ text: "Words" }] }]);
+  });
+
+  it("gives a shift+Enter line the alignment of the block it sits in", () => {
+    expect(docFromElement(editable('<div style="text-align: right">one<br>two</div>'))).toEqual([
+      { runs: [{ text: "one" }], align: "right" },
+      { runs: [{ text: "two" }], align: "right" },
+    ]);
+  });
+
   it("reads loose text at the root as a single paragraph", () => {
-    expect(docFromElement(editable("just typing"))).toEqual([[{ text: "just typing" }]]);
+    expect(docFromElement(editable("just typing"))).toEqual([{ runs: [{ text: "just typing" }] }]);
   });
 
   it("reads the marks the toolbar writes", () => {
@@ -39,28 +78,32 @@ describe("docFromElement", () => {
       editable("<div><strong>bold</strong><em>it</em><u>un</u>plain</div>"),
     );
     expect(doc).toEqual([
-      [
-        { text: "bold", bold: true },
-        { text: "it", italic: true },
-        { text: "un", underline: true },
-        { text: "plain" },
-      ],
+      {
+        runs: [
+          { text: "bold", bold: true },
+          { text: "it", italic: true },
+          { text: "un", underline: true },
+          { text: "plain" },
+        ],
+      },
     ]);
   });
 
   // execCommand emits <b>/<i> rather than <strong>/<em> in some browsers.
   it("reads the tags execCommand emits as the same marks", () => {
     expect(docFromElement(editable("<div><b>a</b><i>b</i></div>"))).toEqual([
-      [
-        { text: "a", bold: true },
-        { text: "b", italic: true },
-      ],
+      {
+        runs: [
+          { text: "a", bold: true },
+          { text: "b", italic: true },
+        ],
+      },
     ]);
   });
 
   it("reads nested marks as one run carrying both", () => {
     expect(docFromElement(editable("<div><strong><em>both</em></strong></div>"))).toEqual([
-      [{ text: "both", bold: true, italic: true }],
+      { runs: [{ text: "both", bold: true, italic: true }] },
     ]);
   });
 
@@ -72,12 +115,12 @@ describe("docFromElement", () => {
       ),
       BUILT_IN_FONTS,
     );
-    expect(doc).toEqual([[{ text: "x", colour: "#aabbcc", font: id, size: 1.5 }]]);
+    expect(doc).toEqual([{ runs: [{ text: "x", colour: "#aabbcc", font: id, size: 1.5 }] }]);
   });
 
   it("reads a link", () => {
     expect(docFromElement(editable('<div><a href="https://example.com">go</a></div>'))).toEqual([
-      [{ text: "go", href: "https://example.com/" }],
+      { runs: [{ text: "go", href: "https://example.com/" }] },
     ]);
   });
 
@@ -106,13 +149,13 @@ describe("docFromElement", () => {
 
   it("keeps a pasted link's text but drops an unusable scheme", () => {
     const doc = docFromElement(editable('<div><a href="javascript:alert(1)">text</a></div>'));
-    expect(doc).toEqual([[{ text: "text" }]]);
+    expect(doc).toEqual([{ runs: [{ text: "text" }] }]);
   });
 
   it("turns a shift+Enter line break into a paragraph", () => {
     expect(docFromElement(editable("<div>one<br>two</div>"))).toEqual([
-      [{ text: "one" }],
-      [{ text: "two" }],
+      { runs: [{ text: "one" }] },
+      { runs: [{ text: "two" }] },
     ]);
   });
 
@@ -126,7 +169,7 @@ describe("docFromElement", () => {
     const el = editable("<div><strong></strong></div>");
     const strong = el.querySelector("strong")!;
     for (const ch of "hello") strong.appendChild(document.createTextNode(ch));
-    expect(docFromElement(el)).toEqual([[{ text: "hello", bold: true }]]);
+    expect(docFromElement(el)).toEqual([{ runs: [{ text: "hello", bold: true }] }]);
   });
 });
 
@@ -162,8 +205,38 @@ describe("markSpan", () => {
     const root = document.createElement("div");
     root.appendChild(block);
     expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
-      [{ text: "x", colour: "#aabbcc", font: id, size: 1.5 }],
+      { runs: [{ text: "x", colour: "#aabbcc", font: id, size: 1.5 }] },
     ]);
+  });
+});
+
+describe("alignOfBlock", () => {
+  it("ignores an alignment the artist cannot choose", () => {
+    const el = editable('<div style="text-align: justify">x</div>');
+    expect(alignOfBlock(el.firstElementChild as HTMLElement)).toBeUndefined();
+  });
+
+  it("reports nothing for a block that was never aligned", () => {
+    expect(alignOfBlock(editable("<div>x</div>").firstElementChild as HTMLElement)).toBeUndefined();
+  });
+});
+
+describe("activeAlign", () => {
+  it("finds the alignment of the block the caret is in", () => {
+    const root = editable('<div style="text-align: center">x</div>');
+    expect(activeAlign(root.querySelector("div")!.firstChild, root)).toBe("center");
+  });
+
+  /** Undefined, not "left": she has expressed no opinion and the box decides. */
+  it("reports nothing where no alignment has been chosen", () => {
+    const root = editable("<div>x</div>");
+    expect(activeAlign(root.querySelector("div")!.firstChild, root)).toBeUndefined();
+  });
+
+  it("stops at the editor root, whose alignment belongs to the box", () => {
+    const root = editable("<div>x</div>");
+    root.style.textAlign = "right";
+    expect(activeAlign(root.querySelector("div")!.firstChild, root)).toBeUndefined();
   });
 });
 
@@ -221,14 +294,16 @@ describe("applyDocToElement", () => {
 
   it("round-trips a document through the DOM unchanged", () => {
     const doc: RichDoc = [
-      [
-        { text: "A ", bold: true },
-        { text: "link", href: "https://example.com/" },
-        { text: " and ", italic: true, colour: "#123456" },
-        { text: "big", size: 2, font: BUILT_IN_FONTS[0].id },
-      ],
-      [],
-      [{ text: "Second paragraph", underline: true }],
+      {
+        runs: [
+          { text: "A ", bold: true },
+          { text: "link", href: "https://example.com/" },
+          { text: " and ", italic: true, colour: "#123456" },
+          { text: "big", size: 2, font: BUILT_IN_FONTS[0].id },
+        ],
+      },
+      { runs: [] },
+      { runs: [{ text: "Second paragraph", underline: true }], align: "center" },
     ];
     expect(roundTrip(doc)).toEqual(doc);
   });
@@ -243,7 +318,11 @@ describe("applyDocToElement", () => {
    */
   it("gives a blank paragraph something to hold a caret", () => {
     const el = document.createElement("div");
-    applyDocToElement(el, [[{ text: "a" }], [], [{ text: "b" }]], BUILT_IN_FONTS);
+    applyDocToElement(
+      el,
+      [{ runs: [{ text: "a" }] }, { runs: [] }, { runs: [{ text: "b" }] }],
+      BUILT_IN_FONTS,
+    );
     expect(el.children[1].innerHTML).toBe("<br>");
   });
 });
@@ -258,7 +337,7 @@ describe("applyDocToElement", () => {
   30 while storing the full multiple, so the editor and the saved document
   disagreed and every further adjustment drifted from the last.
 */
-describe("size marks do not compound", () => {
+describe("marks are replaced, not nested", () => {
   const rooted = (html: string): HTMLElement => {
     const root = document.createElement("div");
     root.innerHTML = html;
@@ -272,19 +351,57 @@ describe("size marks do not compound", () => {
         "</span></div>",
     );
     const outer = root.querySelector<HTMLElement>("[data-rt-size]")!;
-    clearSizeMarks(outer);
+    clearMarks(outer, ["size"]);
 
     expect(root.querySelectorAll("[data-rt-size]")).toHaveLength(1);
     expect(outer.getAttribute("data-rt-size")).toBe("2");
-    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([[{ text: "x", size: 2 }]]);
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([{ runs: [{ text: "x", size: 2 }] }]);
   });
 
-  it("leaves colour and face alone, which do not multiply", () => {
+  /** Only the kind being applied is replaced; the others are hers to keep. */
+  it("leaves marks of other kinds alone", () => {
     const root = rooted(
       '<div><span data-rt-size="2"><span data-rt-colour="#aabbcc">x</span></span></div>',
     );
-    clearSizeMarks(root.querySelector<HTMLElement>("[data-rt-size]")!);
+    clearMarks(root.querySelector<HTMLElement>("[data-rt-size]")!, ["size"]);
     expect(root.querySelector("[data-rt-colour]")).not.toBeNull();
+  });
+
+  it("drops a nested colour, style and attribute together", () => {
+    const root = rooted(
+      '<div><span data-rt-colour="#101010" style="color: #101010">' +
+        '<span data-rt-colour="#2140d6" style="color: #2140d6">x</span>' +
+        "</span></div>",
+    );
+    const outer = root.querySelector<HTMLElement>("[data-rt-colour]")!;
+    clearMarks(outer, ["colour"]);
+
+    expect(root.querySelectorAll("[data-rt-colour]")).toHaveLength(1);
+    expect(root.querySelector<HTMLElement>("span span")!.style.color).toBe("");
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      { runs: [{ text: "x", colour: "#101010" }] },
+    ]);
+  });
+
+  /*
+    What "Clear" leaves behind if nobody strips the attributes: removeFormat
+    empties the style and the mark reads back off data-rt-colour regardless, so
+    the box looks plain and publishes coloured.
+  */
+  it("strips every mark a selection touches, and none that it does not", () => {
+    const root = rooted(
+      '<div><span data-rt-colour="#2140d6" data-rt-size="2">cleared</span></div>' +
+        '<div><span data-rt-colour="#2140d6">kept</span></div>',
+    );
+    const range = document.createRange();
+    range.selectNodeContents(root.firstElementChild!);
+
+    clearMarksInRange(root, range);
+
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      { runs: [{ text: "cleared" }] },
+      { runs: [{ text: "kept", colour: "#2140d6" }] },
+    ]);
   });
 
   it("divides the style by what the span nests inside, keeping the attribute true", () => {
@@ -373,7 +490,7 @@ describe("applySpanMark", () => {
     applySpanMark({ size: 1.5 }, BUILT_IN_FONTS, root);
 
     const doc = docFromElement(root, BUILT_IN_FONTS);
-    expect(doc).toEqual([[{ text: "word", size: 1.5 }]]);
+    expect(doc).toEqual([{ runs: [{ text: "word", size: 1.5 }] }]);
     expect(paintedSize(marked(root), root)).toBeCloseTo(1.5, 5);
   });
 
@@ -390,7 +507,7 @@ describe("applySpanMark", () => {
       applySpanMark({ size }, BUILT_IN_FONTS, root);
     }
 
-    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([[{ text: "word", size: 1.3 }]]);
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([{ runs: [{ text: "word", size: 1.3 }] }]);
     expect(paintedSize(marked(root), root)).toBeCloseTo(1.3, 5);
   });
 
@@ -412,10 +529,67 @@ describe("applySpanMark", () => {
     expect(paintedSize(armed, root)).toBeCloseTo(2, 5);
   });
 
-  it("leaves a colour or face alone, which have no arithmetic to get wrong", () => {
+  it("applies a colour to text that carries none", () => {
     const root = mounted("<div>word</div>");
     select(root, "div");
     applySpanMark({ colour: "#aabbcc" }, BUILT_IN_FONTS, root);
-    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([[{ text: "word", colour: "#aabbcc" }]]);
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      { runs: [{ text: "word", colour: "#aabbcc" }] },
+    ]);
+  });
+
+  /*
+    The regression the artist reported as "it will not go back to black".
+
+    A new mark wraps the selection, so the colour it is replacing ends up
+    *inside* the new span — and the inner colour is the one the browser paints
+    and the one `marksOf` reads back. Nothing was stale: the old colour was
+    still there, winning.
+  */
+  it("replaces a colour the selection already had, rather than wrapping it", () => {
+    const root = mounted(
+      '<div><span data-rt-colour="#2140d6" style="color: #2140d6">word</span></div>',
+    );
+    // The whole line, as dragging across it or triple-clicking gives — which
+    // puts the coloured span *inside* the range rather than around it.
+    select(root, "div");
+
+    applySpanMark({ colour: "#101010" }, BUILT_IN_FONTS, root);
+
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      { runs: [{ text: "word", colour: "#101010" }] },
+    ]);
+    expect(root.querySelectorAll("[data-rt-colour]")).toHaveLength(1);
+  });
+
+  it("replaces a face the selection already had", () => {
+    const [first, second] = BUILT_IN_FONTS;
+    const root = mounted(`<div><span data-rt-font="${second.id}">word</span></div>`);
+    select(root, "div");
+
+    applySpanMark({ font: first.id }, BUILT_IN_FONTS, root);
+
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      { runs: [{ text: "word", font: first.id }] },
+    ]);
+  });
+
+  /*
+    Selecting a coloured word by double-clicking puts the range *inside* the
+    span instead, so the new mark nests within the old one and the innermost —
+    the new one — is what is read and painted. That case always worked; it is
+    why the fault looked intermittent rather than total.
+  */
+  it("replaces it from inside the old span too, leaving one mark behind", () => {
+    const root = mounted(
+      '<div><span data-rt-colour="#2140d6" style="color: #2140d6">word</span></div>',
+    );
+    select(root, "span");
+
+    applySpanMark({ colour: "#101010" }, BUILT_IN_FONTS, root);
+
+    expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
+      { runs: [{ text: "word", colour: "#101010" }] },
+    ]);
   });
 });

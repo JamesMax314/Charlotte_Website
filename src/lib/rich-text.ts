@@ -31,7 +31,25 @@ export interface RichRun {
   href?: string;
 }
 
-export type RichParagraph = RichRun[];
+/** How a paragraph sits in its box. */
+export type TextAlign = "left" | "center" | "right";
+
+/**
+ * A paragraph: its runs, and the alignment the artist gave that line.
+ *
+ * Alignment belongs to the paragraph rather than to the box, because the
+ * paragraph is the only thing both surfaces have. A wall text box has a row of
+ * its own to hang a setting on; the About, Contact and Privacy copy is one
+ * document with no box at all, so a box-level setting could only ever align a
+ * whole page of prose at once.
+ *
+ * Absent means "whatever the box is set to", which is what keeps every
+ * document written before alignment existed rendering exactly as it did.
+ */
+export interface RichParagraph {
+  runs: RichRun[];
+  align?: TextAlign;
+}
 export type RichDoc = RichParagraph[];
 
 export const EMPTY_DOC: RichDoc = [];
@@ -194,6 +212,26 @@ export const mergeRuns = (runs: RichRun[]): RichRun[] => {
   return merged;
 };
 
+const ALIGNMENTS: readonly TextAlign[] = ["left", "center", "right"];
+
+const sanitiseAlign = (value: unknown): TextAlign | undefined =>
+  ALIGNMENTS.find((option) => option === value);
+
+/**
+ * Reads a stored paragraph, in either shape it can be in.
+ *
+ * A paragraph carrying no alignment is stored as the bare array of runs it has
+ * always been — see serialiseDoc — so both shapes are current, and neither is
+ * a legacy form that could ever be migrated away.
+ */
+const storedParagraph = (raw: unknown): { runs: unknown[]; align?: TextAlign } | null => {
+  if (Array.isArray(raw)) return { runs: raw };
+  if (typeof raw !== "object" || raw === null) return null;
+  const { runs, align } = raw as { runs?: unknown; align?: unknown };
+  if (!Array.isArray(runs)) return null;
+  return { runs, align: sanitiseAlign(align) };
+};
+
 /**
  * The one place an untrusted document becomes a trusted one.
  *
@@ -208,10 +246,11 @@ export const sanitiseDoc = (input: unknown, fonts: FontOption[] = []): RichDoc =
   let budget = RICH_LIMITS.text;
 
   for (const rawParagraph of input.slice(0, RICH_LIMITS.paragraphs)) {
-    if (!Array.isArray(rawParagraph)) continue;
+    const stored = storedParagraph(rawParagraph);
+    if (!stored) continue;
 
     const runs: RichRun[] = [];
-    for (const rawRun of rawParagraph.slice(0, RICH_LIMITS.runsPerParagraph)) {
+    for (const rawRun of stored.runs.slice(0, RICH_LIMITS.runsPerParagraph)) {
       if (budget <= 0) break;
       const run = sanitiseRun(rawRun, fonts);
       if (!run) continue;
@@ -223,10 +262,12 @@ export const sanitiseDoc = (input: unknown, fonts: FontOption[] = []): RichDoc =
     // An empty paragraph is a deliberate blank line, so it survives — but a
     // trailing run of them, which is what Enter at the end of a box produces,
     // is trimmed below.
-    doc.push(mergeRuns(runs));
+    const paragraph: RichParagraph = { runs: mergeRuns(runs) };
+    if (stored.align !== undefined) paragraph.align = stored.align;
+    doc.push(paragraph);
   }
 
-  while (doc.length > 0 && doc[doc.length - 1].length === 0) doc.pop();
+  while (doc.length > 0 && doc[doc.length - 1].runs.length === 0) doc.pop();
   return doc;
 };
 
@@ -248,14 +289,26 @@ export const parseDoc = (
   return docFromPlain(fallbackPlain);
 };
 
-export const serialiseDoc = (doc: RichDoc): string => JSON.stringify(doc);
+/**
+ * The stored form.
+ *
+ * A paragraph with no alignment is written as the bare array of runs it has
+ * always been, so every document already in the database stays byte-identical
+ * and the published site's content hash does not move — otherwise the "Live"
+ * badge would report changes to publish across the whole site the moment this
+ * shipped, for content nobody had touched.
+ */
+export const serialiseDoc = (doc: RichDoc): string =>
+  JSON.stringify(
+    doc.map((paragraph) => (paragraph.align === undefined ? paragraph.runs : paragraph)),
+  );
 
 /** Plain text with no marks — the shape every existing row is already in. */
 export const docFromPlain = (plain: string): RichDoc =>
   cleanText(plain)
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .map((line) => (line === "" ? [] : [{ text: line }]));
+    .map((line) => ({ runs: line === "" ? [] : [{ text: line }] }));
 
 /**
  * The plain-text projection.
@@ -266,7 +319,7 @@ export const docFromPlain = (plain: string): RichDoc =>
  * document cannot be parsed.
  */
 export const docToPlain = (doc: RichDoc): string =>
-  doc.map((paragraph) => paragraph.map((run) => run.text).join("")).join("\n");
+  doc.map((paragraph) => paragraph.runs.map((run) => run.text).join("")).join("\n");
 
 export const isEmptyDoc = (doc: RichDoc): boolean => docToPlain(doc).trim() === "";
 
@@ -295,4 +348,8 @@ export const copyDoc = (
 
 /** Whether any run carries a mark — what tells the editor a box is truly plain. */
 export const hasFormatting = (doc: RichDoc): boolean =>
-  doc.some((paragraph) => paragraph.some((run) => MARK_KEYS.some((key) => run[key] !== undefined)));
+  doc.some(
+    (paragraph) =>
+      paragraph.align !== undefined ||
+      paragraph.runs.some((run) => MARK_KEYS.some((key) => run[key] !== undefined)),
+  );

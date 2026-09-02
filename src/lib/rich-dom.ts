@@ -14,13 +14,29 @@
  */
 
 import { resolveFontFamily, type FontOption } from "./fonts";
-import { mergeRuns, sanitiseDoc, type RichDoc, type RichRun } from "./rich-text";
+import {
+  mergeRuns,
+  sanitiseDoc,
+  type RichDoc,
+  type RichParagraph,
+  type RichRun,
+  type TextAlign,
+} from "./rich-text";
 
 const MARK_ATTR = {
   colour: "data-rt-colour",
   font: "data-rt-font",
   size: "data-rt-size",
 } as const;
+
+/** The style each mark writes, so clearing one can undo both halves of it. */
+const MARK_STYLE = {
+  colour: "color",
+  font: "font-family",
+  size: "font-size",
+} as const;
+
+const MARK_KINDS = ["colour", "font", "size"] as const;
 
 /** The marks carried by a span rather than by a tag. */
 export type SpanMark = { colour?: string; font?: string; size?: number };
@@ -59,23 +75,73 @@ export function markSpan(mark: SpanMark, fonts: FontOption[]): HTMLSpanElement {
 }
 
 /**
- * Drops every size mark inside an element, style and attribute together.
+ * Drops the named marks from everything inside an element, style and attribute
+ * together.
  *
- * Applied to a span that has just been wrapped around a selection: the size
- * being applied wins outright over any inside it. Left in place they would
- * compound, because a nested `em` multiplies — so 30pt wrapped around a
- * half-size run painted at half of 30 — while `marksOf` reads only the
- * innermost, so the document would disagree with the screen either way.
+ * Applied to a span that has just been wrapped around a selection: the mark
+ * being applied wins outright over any of the same kind inside it. All three
+ * kinds need this, for two different reasons.
  *
- * Size only. A nested colour or face is merely redundant; those do not
- * multiply.
+ * A nested size *compounds*, because a nested `em` multiplies — 30pt wrapped
+ * around a half-size run painted at half of 30, while `marksOf` read the full
+ * multiple, so the document disagreed with the screen.
+ *
+ * A nested colour or face does not compound. It simply wins: the innermost
+ * value is both what the browser paints and what `marksOf` reads back, so a
+ * colour laid over text that already had one changed nothing whatsoever. That
+ * is the fault the artist reported as black not applying — the old colour was
+ * still in there, not a stale idea of what the colour was. It looked
+ * intermittent because it depends on how the selection was made: dragging
+ * across a coloured word puts the span inside the range and fails, while
+ * double-clicking it puts the range inside the span, so the new mark nests
+ * within the old one and the innermost is the new one.
+ *
+ * Marks of other kinds are left alone. They are independent of the one being
+ * applied, and she has not asked for them to change.
  */
-export function clearSizeMarks(el: HTMLElement): void {
-  for (const inner of el.querySelectorAll<HTMLElement>(`[${MARK_ATTR.size}]`)) {
-    inner.removeAttribute(MARK_ATTR.size);
-    inner.style.removeProperty("font-size");
+export function clearMarks(el: HTMLElement, kinds: readonly (keyof SpanMark)[]): void {
+  for (const kind of kinds) {
+    for (const inner of el.querySelectorAll<HTMLElement>(`[${MARK_ATTR[kind]}]`)) {
+      stripMarks(inner, [kind]);
+    }
   }
 }
+
+/** Both halves of a mark, on one element. */
+function stripMarks(el: HTMLElement, kinds: readonly (keyof SpanMark)[]): void {
+  for (const kind of kinds) {
+    el.removeAttribute(MARK_ATTR[kind]);
+    el.style.removeProperty(MARK_STYLE[kind]);
+  }
+}
+
+/**
+ * Strips our marks from everything a selection touches.
+ *
+ * `removeFormat` cannot do this itself, and the way it fails is the dangerous
+ * kind: it clears the inline styles and leaves the `data-rt-*` attributes
+ * behind, so the text goes back to plain on screen while `marksOf` still reads
+ * every mark off the attributes. "Clear" then appeared to work and the colour
+ * came back on the published site — the editor and the stored document
+ * disagreeing, which is the one thing the attribute/style pair exists to
+ * prevent.
+ */
+export function clearMarksInRange(
+  root: HTMLElement,
+  range: Range,
+  kinds: readonly (keyof SpanMark)[] = MARK_KINDS,
+): void {
+  const selector = kinds.map((kind) => `[${MARK_ATTR[kind]}]`).join(",");
+  for (const el of root.querySelectorAll<HTMLElement>(selector)) {
+    // A partly-covered span has already been split by `removeFormat`, so the
+    // half she did not select keeps its marks.
+    if (range.intersectsNode(el)) stripMarks(el, kinds);
+  }
+}
+
+/** The kinds a mark carries, which are exactly the kinds it has to replace. */
+const kindsOf = (mark: SpanMark): (keyof SpanMark)[] =>
+  MARK_KINDS.filter((kind) => mark[kind] !== undefined);
 
 /**
  * Rewrites a span's size style against what it ended up nesting inside.
@@ -94,6 +160,42 @@ export function rebaseSizeStyle(span: HTMLElement, size: number | undefined, roo
   if (size === undefined) return;
   const inherited = activeSpanMark(span.parentNode, root).size ?? 1;
   span.style.fontSize = `${inherited > 0 ? size / inherited : size}em`;
+}
+
+/**
+ * The alignment written on a block, in either shape a browser produces.
+ *
+ * `execCommand` emits a `text-align` style once `styleWithCSS` is on and an
+ * `align` attribute when it is not, and a paste can carry either — so both are
+ * read. Anything else, `justify` included, is not a value the artist can
+ * choose here and is dropped rather than stored.
+ */
+export function alignOfBlock(el: HTMLElement): TextAlign | undefined {
+  const written = el.style.textAlign || el.getAttribute("align") || "";
+  return written === "left" || written === "center" || written === "right" ? written : undefined;
+}
+
+/**
+ * The alignment in force where the caret is.
+ *
+ * Walks outward exactly as `activeSpanMark` does, so the toolbar can show the
+ * artist which way the line she is standing in is set. Undefined means she has
+ * not chosen one and the box's own alignment applies.
+ */
+export function activeAlign(node: Node | null, root: HTMLElement): TextAlign | undefined {
+  let el: HTMLElement | null =
+    node === null
+      ? null
+      : node.nodeType === Node.ELEMENT_NODE
+        ? (node as HTMLElement)
+        : node.parentElement;
+
+  while (el && root.contains(el) && el !== root) {
+    const align = alignOfBlock(el);
+    if (align) return align;
+    el = el.parentElement;
+  }
+  return undefined;
 }
 
 /**
@@ -170,7 +272,7 @@ export function applySpanMark(mark: SpanMark, fonts: FontOption[], root: HTMLEle
   // surroundContents throws when the range crosses an element boundary; the
   // extract/append path handles that case and behaves identically otherwise.
   span.appendChild(range.extractContents());
-  if (mark.size !== undefined) clearSizeMarks(span);
+  clearMarks(span, kindsOf(mark));
   range.insertNode(span);
   rebaseSizeStyle(span, mark.size, root);
   selection.removeAllRanges();
@@ -212,15 +314,18 @@ function runToNode(run: RichRun, fonts: FontOption[]): Node {
 }
 
 /** One paragraph per block, which is the shape `contenteditable` maintains. */
-export function paragraphToNode(runs: RichRun[], fonts: FontOption[]): HTMLElement {
+export function paragraphToNode(paragraph: RichParagraph, fonts: FontOption[]): HTMLElement {
   const block = document.createElement("div");
-  if (runs.length === 0) {
+  // Written as a style rather than an attribute, so it reads back through the
+  // same branch `execCommand` writes on a block the artist aligns herself.
+  if (paragraph.align !== undefined) block.style.textAlign = paragraph.align;
+  if (paragraph.runs.length === 0) {
     // An empty block collapses to nothing and cannot hold a caret; the <br>
     // is what makes a blank line editable rather than merely stored.
     block.appendChild(document.createElement("br"));
     return block;
   }
-  for (const run of runs) block.appendChild(runToNode(run, fonts));
+  for (const run of paragraph.runs) block.appendChild(runToNode(run, fonts));
   return block;
 }
 
@@ -228,7 +333,7 @@ export function paragraphToNode(runs: RichRun[], fonts: FontOption[]): HTMLEleme
 export function applyDocToElement(el: HTMLElement, doc: RichDoc, fonts: FontOption[]): void {
   el.replaceChildren(
     ...(doc.length === 0
-      ? [paragraphToNode([], fonts)]
+      ? [paragraphToNode({ runs: [] }, fonts)]
       : doc.map((paragraph) => paragraphToNode(paragraph, fonts))),
   );
 }
@@ -296,9 +401,12 @@ const BLOCK = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE)$/;
  * and an href picked up from a pasted anchor is checked there like any other.
  */
 export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichDoc {
-  const paragraphs: RichRun[][] = [];
+  const paragraphs: RichParagraph[] = [];
 
-  const pushBlock = (node: Node) => {
+  const pushBlock = (node: Node, align: TextAlign | undefined) => {
+    const push = (runs: RichRun[]) =>
+      paragraphs.push(align === undefined ? { runs } : { runs, align });
+
     const runs: RichRun[] = [];
     collectRuns(node, {}, runs);
 
@@ -310,15 +418,19 @@ export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichD
     */
     while (runs.length > 0 && runs[runs.length - 1].text === "\n") runs.pop();
 
-    // A run holding "\n" came from a <br>; split it into further paragraphs.
+    /*
+      A run holding "\n" came from a <br>; split it into further paragraphs.
+      They inherit the block's alignment, because a shift+Enter line sits
+      inside the block the artist aligned and is painted with it.
+    */
     let current: RichRun[] = [];
     for (const run of runs) {
       if (run.text === "\n") {
-        paragraphs.push(current);
+        push(current);
         current = [];
       } else current.push(run);
     }
-    paragraphs.push(current);
+    push(current);
   };
 
   // Loose text directly inside the root — what a fresh empty editor holds —
@@ -327,11 +439,18 @@ export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichD
     (n) => n.nodeType === Node.ELEMENT_NODE && BLOCK.test((n as HTMLElement).tagName),
   );
 
-  if (blocks.length === 0) pushBlock(el);
-  else for (const block of blocks) pushBlock(block);
+  /*
+    The root is never read for an alignment of its own. Its `text-align` is the
+    box's setting, inherited rather than chosen, and taking it would write the
+    box's default onto every paragraph the artist has expressed no opinion
+    about — turning "follow the box" into a copy of it that then stops
+    following.
+  */
+  if (blocks.length === 0) pushBlock(el, undefined);
+  else for (const block of blocks) pushBlock(block, alignOfBlock(block as HTMLElement));
 
   return sanitiseDoc(
-    paragraphs.map((runs) => mergeRuns(runs)),
+    paragraphs.map((paragraph) => ({ ...paragraph, runs: mergeRuns(paragraph.runs) })),
     fonts,
   );
 }

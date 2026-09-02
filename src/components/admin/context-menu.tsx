@@ -46,18 +46,6 @@ export const Icons = {
       <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.5 6.5v5M9.5 6.5v5" />
     </svg>
   ),
-  format: (
-    <svg
-      viewBox="0 0 16 16"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.4"
-    >
-      <path d="M3 3.5h10M8 3.5v9M5.5 12.5h5" />
-      <path d="M12.5 9.5h2M12.5 12h2" />
-    </svg>
-  ),
   tag: (
     <svg
       viewBox="0 0 16 16"

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  activeAlign,
   activeSpanMark,
   applyDocToElement,
   applySpanMark,
+  clearMarksInRange,
   docFromElement,
   type SpanMark,
 } from "@/lib/rich-dom";
@@ -17,6 +19,7 @@ import {
   runSizeInPt,
   safeHref,
   type RichDoc,
+  type TextAlign,
 } from "@/lib/rich-text";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
 import { SizeSelect } from "./size-select";
@@ -44,8 +47,41 @@ import { SizeSelect } from "./size-select";
 
 const BUTTON =
   "border-line hover:border-ink flex h-7 min-w-7 items-center justify-center border px-1.5 text-xs transition-colors";
+const ACTIVE = "bg-ink text-paper border-ink";
 
 const SWATCHES = [INK, "#6d6a66", DEFAULT_ACCENT, PAPER, "#2140d6"];
+
+/**
+ * Alignment is a property of the line, not of the selection.
+ *
+ * `execCommand` is left to apply it for the same reason it handles bold: it
+ * already knows which blocks a selection touches and where to put the caret
+ * back afterwards. `styleWithCSS` is deliberately not switched on to force the
+ * style form — the flag is document-wide and sticky, so turning it on here
+ * would make every later bold and italic emit a styled `<span>` instead of a
+ * `<strong>`, which `marksOf` does not read and which would therefore save as
+ * unformatted text. `alignOfBlock` reads both forms instead.
+ */
+const ALIGNMENTS: { value: TextAlign; command: string; label: string; path: string }[] = [
+  {
+    value: "left",
+    command: "justifyLeft",
+    label: "Align left",
+    path: "M2.5 4h11M2.5 7h7M2.5 10h11M2.5 13h7",
+  },
+  {
+    value: "center",
+    command: "justifyCenter",
+    label: "Align centre",
+    path: "M2.5 4h11M4.5 7h7M2.5 10h11M4.5 13h7",
+  },
+  {
+    value: "right",
+    command: "justifyRight",
+    label: "Align right",
+    path: "M2.5 4h11M6.5 7h7M2.5 10h11M6.5 13h7",
+  },
+];
 
 export function RichTextEditor({
   value,
@@ -174,6 +210,15 @@ export function RichTextEditor({
   */
   const [active, setActive] = useState<SpanMark>({});
 
+  /**
+   * The alignment of the paragraph the caret is in.
+   *
+   * Undefined until she chooses one, which is not the same as "left": it means
+   * the line follows whatever the box is set to, and the buttons show none
+   * pressed rather than claiming a choice she has not made.
+   */
+  const [align, setAlign] = useState<TextAlign | undefined>(undefined);
+
   useEffect(() => {
     const remember = () => {
       const selection = window.getSelection();
@@ -182,6 +227,7 @@ export function RichTextEditor({
       if (!ref.current?.contains(range.commonAncestorContainer)) return;
       savedRange.current = range.cloneRange();
       setActive(activeSpanMark(selection.anchorNode, ref.current));
+      setAlign(activeAlign(selection.anchorNode, ref.current));
     };
     document.addEventListener("selectionchange", remember);
     return () => document.removeEventListener("selectionchange", remember);
@@ -220,6 +266,33 @@ export function RichTextEditor({
     // face the artist just replaced.
     const selection = window.getSelection();
     if (selection && ref.current) setActive(activeSpanMark(selection.anchorNode, ref.current));
+  };
+
+  const alignTo = (option: (typeof ALIGNMENTS)[number]) => {
+    command(option.command);
+    // The command moves no selection, so `selectionchange` may not fire and
+    // the buttons would still show the alignment she just replaced.
+    setAlign(option.value);
+  };
+
+  /**
+   * Clear: back to the box's own type, for everything selected.
+   *
+   * `removeFormat` covers the tags and the inline styles but knows nothing of
+   * the `data-rt-*` attributes the colour, face and size marks are read from —
+   * see clearMarksInRange — so on its own it clears the screen and not the
+   * document.
+   */
+  const clearFormatting = () => {
+    restoreSelection();
+    document.execCommand("removeFormat");
+    const el = ref.current;
+    const selection = window.getSelection();
+    if (el && selection && selection.rangeCount > 0) {
+      clearMarksInRange(el, selection.getRangeAt(0));
+    }
+    read();
+    setActive({});
   };
 
   const addLink = () => {
@@ -271,6 +344,39 @@ export function RichTextEditor({
         onChange={(pt) => span({ size: runSizeFromPt(basePt, pt) })}
         className={layout === "top" ? "w-20" : "w-full"}
       />
+
+      <span
+        className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}
+        aria-hidden="true"
+      />
+
+      <div
+        className={layout === "side" ? "flex gap-1" : "contents"}
+        role="group"
+        aria-label="Alignment"
+      >
+        {ALIGNMENTS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-label={option.label}
+            aria-pressed={align === option.value}
+            onClick={() => alignTo(option)}
+            className={`${BUTTON} ${align === option.value ? ACTIVE : ""}`}
+          >
+            <svg
+              viewBox="0 0 16 16"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              aria-hidden="true"
+            >
+              <path d={option.path} />
+            </svg>
+          </button>
+        ))}
+      </div>
 
       <span
         className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}
@@ -381,11 +487,7 @@ export function RichTextEditor({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => command("removeFormat")}
-          className={`${BUTTON} text-graphite`}
-        >
+        <button type="button" onClick={clearFormatting} className={`${BUTTON} text-graphite`}>
           Clear
         </button>
       </div>
