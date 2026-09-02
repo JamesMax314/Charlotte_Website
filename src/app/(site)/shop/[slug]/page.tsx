@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Container } from "@/components/container";
 import { ArtworkViewer } from "@/components/artwork-viewer";
 import { BuyPanel } from "@/components/buy-panel";
-import { getArtworkBySlug } from "@/lib/catalogue";
+import { getArtworkBySlug, getSiteSettings } from "@/lib/catalogue";
+import { DEFAULT_SITE_NAME } from "@/lib/default-copy";
 import { primaryImage, soleListing } from "@/lib/artworks";
 import { SITE_URL } from "@/lib/site";
 
@@ -36,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ArtworkPage({ params }: Props) {
   const { slug } = await params;
-  const artwork = await getArtworkBySlug(slug);
+  const [artwork, settings] = await Promise.all([getArtworkBySlug(slug), getSiteSettings()]);
 
   // Drafts resolve to nothing; archived work still renders (brief P-08, A-09).
   if (!artwork) notFound();
@@ -51,7 +52,7 @@ export default async function ArtworkPage({ params }: Props) {
     name: artwork.title,
     artform: artwork.medium,
     dateCreated: String(artwork.year),
-    creator: { "@type": "Person", name: "Charlotte" },
+    creator: { "@type": "Person", name: settings.siteName || DEFAULT_SITE_NAME },
     ...(primaryImage(artwork) ? { image: `${SITE_URL}${primaryImage(artwork)!.src}` } : {}),
     url: `${SITE_URL}/shop/${artwork.slug}`,
   };

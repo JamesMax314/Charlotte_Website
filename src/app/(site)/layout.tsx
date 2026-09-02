@@ -105,9 +105,9 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         the gap below it were never the same twice — which is exactly what the
         artist now has one control for.
       */}
-      <div id="main" className="flex-1 py-[var(--content-space,64px)]">
+      <main id="main" className="flex-1 py-[var(--content-space,64px)]">
         {children}
-      </div>
+      </main>
       <SiteFooter />
       <DraftMarker />
     </div>
