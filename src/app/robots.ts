@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
-import { SITE_HOST, SITE_URL } from "@/lib/site";
+import { robotsRules } from "@/lib/seo";
+import { SITE_URL } from "@/lib/site";
 
 // Reads the request host, so it cannot be prerendered.
 export const dynamic = "force-dynamic";
@@ -23,8 +24,5 @@ export const dynamic = "force-dynamic";
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = (await headers()).get("host");
 
-  return {
-    rules: host === SITE_HOST ? { userAgent: "*", allow: "/" } : { userAgent: "*", disallow: "/" },
-    sitemap: `${SITE_URL}/sitemap.xml`,
-  };
+  return { rules: robotsRules(host), sitemap: `${SITE_URL}/sitemap.xml` };
 }

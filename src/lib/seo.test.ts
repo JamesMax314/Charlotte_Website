@@ -7,12 +7,13 @@ import {
   metaDescription,
   personJsonLd,
   profileLinks,
+  robotsRules,
   siteOpenGraph,
   socialImage,
   visualArtworkJsonLd,
   webSiteJsonLd,
 } from "./seo";
-import { SITE_URL } from "./site";
+import { SITE_HOST, SITE_URL } from "./site";
 
 describe("absoluteUrl", () => {
   it("resolves the home page to the bare origin", () => {
@@ -240,5 +241,26 @@ describe("jsonLdScriptContent", () => {
 
     expect(parsed["@context"]).toBe("https://schema.org");
     expect(parsed["@graph"]).toHaveLength(2);
+  });
+});
+
+describe("robotsRules", () => {
+  it("allows the canonical host, and keeps the admin out of the index", () => {
+    expect(robotsRules(SITE_HOST)).toEqual({
+      userAgent: "*",
+      allow: "/",
+      disallow: ["/admin", "/api"],
+    });
+  });
+
+  it("refuses every other origin the worker answers on", () => {
+    // The same site is reachable at charlotte-website.workers.dev, and a
+    // crawler that finds that copy would index the site twice.
+    expect(robotsRules("charlotte-website.workers.dev")).toEqual({
+      userAgent: "*",
+      disallow: "/",
+    });
+    expect(robotsRules("localhost:8787")).toEqual({ userAgent: "*", disallow: "/" });
+    expect(robotsRules(null)).toEqual({ userAgent: "*", disallow: "/" });
   });
 });

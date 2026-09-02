@@ -11,6 +11,7 @@ import { getSiteFonts } from "@/lib/site-settings";
 import { JsonLd } from "@/components/json-ld";
 import {
   absoluteUrl,
+  breadcrumbJsonLd,
   metaDescription,
   siteOpenGraph,
   siteTwitter,
@@ -102,9 +103,19 @@ export default async function PortfolioItemPage({ params }: Props) {
     imageUrl: cover ? absoluteUrl(cover.src) : null,
   });
 
+  // The trail follows the same wall the back link does, so a search result
+  // shows the visitor the route they would actually have taken.
+  const crumbs = breadcrumbJsonLd([
+    { name: "Home", path: "/" },
+    ...(shownOn && shownOn.status === "published"
+      ? [{ name: navLabel(shownOn), path: `/${shownOn.slug}` }]
+      : []),
+    { name: item.name || slug, path: `/work/${item.slug}` },
+  ]);
+
   return (
     <Container>
-      <JsonLd nodes={[jsonLd]} />
+      <JsonLd nodes={[jsonLd, crumbs]} />
 
       <Link href={back.href} className="text-graphite hover:text-accent mb-8 inline-block text-sm">
         ← {back.label}

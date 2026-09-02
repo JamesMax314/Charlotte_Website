@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Container } from "@/components/container";
+import { JsonLd } from "@/components/json-ld";
 import { DrawnRule } from "@/components/drawn-rule";
 import { RichTextBlocks } from "@/components/rich-text";
 import { mergeFonts } from "@/lib/fonts";
@@ -8,8 +9,16 @@ import { copyDoc, docToPlain } from "@/lib/rich-text";
 import { getSiteFonts } from "@/lib/site-settings";
 import { Mark } from "@/components/mark";
 import { getSiteSettings } from "@/lib/catalogue";
-import { DEFAULT_ABOUT_COPY, DEFAULT_CONTACT_COPY } from "@/lib/default-copy";
-import { metaDescription } from "@/lib/seo";
+import {
+  DEFAULT_ABOUT_COPY,
+  DEFAULT_ALTERNATE_NAMES,
+  DEFAULT_CONTACT_COPY,
+  DEFAULT_JOB_TITLE,
+  DEFAULT_SITE_DESCRIPTION,
+  DEFAULT_SITE_NAME,
+  DEFAULT_TOPICS,
+} from "@/lib/default-copy";
+import { absoluteUrl, firstText, metaDescription, siteEntityJsonLd } from "@/lib/seo";
 
 // The root layout's header and footer read site settings from D1, so this page
 // cannot be prerendered without baking in stale settings.
@@ -66,6 +75,28 @@ export default async function AboutPage() {
 
   return (
     <Container>
+      {/*
+        The same two nodes the home page emits, under the same `@id`. Repeating
+        one entity across the two pages that are about her is valid and is what
+        a crawler expects; it is repeating it on every artwork that is noise.
+      */}
+      <JsonLd
+        nodes={siteEntityJsonLd({
+          siteName: settings.siteName || DEFAULT_SITE_NAME,
+          description: firstText(settings.siteDescription, DEFAULT_SITE_DESCRIPTION),
+          imageUrl: settings.aboutPhotoKey
+            ? absoluteUrl(`/media/${settings.aboutPhotoKey}`)
+            : settings.faviconKey
+              ? absoluteUrl(`/media/${settings.faviconKey}`)
+              : null,
+          alternateNames: DEFAULT_ALTERNATE_NAMES,
+          jobTitle: DEFAULT_JOB_TITLE,
+          topics: DEFAULT_TOPICS,
+          instagramUrl: settings.instagramUrl,
+          etsyShopUrl: settings.etsyShopUrl,
+        })}
+      />
+
       <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr] lg:gap-16">
         {/*
           Below lg the grid collapses to one column and the photo stacks above

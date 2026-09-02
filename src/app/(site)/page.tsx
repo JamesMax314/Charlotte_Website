@@ -1,12 +1,27 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/container";
+import { JsonLd } from "@/components/json-ld";
 import { PortfolioWall } from "@/components/portfolio-wall";
 import { getPublishedWall, getWallTexts } from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
-import { DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_NAME } from "@/lib/default-copy";
+import {
+  DEFAULT_ALTERNATE_NAMES,
+  DEFAULT_JOB_TITLE,
+  DEFAULT_SITE_DESCRIPTION,
+  DEFAULT_SITE_NAME,
+  DEFAULT_TOPICS,
+} from "@/lib/default-copy";
 import { mergeFonts } from "@/lib/fonts";
 import { inReadingOrder } from "@/lib/portfolio";
-import { firstText, metaDescription, siteOpenGraph, siteTwitter, socialImage } from "@/lib/seo";
+import {
+  absoluteUrl,
+  firstText,
+  metaDescription,
+  siteEntityJsonLd,
+  siteOpenGraph,
+  siteTwitter,
+  socialImage,
+} from "@/lib/seo";
 import { getSiteFonts } from "@/lib/site-settings";
 
 // D1 is unreachable during `next build` (no binding outside the Worker), so
@@ -57,8 +72,34 @@ export default async function HomePage() {
     getSiteFonts(),
   ]);
 
+  /*
+    Who the site is about, said once, here and on /about.
+
+    A search for the artist's name is the measure this site is held to, and
+    `sameAs` is what connects the domain to the accounts she already has. It is
+    not repeated on every page: forty copies of the same node give a crawler
+    forty things to reconcile and add bytes to every response for no signal —
+    the artwork pages point at this one by `@id` instead.
+  */
+  const entity = siteEntityJsonLd({
+    siteName: settings.siteName || DEFAULT_SITE_NAME,
+    description: firstText(settings.siteDescription, DEFAULT_SITE_DESCRIPTION),
+    imageUrl: settings.aboutPhotoKey
+      ? absoluteUrl(`/media/${settings.aboutPhotoKey}`)
+      : settings.faviconKey
+        ? absoluteUrl(`/media/${settings.faviconKey}`)
+        : null,
+    alternateNames: DEFAULT_ALTERNATE_NAMES,
+    jobTitle: DEFAULT_JOB_TITLE,
+    topics: DEFAULT_TOPICS,
+    instagramUrl: settings.instagramUrl,
+    etsyShopUrl: settings.etsyShopUrl,
+  });
+
   return (
     <Container>
+      <JsonLd nodes={entity} />
+
       <PortfolioWall
         items={items}
         texts={texts}

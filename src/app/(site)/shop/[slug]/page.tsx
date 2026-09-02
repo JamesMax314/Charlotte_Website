@@ -10,6 +10,7 @@ import { primaryImage, soleListing } from "@/lib/artworks";
 import { JsonLd } from "@/components/json-ld";
 import {
   absoluteUrl,
+  breadcrumbJsonLd,
   metaDescription,
   siteOpenGraph,
   siteTwitter,
@@ -76,9 +77,15 @@ export default async function ArtworkPage({ params }: Props) {
     imageUrl: cover ? absoluteUrl(cover.src) : null,
   });
 
+  const crumbs = breadcrumbJsonLd([
+    { name: "Home", path: "/" },
+    { name: "Shop", path: "/shop" },
+    { name: artwork.title, path: `/shop/${artwork.slug}` },
+  ]);
+
   return (
     <Container>
-      <JsonLd nodes={[jsonLd]} />
+      <JsonLd nodes={[jsonLd, crumbs]} />
 
       <Link
         href="/shop"

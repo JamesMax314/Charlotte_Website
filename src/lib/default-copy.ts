@@ -37,3 +37,29 @@ export const DEFAULT_SITE_NAME = "Charlotte Wilkinson";
  */
 export const DEFAULT_SITE_DESCRIPTION =
   "Illustration and printmaking by Charlotte Wilkinson — nature, people and children’s books. Original work, prints and commissions.";
+
+/**
+ * The other ways the artist's name is written.
+ *
+ * `alternateName` is the correct, non-spammy home for genuine name variants —
+ * someone searching "cjw illustration" or "c wilkinson art" is looking for her.
+ * They belong in structured data rather than scattered through body copy.
+ */
+export const DEFAULT_ALTERNATE_NAMES = [
+  "Charlotte J Wilkinson",
+  "C Wilkinson",
+  "CJW",
+  "Charlotte Wilkinson Art",
+];
+
+/** What she works on, for `knowsAbout`. Her list, in the wording schema.org expects. */
+export const DEFAULT_TOPICS = [
+  "Illustration",
+  "Printmaking",
+  "Nature illustration",
+  "Children's book illustration",
+  "Editorial illustration",
+  "Design",
+];
+
+export const DEFAULT_JOB_TITLE = "Illustrator";

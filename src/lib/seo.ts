@@ -10,7 +10,7 @@
 
 import type { Metadata } from "next";
 import mediaLoader from "@/image-loader";
-import { SITE_URL } from "./site";
+import { SITE_HOST, SITE_URL } from "./site";
 
 /** Roughly where Google truncates a description in a result. */
 export const DESCRIPTION_LENGTH = 155;
@@ -310,3 +310,52 @@ export const breadcrumbJsonLd = (
  */
 export const jsonLdScriptContent = (nodes: Record<string, unknown>[]): string =>
   JSON.stringify({ "@context": "https://schema.org", "@graph": nodes }).replace(/</g, "\\u003c");
+
+/**
+ * The artist and her site, described once.
+ *
+ * Emitted only on the pages that are *about* her — home and About — and
+ * referred to by `@id` from every artwork. `sameAs` is what ties this site to
+ * her existing profiles, and is the part that does the work when someone
+ * searches her name rather than a subject.
+ */
+export const siteEntityJsonLd = (input: {
+  siteName: string;
+  description: string;
+  imageUrl?: string | null;
+  alternateNames: readonly string[];
+  jobTitle: string;
+  topics: readonly string[];
+  instagramUrl?: string | null;
+  etsyShopUrl?: string | null;
+}): Record<string, unknown>[] => [
+  personJsonLd({
+    name: input.siteName,
+    alternateNames: input.alternateNames,
+    jobTitle: input.jobTitle,
+    description: input.description,
+    imageUrl: input.imageUrl,
+    knowsAbout: input.topics,
+    sameAs: profileLinks(input.instagramUrl, input.etsyShopUrl),
+  }),
+  webSiteJsonLd({ name: input.siteName }),
+];
+
+/**
+ * What `robots.txt` says, decided by the host that was asked.
+ *
+ * A Worker answers on its `*.workers.dev` subdomain as well as on the custom
+ * domain, so the same site is reachable at two origins and only one of them
+ * should be indexed. Derived from the request rather than a flag, so there is
+ * nothing to remember to switch when a second origin appears.
+ *
+ * The admin is disallowed rather than merely `noindex`ed: there is nothing
+ * under it worth crawling, and the sign-in page appearing in a result is
+ * confusing rather than harmful.
+ */
+export const robotsRules = (
+  host: string | null,
+): { userAgent: string; allow?: string; disallow?: string | string[] } =>
+  host === SITE_HOST
+    ? { userAgent: "*", allow: "/", disallow: ["/admin", "/api"] }
+    : { userAgent: "*", disallow: "/" };
