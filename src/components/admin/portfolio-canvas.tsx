@@ -373,7 +373,12 @@ export function PortfolioCanvas({
   const openDetails = (item: PortfolioItem) =>
     setDialog({
       id: item.id,
-      initial: { name: item.name, information: item.information, clickable: item.clickable },
+      initial: {
+        name: item.name,
+        information: item.information,
+        clickable: item.clickable,
+        zoomable: item.zoomable,
+      },
       imageSrc: coverImage(item)?.src ?? null,
       isNew: false,
     });
@@ -392,7 +397,9 @@ export function PortfolioCanvas({
       const uploaded = await uploadImage(file, { field: "portfolioItemId", parentId: id });
       setDialog({
         id,
-        initial: { name: "", information: "", clickable: linksOnward },
+        // Zoomable by default, so a new image is worth clicking without the
+        // artist having to find the switch.
+        initial: { name: "", information: "", clickable: linksOnward, zoomable: true },
         imageSrc: uploaded.src,
         isNew: true,
       });

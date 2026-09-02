@@ -72,6 +72,15 @@ function shape(
     parentId: row.parentId,
     pageId: row.pageId,
     clickable: row.clickable,
+    /*
+      A revision published before this column existed has no opinion on it, so
+      the field is simply absent from those snapshot rows — and left alone it
+      would arrive as `undefined`, read as false, and quietly make every image
+      on the live site inert until the artist next published. The column's
+      default is the right answer for a row that predates it, which is what
+      D1 itself would return.
+    */
+    zoomable: row.zoomable ?? true,
     x: row.x,
     y: row.y,
     width: row.width,

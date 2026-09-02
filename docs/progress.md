@@ -24,7 +24,10 @@ The product specification is `docs/project-brief.md`.
   behind a menu. It is stored as a document, not as HTML — see the invariants.
 
 - **Pieces can have pages of their own**, built with the same wall editor. Elements placed
-  on them are inert by construction and never link onward.
+  on them are inert by construction and never link onward — but they are not inert to the
+  eye: an image with nowhere to go opens full screen instead, in the shop's lightbox,
+  cycling every zoomable image on that wall. It is on by default and switched off per
+  image, which is how a decorative mark stays silent.
 
 - **The artist adds her own pages**, linked from the middle of the top bar behind Home.
   Each is the same free-form wall as the home page — work placed on one is clickable and
@@ -118,9 +121,11 @@ The product specification is `docs/project-brief.md`.
 | 21    | CI generates `cloudflare-env.d.ts` before it typechecks. The Worker's bindings live only in that generated file, so `env.DB` and `env.MEDIA` were TS2339 on every run while a developer machine stayed clean                                                                                                                                                     |
 | 22    | Search and sharing. Canonicals, Open Graph and Twitter cards on every page; `Person`/`WebSite` entity markup with `sameAs`; breadcrumbs; a heading fallback so no page renders without an `<h1>`; an artist-owned description and share image; `lastModified` in the sitemap                                                                                     |
 | 23    | Type sizes are chosen from a list, not typed into a spinner. One scrolling list of point sizes serves both the box and the run, and a span's size style is rebased against what it nests inside so the editor finally paints the size it reports                                                                                                                 |
-| 24    | Alignment moved into the text box's own format bar, where it aligns the paragraph the caret is in rather than the whole box — so the settings copy fields get it too. The right-click menu's "Edit format" panel is gone, and with it every box-wide font, size, mark and colour it carried                          |
-| 25    | A mark now replaces the marks of its own kind inside the selection, so a colour applied over coloured text takes; and "Clear" strips the data attributes `removeFormat` leaves behind, so it no longer clears the screen while publishing the old marks                                                              |
-| 26    | The size list scrolls itself to the size in force instead of asking the browser to, so opening it in the settings form no longer scrolls the page under the artist                                                                                                                                                   |
+| 24    | Alignment moved into the text box's own format bar, where it aligns the paragraph the caret is in rather than the whole box — so the settings copy fields get it too. The right-click menu's "Edit format" panel is gone, and with it every box-wide font, size, mark and colour it carried                                                                      |
+| 25    | A mark now replaces the marks of its own kind inside the selection, so a colour applied over coloured text takes; and "Clear" strips the data attributes `removeFormat` leaves behind, so it no longer clears the screen while publishing the old marks                                                                                                          |
+| 26    | The size list scrolls itself to the size in force instead of asking the browser to, so opening it in the settings form no longer scrolls the page under the artist                                                                                                                                                                                               |
+| 27    | An image with nowhere to go opens full screen. Every unclickable piece on every wall is zoomable by default, in the shop's own lightbox — now one shared component — and cycles the whole wall in reading order. A new per-image toggle turns it off for a decorative mark                                                                                       |
+| 28    | Clicking beside the enlarged picture closes it — the dialog fills the viewport, so the grey a visitor takes for the backdrop is inside it. The lightbox image is eager too: `w-auto` before load is 0px, and a zero-sized element never intersects, so lazy never fired                                                                                          |
 
 ---
 
@@ -141,6 +146,16 @@ Non-obvious decisions that the code alone does not explain.
   the locale, the type and the image the layout supplied. That is why `siteOpenGraph` and
   `siteTwitter` exist and why every route builds the whole object through them — declaring
   one inline is a card that silently degrades on the pages most worth sharing.
+
+- **A snapshot row that predates a column reads as the column's default, not as false.**
+  `zoomable` was added after the site had been published, so every item row in the live
+  revision simply has no such field — and `row.zoomable` is typed `boolean`, so nothing
+  complains when `undefined` arrives and is read as "off". The symptom would have been
+  every image on the live site going inert until the artist next pressed "Make live", from
+  a deploy that changed no content. `shape()` applies `?? true` because that is what D1
+  itself returns for a row written before the column existed. The same care is owed to the
+  next nullable-by-omission column: `SNAPSHOT_VERSION` is the alternative and it is the
+  wrong tool, because bumping it blanks the live site until a republish.
 
 - **`snapshotMediaKeys` must name every image column in settings.** A key it omits is one
   `publishSite`'s sweep treats as unreferenced, so the object is deleted the first time the
@@ -425,7 +440,7 @@ Non-obvious decisions that the code alone does not explain.
   correct there. `src/lib/list-scroll.ts` holds the arithmetic, pure and unit-tested
   because jsdom has no layout, and `focus` takes `preventScroll` for the same reason. A
   row's offset is measured against the list rather than read from `offsetTop`, which is
-  relative to the nearest *positioned* ancestor: that is this list today only because it
+  relative to the nearest _positioned_ ancestor: that is this list today only because it
   is absolutely positioned, and the failure if it ever stopped being so is every row
   scrolling to the end of the ladder.
 
@@ -669,6 +684,18 @@ Non-obvious decisions that the code alone does not explain.
   height at a pixel for exactly this reason. The timing and geometry live in
   `src/lib/reveal.ts`, pure and unit-tested, because measuring this in a browser proved
   unreliable.
+
+- **A lazily loaded image that sizes itself from its content never loads.** The
+  lightbox picture is `w-auto` so it can be letterboxed by `max-h-full`, which means it
+  has no width until it has loaded — and an element of zero size never intersects the
+  viewport, so the observer behind `loading="lazy"` never fires and it never loads. The
+  deadlock only broke when something unrelated forced a re-layout, so it read as an
+  intermittently slow image rather than a bug, and it sat in the shop's lightbox from the
+  day it was written. `loading="eager"` is the fix and costs nothing here: a dialog that
+  is never opened never renders its contents. `priority` would be the wrong tool — it
+  preloads from the page that owns the lightbox, for a picture most visitors never ask
+  for. The rule generalises: any image whose box comes from its own content cannot also
+  be lazy.
 
 - **The fade hides before first paint, via an inline script, not from React.** Hiding
   from the component meant the wall painted once, vanished, then faded — a visible

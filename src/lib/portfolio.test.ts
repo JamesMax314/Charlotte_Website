@@ -12,6 +12,7 @@ import {
   isLikelyAboveFold,
   isOnWall,
   lcpCandidateId,
+  opensFullScreen,
   HOME_WALL,
   scopeColumns,
   scopeOf,
@@ -33,6 +34,7 @@ const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
   parentId: null,
   pageId: null,
   clickable: true,
+  zoomable: true,
   images: [],
   ...over,
 });
@@ -40,6 +42,8 @@ const item = (over: Partial<PortfolioItem>): PortfolioItem => ({
 const withCover = (w: number, h: number) => [
   { id: "i", src: "/media/a.jpg", alt: "", width: w, height: h },
 ];
+
+const cover = withCover(4, 3);
 
 describe("coverImage", () => {
   it("is the first image, which is the one shown on the wall", () => {
@@ -201,6 +205,45 @@ describe("isInteractive", () => {
    */
   it("is true for a piece on one of the artist's own pages", () => {
     expect(isInteractive(item({ clickable: true, parentId: null, pageId: "page" }))).toBe(true);
+  });
+});
+
+describe("opensFullScreen", () => {
+  /**
+   * The pairing with `isInteractive` is the whole rule: a piece has one
+   * behaviour on tap, never two. A test that only checked `zoomable` would
+   * pass while every clickable piece on the wall also opened a lightbox over
+   * the page it was navigating to.
+   */
+  it("is false for a clickable piece, which goes to its own page instead", () => {
+    expect(opensFullScreen(item({ clickable: true, images: cover }))).toBe(false);
+  });
+
+  it("is true for a piece the artist unclicked", () => {
+    expect(opensFullScreen(item({ clickable: false, images: cover }))).toBe(true);
+  });
+
+  // Inert by construction, and the reason the feature was asked for: these are
+  // the images that had nowhere at all to go.
+  it("is true for an element on a piece's own page, even though it is marked clickable", () => {
+    expect(opensFullScreen(item({ clickable: true, parentId: "parent", images: cover }))).toBe(
+      true,
+    );
+  });
+
+  it("is false once the artist switches zoom off, leaving a decorative image inert", () => {
+    expect(opensFullScreen(item({ clickable: false, zoomable: false, images: cover }))).toBe(false);
+    expect(
+      opensFullScreen(
+        item({ clickable: true, parentId: "parent", zoomable: false, images: cover }),
+      ),
+    ).toBe(false);
+  });
+
+  // The artist creates a piece before uploading to it; there is nothing to
+  // enlarge, and the wall does not render it either.
+  it("is false for a piece with no photograph yet", () => {
+    expect(opensFullScreen(item({ clickable: false, images: [] }))).toBe(false);
   });
 });
 
