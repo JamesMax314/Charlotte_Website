@@ -102,6 +102,7 @@ The product specification is `docs/project-brief.md`.
 | 18    | The real domain, charlottewilkinsonart.co.uk, is the committed default for canonicals, the sitemap and OG cards, and `robots.txt` allows indexing only on that host — so the workers.dev origin the site answers on is never indexed alongside it                                                                                                                |
 | 19    | Deployed to Cloudflare on the artist's own account: two R2 buckets, a D1 database in WEUR, all migrations, both secrets, and the apex bound as a custom domain in `wrangler.jsonc`. Guarded reads now rethrow Next's control-flow errors, which the session check had started swallowing                                                                         |
 | 20    | Wall text sizes are typed in points. Storage stays `cqw` so type still scales with the wall; `cqwToPt` converts at the edge against a documented reference width, and the studio, the derived pt bounds and the server clamp now share one pair of limits. The run-level Small/Normal/Large dropdown is a points input too, converted against the box it sits in |
+| 21    | CI generates `cloudflare-env.d.ts` before it typechecks. The Worker's bindings live only in that generated file, so `env.DB` and `env.MEDIA` were TS2339 on every run while a developer machine stayed clean                                                                                                                                                     |
 
 ---
 
@@ -240,6 +241,18 @@ Non-obvious decisions that the code alone does not explain.
   while looking entirely correct. `src/app/icon.svg` also had to move to `public/`,
   because file-based metadata always beats `metadata.icons` and the setting was ignored
   while it sat there.
+
+- **`cloudflare-env.d.ts` is generated, and CI must generate it too.**
+  `@opennextjs/cloudflare` declares a global `CloudflareEnv` carrying its own
+  bindings and nothing else, so `DB` and `MEDIA` exist for TypeScript only in the
+  file `wrangler types` writes from `wrangler.jsonc` — which is gitignored, because
+  it is 580KB of runtime types that would have to be regenerated on every binding
+  change anyway. The failure is quiet in the worst way: a developer machine has run
+  `pnpm cf-typegen` at some point and is clean forever, while every CI run fails
+  `typecheck` _and_ `build` on nine TS2339s in code nobody touched. `pnpm cf-typegen`
+  runs before both. It reads the config only — no account, no network, and no prior
+  build, despite the `WORKER_SELF_REFERENCE` type pointing into `.open-next`, which
+  `skipLibCheck` never resolves.
 
 - **`pnpm.packageExtensions` declares `esbuild` for `@opennextjs/cloudflare`.** The
   adapter imports esbuild without declaring it as a dependency. Under pnpm's isolated
@@ -739,6 +752,7 @@ One-time setup:
 pnpm install
 cp .dev.vars.example .dev.vars   # then fill it from the next command
 pnpm admin:passphrase            # prints the passphrase and both secret values
+pnpm cf-typegen                  # writes cloudflare-env.d.ts, or typecheck fails
 pnpm db:migrate:local            # creates the D1 tables
 pnpm seed                        # loads eight placeholder artworks into D1 and R2
 ```

@@ -24,6 +24,14 @@ jobs:
       # CLAUDE.md: ESLint must pass with zero warnings before commit.
       - run: pnpm lint --max-warnings=0
       - run: pnpm format:check
+      # `cloudflare-env.d.ts` is generated, gitignored, and the only thing that
+      # tells TypeScript the Worker's bindings exist: `@opennextjs/cloudflare`
+      # declares `CloudflareEnv` with its own bindings and nothing else, so
+      # without this step every `env.DB` and `env.MEDIA` is a TS2339 here while
+      # a developer machine — where `wrangler types` has been run — is clean.
+      # It reads wrangler.jsonc only: no account, no network, no prior build.
+      - run: pnpm cf-typegen
+
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
