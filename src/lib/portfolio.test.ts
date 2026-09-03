@@ -6,6 +6,7 @@ import {
   ptToCqw,
   WALL_TEXT_CQW,
   coverImage,
+  hasOwnPage,
   headingTextId,
   inReadingOrder,
   isInteractive,
@@ -206,6 +207,36 @@ describe("isInteractive", () => {
    */
   it("is true for a piece on one of the artist's own pages", () => {
     expect(isInteractive(item({ clickable: true, parentId: null, pageId: "page" }))).toBe(true);
+  });
+});
+
+describe("hasOwnPage", () => {
+  it("is true for a published, clickable, top-level piece", () => {
+    expect(hasOwnPage(item({ status: "published", clickable: true, parentId: null }))).toBe(true);
+  });
+
+  it("is false for a draft — it has never been shown", () => {
+    expect(hasOwnPage(item({ status: "draft", clickable: true, parentId: null }))).toBe(false);
+  });
+
+  /**
+   * The case the enum widening from two statuses to three exists to guard.
+   * `status !== "draft"` was true for "archived" as much as for "published",
+   * which would have left an archived piece's page resolving at its URL for
+   * a signed-in artist previewing the draft — the exact bug this replaced.
+   */
+  it("is false once archived — the whole point of putting a piece away", () => {
+    expect(hasOwnPage(item({ status: "archived", clickable: true, parentId: null }))).toBe(false);
+  });
+
+  it("is false for an element on a piece's own page", () => {
+    expect(hasOwnPage(item({ status: "published", clickable: true, parentId: "parent" }))).toBe(
+      false,
+    );
+  });
+
+  it("is false once the artist turns clickable off", () => {
+    expect(hasOwnPage(item({ status: "published", clickable: false, parentId: null }))).toBe(false);
   });
 });
 

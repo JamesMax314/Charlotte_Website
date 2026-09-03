@@ -3,7 +3,11 @@ import { Container } from "@/components/container";
 import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
 import { PageSettingsPanel } from "@/components/admin/page-settings";
 import { SitePageForm } from "@/components/admin/site-page-form";
-import { getAllPortfolioItems, getWallTexts } from "@/lib/portfolio-queries";
+import {
+  getAllPortfolioItems,
+  getArchivedPortfolioItems,
+  getWallTexts,
+} from "@/lib/portfolio-queries";
 import { getSitePageById } from "@/lib/site-pages-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { mergeFonts } from "@/lib/fonts";
@@ -31,9 +35,10 @@ export default async function SitePageEditor({ params }: Props) {
   if (!page) notFound();
 
   const scope: WallScope = { kind: "page", id };
-  const [items, texts, settings, fonts] = await Promise.all([
+  const [items, texts, archived, settings, fonts] = await Promise.all([
     getAllPortfolioItems(scope),
     getWallTexts(scope),
+    getArchivedPortfolioItems(),
     getSiteSettings(),
     getSiteFonts(),
   ]);
@@ -67,6 +72,7 @@ export default async function SitePageEditor({ params }: Props) {
       <PortfolioCanvas
         items={items}
         texts={texts}
+        archived={archived}
         snapEnabled={settings.snapEnabled}
         gutter={settings.gutterEnabled ? settings.gutter : 0}
         gridEnabled={settings.gridEnabled}

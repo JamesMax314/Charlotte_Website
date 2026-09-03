@@ -292,6 +292,70 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   // must not navigate the artist away from what she was doing.
 }
 
+/**
+ * Puts pieces away without deleting them.
+ *
+ * Unlike delete, nothing here touches R2 or the piece's own page: the row
+ * keeps its images and — because a page's elements point at it by
+ * `parent_id`, untouched — whatever the artist arranged there, so a restore
+ * gets back the whole piece rather than a picture to rebuild. Only the piece's
+ * own scope pair is cleared, back to the pair the home wall uses, which is
+ * what makes the archive one box shared by every wall rather than one per
+ * page. A `parent_id` is never in `ids` here — the option is not offered for
+ * an element on a piece's own page, and archiving one would orphan whatever
+ * the artist arranged on top of it.
+ *
+ * One statement for the whole selection, exactly like `deleteWallSelection`:
+ * a group action is one related change, not `ids.length` of them.
+ */
+export async function archivePortfolioItems(ids: string[]): Promise<void> {
+  await requireSession();
+  if (ids.length === 0) return;
+  const db = await getDb();
+
+  await db
+    .update(schema.portfolioItems)
+    .set({ status: "archived", parentId: null, pageId: null, updatedAt: new Date() })
+    .where(inArray(schema.portfolioItems.id, ids));
+
+  refresh();
+}
+
+/**
+ * Brings an archived piece back, at the point the artist right-clicked.
+ *
+ * Restores to whichever wall the menu was opened on — the archive is shared,
+ * so this is what lets a piece put away from the home page return onto a
+ * custom one. Brought to the front, exactly as a freshly added piece is: an
+ * old arrangement's z would otherwise bury it under everything added since.
+ */
+export async function restorePortfolioItem(
+  id: string,
+  at: { x: number; y: number },
+  scope: WallScope = HOME_WALL,
+): Promise<void> {
+  await requireSession();
+  const db = await getDb();
+
+  const [{ nextZ }] = await db
+    .select({ nextZ: sql<number>`coalesce(max(${schema.portfolioItems.z}), 0) + 1` })
+    .from(schema.portfolioItems);
+
+  await db
+    .update(schema.portfolioItems)
+    .set({
+      status: "published",
+      ...scopeColumns(scope),
+      x: Math.min(Math.max(at.x, 0), 95),
+      y: Math.max(at.y, 0),
+      z: nextZ,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.portfolioItems.id, id));
+
+  refresh();
+}
+
 // ---------------------------------------------------------------- text boxes
 
 /** Highest z across both pieces and text, so the two stack in one order. */

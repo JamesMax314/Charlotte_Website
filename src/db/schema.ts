@@ -134,7 +134,20 @@ export const portfolioItems = sqliteTable(
     /** May be blank: an untitled piece shows nothing on hover (see brief). */
     name: text("name").notNull(),
     information: text("information").notNull().default(""),
-    status: text("status", { enum: ["draft", "published"] })
+    /**
+     * `archived` is a third kind of hidden, and the only one the artist can
+     * come back from without rebuilding the piece.
+     *
+     * A draft is unfinished; archived is finished and put away. The row keeps
+     * its images and — because `parent_id` still points at it — everything she
+     * arranged on its own page, so restoring it returns the whole piece rather
+     * than a picture she has to compose again. Archiving also clears the
+     * scope pair below: the archive is one box shared by every wall, which is
+     * what lets a piece be put away from the home page and brought back onto
+     * a custom one, and what stops deleting that page cascading the archive
+     * away with it.
+     */
+    status: text("status", { enum: ["draft", "published", "archived"] })
       .notNull()
       .default("published"),
 
