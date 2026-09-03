@@ -140,7 +140,7 @@ The product specification is `docs/project-brief.md`.
 | 33    | Line spacing, chosen in points from the same scrolling ladder the type size uses and applied to the paragraph the caret is in, exactly as the alignment buttons beside it are. Stored as a multiple of the box so it still scales with the wall, and written as an `em` on the block so one paragraph gets one spacing whatever sizes are mixed into it                                                                                                                                                                                                                                                      |
 | 34    | Archive, on the home page and the artist's own custom pages. "Archive image" (or "Archive N images" on a selection) puts a piece away without deleting it — its own page and photographs untouched — and "Add from archive" restores it at the cursor, on any wall, from a shared box of thumbnails with delete-forever on right-click. Not offered on a piece's own page, which has nothing of its own to put away                                                                                                                                                                                        |
 | 32    | Performance. The 1102 the artist met in the studio was one server action per keystroke, each revalidating the layout, each layout render hashing the whole site: writes are now queued and coalesced, autosaves no longer revalidate, and the publish hash moved behind its own endpoint. Images are downscaled server-side by the IMAGES binding into AVIF and WebP, `/media` negotiates on `Accept` and caches at the edge, and the LQIP that had been stored since Phase 2 is finally rendered. A follow-up taught `derivativeKeys` about the new encodings, which a delete would otherwise have orphaned |
-| 36    | The top bar on a phone: the mark and the artist's name centred on their own line, with the menu button and Instagram at either end of the line below. The pages, the shop and About drop from the button as one list in reading order, in the flow so the page moves down rather than being covered. Desktop is untouched                                                                                                                                                                                                                                                                                              |
+| 36    | The top bar on a phone: the mark and the artist's name centred on their own line, with the menu button and Instagram at either end of the line below. The pages, the shop and About drop from the button as one list in reading order, in the flow so the page moves down rather than being covered. Built as a native `<details>` after the first version — a button with an `onClick` — was found on a phone as a hamburger that could be seen and not pressed. Desktop is untouched                                                                                                                                             |
 | 35    | Fixed "View site": it used `<Link>`, so leaving the admin was a client-side transition into a layout whose inline fade-in `<script>` never gets a parse pass — React refused to render it. Swapped for a plain `<a>` to force a full navigation. `/admin` now redirects to the wall (`/admin/portfolio`) instead of opening the shop grid, which moved to `/admin/shop` |
 
 ---
@@ -824,6 +824,33 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
 - **Text boxes resize in both directions; pieces do not.** A piece's height follows its
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
+
+- **The mobile menu is a `<details>`, because navigation must not depend on hydration.**
+  The same rule the fade already carries, and the top bar has the stronger claim to it:
+  a fade that does not run is a page that appears plainly, while a menu that does not run
+  is a site with no way around it. The first version was a `<button>` with an `onClick`,
+  and on a phone it was a hamburger that could be seen and not pressed — the artist found
+  it, and the giveaway was that the lightbox was dead on the same page while the Instagram
+  link beside the button, being a plain `<a>`, still worked. A summary is also a button
+  with an expanded state already announced, so there is no `aria-expanded` of ours to keep
+  in step. The element is uncontrolled and closed by writing `open` on the node: React must
+  not hold a second opinion about a thing whose whole purpose is to work when React does
+  not. Turning it back into a button with state is the obvious tidy-up and it reintroduces
+  the bug.
+
+- **`summary::-webkit-details-marker` lives in `globals.css` because no variant reaches
+  it.** `list-none` hides the disclosure triangle in Blink and Gecko; WebKit draws its
+  marker through a pseudo-element instead. Omit the rule and the menu button has a triangle
+  beside it on every iPhone and nothing anywhere else — a fault that cannot be seen on the
+  machine it is written on. The summary also keeps its own `display` for a related reason:
+  setting a summary to `flex` has a history of taking the disclosure behaviour with it in
+  WebKit, so the flex box is a span inside it.
+
+- **A glyph carries `width` and `height` attributes as well as classes.** An `<svg>` with a
+  `viewBox` and no intrinsic size collapses to nothing in WebKit inside a flex container
+  while Blink gives it a default box — so a stylesheet that has not arrived is an icon
+  missing on an iPhone and merely mis-sized on Android, which arrives as two bug reports
+  rather than one. The attributes lose to any class that does arrive, so they cost nothing.
 
 - **The reveal is one shared scroll sweep, and must never split into two mechanisms.**
   It used to pick per element: on screen at mount meant a timer, below the fold meant an

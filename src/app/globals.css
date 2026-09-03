@@ -255,6 +255,20 @@ dialog::backdrop {
 }
 
 /*
+  The disclosure triangle on the mobile menu.
+
+  `list-none` on the element covers Blink and Gecko. WebKit draws its marker
+  through a pseudo-element instead, which no Tailwind variant reaches — so
+  without this the artist's menu button is a hamburger with a triangle beside
+  it on every iPhone and nothing on anything else. Left as an element selector
+  rather than a class because a summary that ever escapes this one component
+  wants the same treatment.
+*/
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/*
   The shop's two-handle price slider.
 
   Both inputs are stacked over one track so the handles share it, which means
