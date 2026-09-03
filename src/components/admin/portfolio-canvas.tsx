@@ -1212,12 +1212,12 @@ export function PortfolioCanvas({
                       fonts={fonts}
                       ariaLabel="this text box"
                       layout="side"
-                      className="h-full w-full bg-transparent p-1 leading-snug"
+                      className="h-full w-full bg-transparent p-1 leading-none"
                       style={textStyle(text, { fonts })}
                       // Run sizes are a multiple of this, so the panel can
                       // only show points if it knows what the box is set to.
                       basePt={cqwToPt(text.fontSize)}
-                      // The `leading-snug` below, and on the public wall.
+                      // The `leading-none` below, and on the public wall.
                       baseLeading={SURFACE_LEADING.wall}
                     />
                   </div>
@@ -1240,7 +1240,7 @@ export function PortfolioCanvas({
                       when the box is focused is unaffected, which is what keeps
                       the artist able to select her own words to format them.
                     */
-                    className="h-full w-full cursor-grab overflow-hidden p-1 leading-snug whitespace-pre-wrap select-none"
+                    className="h-full w-full cursor-grab overflow-hidden p-1 leading-none whitespace-pre-wrap select-none"
                     style={textStyle(text, { fonts })}
                   >
                     <RichTextInline doc={text.rich} fonts={fonts} />

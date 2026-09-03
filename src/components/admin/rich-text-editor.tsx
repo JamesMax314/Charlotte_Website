@@ -159,10 +159,11 @@ export function RichTextEditor({
    *
    * The toolbar has to quote a spacing in points before the artist has picked
    * one, and the honest number is whatever the surface is already set to —
-   * `leading-snug` on the wall, `leading-relaxed` in a copy field. It is also
-   * what she picks to get *back* to the default: choosing it writes no
-   * paragraph property at all, so the box goes on following the surface rather
-   * than freezing a copy of today's value.
+   * `leading-none` on the wall and in a copy field, so the default tracks
+   * whatever size the paragraph is in. It is also what she picks to get *back*
+   * to the default: choosing it writes no paragraph property at all, so the
+   * box goes on following the surface rather than freezing a copy of today's
+   * value.
    */
   baseLeading?: number;
   /** Off for the wall, whose boxes carry the toolbar in their own panel. */
