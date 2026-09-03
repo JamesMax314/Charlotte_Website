@@ -21,7 +21,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Artwork } from "@/lib/artworks";
+import type { Artwork, ArtworkStatus } from "@/lib/artworks";
 import { isSoldOut, soleListing } from "@/lib/artworks";
 import { formatPrice } from "@/lib/format";
 import {
@@ -35,6 +35,8 @@ import { ArtworkDialog } from "./artwork-dialog";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
+import { restoreDeleted } from "@/app/admin/undo-actions";
 
 const STATUS_LABEL: Record<Artwork["status"], string> = {
   published: "Live",
@@ -154,7 +156,8 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
   const [items, setItems] = useState(artworks);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
-  const { run, error } = useAction();
+  const { run, track, error } = useAction();
+  const { record } = useUndo();
 
   const [dialog, setDialog] = useState<{ artwork: Artwork; isNew: boolean } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; entries: MenuEntry[] } | null>(null);
@@ -185,8 +188,21 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
       items.findIndex((a) => a.id === active.id),
       items.findIndex((a) => a.id === over.id),
     );
+    const before = items;
     setItems(next);
     setSaved(false);
+
+    /** Puts one ordering back on screen and writes it. */
+    const reorderTo = (order: Artwork[], what: string) => {
+      setItems(order);
+      return track(reorderArtworks(order.map((a) => a.id)), what);
+    };
+
+    record({
+      label: "the order",
+      undo: () => reorderTo(before, "Undoing the order"),
+      redo: () => reorderTo(next, "Redoing the order"),
+    });
 
     startTransition(async () => {
       run(
@@ -229,23 +245,49 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
       entries.push({
         label: soldOut ? "Mark as for sale" : "Mark as sold out",
         icon: Icons.tag,
-        onSelect: () =>
+        onSelect: () => {
+          const flip = (to: boolean, what: string) =>
+            track(
+              setArtworkSoldOut(artwork.id, to).then(() => router.refresh()),
+              what,
+            );
+          record({
+            label: "the availability",
+            undo: () => flip(soldOut, "Undoing the availability"),
+            redo: () => flip(!soldOut, "Redoing the availability"),
+          });
           run(
             setArtworkSoldOut(artwork.id, !soldOut).then(() => router.refresh()),
             "Changing availability",
-          ),
+          );
+        },
       });
     }
+
+    /** Moves a piece between draft, published and archived, reversibly. */
+    const changeStatus = (to: ArtworkStatus, what: string, label: string) => {
+      const from = artwork.status;
+      const write = (status: ArtworkStatus, doing: string) =>
+        track(
+          setArtworkStatus(artwork.id, status).then(() => router.refresh()),
+          doing,
+        );
+      record({
+        label,
+        undo: () => write(from, `Undoing ${label}`),
+        redo: () => write(to, `Redoing ${label}`),
+      });
+      run(write(to, what), what);
+    };
 
     entries.push({
       label: artwork.status === "published" ? "Make it a draft" : "Publish it",
       icon: Icons.eye,
       onSelect: () =>
-        run(
-          setArtworkStatus(artwork.id, artwork.status === "published" ? "draft" : "published").then(
-            () => router.refresh(),
-          ),
+        changeStatus(
+          artwork.status === "published" ? "draft" : "published",
           "Changing who can see it",
+          "who can see it",
         ),
     });
 
@@ -253,11 +295,7 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
       entries.push({
         label: "Move to the archive",
         icon: Icons.box,
-        onSelect: () =>
-          run(
-            setArtworkStatus(artwork.id, "archived").then(() => router.refresh()),
-            "Archiving the piece",
-          ),
+        onSelect: () => changeStatus("archived", "Archiving the piece", "the archive"),
       });
     }
 
@@ -353,7 +391,7 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Delete this piece?"
-        body={`“${pendingDelete?.title ?? ""}” and its photographs will be removed for good. Archiving keeps its link working instead.`}
+        body={`“${pendingDelete?.title ?? ""}” and its photographs will be removed. Cmd+Z brings it back until you leave this page; archiving keeps its link working instead.`}
         confirmLabel="Delete"
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => {
@@ -361,8 +399,26 @@ export function ArrangeGrid({ artworks }: { artworks: Artwork[] }) {
           setPendingDelete(null);
           if (!artwork) return;
           setItems((current) => current.filter((a) => a.id !== artwork.id));
+
+          // The same shape the wall's deletes take: the entry closes over the
+          // delete's own promise, so an undo pressed inside the round trip
+          // queues behind the rows rather than finding nothing recorded.
+          const removal = deleteArtworkPermanently(artwork.id);
+          record({
+            label: "the piece",
+            undo: () =>
+              track(
+                removal.then(restoreDeleted).then(() => router.refresh()),
+                "Undoing the deletion",
+              ),
+            redo: () =>
+              track(
+                deleteArtworkPermanently(artwork.id).then(() => router.refresh()),
+                "Redoing the deletion",
+              ),
+          });
           run(
-            deleteArtworkPermanently(artwork.id).then(() => router.refresh()),
+            removal.then(() => router.refresh()),
             "Deleting the piece",
           );
         }}

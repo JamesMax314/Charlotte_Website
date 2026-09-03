@@ -7,6 +7,7 @@ import { deleteSitePage, updateSitePage } from "@/app/admin/site-pages-actions";
 import { ConfirmDialog } from "./confirm-dialog";
 import { FIELD, SECONDARY_BUTTON } from "./styles";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 /**
  * What a custom page is, as opposed to what is on it: its nav label, its URL,
@@ -19,7 +20,8 @@ import { useAction } from "./use-action";
  */
 export function SitePageForm({ page }: { page: SitePage }) {
   const router = useRouter();
-  const { run, pending, error } = useAction();
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
 
   const [title, setTitle] = useState(page.title);
   const [slug, setSlug] = useState(page.slug);
@@ -27,6 +29,20 @@ export function SitePageForm({ page }: { page: SitePage }) {
   const [confirming, setConfirming] = useState(false);
 
   const dirty = title !== page.title || slug !== page.slug;
+
+  /** Writes a patch, puts it on screen, and returns the promise. */
+  const write = (
+    patch: { title?: string; slug?: string; status?: "draft" | "published" },
+    what: string,
+  ) => {
+    if (patch.title !== undefined) setTitle(patch.title);
+    if (patch.slug !== undefined) setSlug(patch.slug);
+    if (patch.status !== undefined) setPublished(patch.status === "published");
+    return track(
+      updateSitePage(page.id, patch).then(() => router.refresh()),
+      what,
+    );
+  };
 
   return (
     <div className="border-line bg-paper-sunk mb-8 border p-4">
@@ -62,12 +78,22 @@ export function SitePageForm({ page }: { page: SitePage }) {
           type="button"
           disabled={!dirty || pending}
           className={SECONDARY_BUTTON}
-          onClick={() =>
-            run(
-              updateSitePage(page.id, { title, slug }).then(() => router.refresh()),
-              "Saving the page",
-            )
-          }
+          onClick={() => {
+            /*
+              The saved values, not the fields: the fields already hold what is
+              being written. A slug is also adjusted on save when it clashes,
+              so `page.slug` is the one that came back rather than the one
+              typed — which is exactly what an undo should restore.
+            */
+            const before = { title: page.title, slug: page.slug };
+            const after = { title, slug };
+            record({
+              label: "the page name",
+              undo: () => write(before, "Undoing the page name"),
+              redo: () => write(after, "Redoing the page name"),
+            });
+            run(write(after, "Saving the page"), "Saving the page");
+          }}
         >
           {pending ? "Saving…" : "Save"}
         </button>
@@ -80,11 +106,15 @@ export function SitePageForm({ page }: { page: SitePage }) {
             checked={published}
             onChange={(event) => {
               const next = event.target.checked;
-              setPublished(next);
+              const status = next ? ("published" as const) : ("draft" as const);
+              const was = published ? ("published" as const) : ("draft" as const);
+              record({
+                label: "who can see this page",
+                undo: () => write({ status: was }, "Undoing who can see this page"),
+                redo: () => write({ status }, "Redoing who can see this page"),
+              });
               run(
-                updateSitePage(page.id, { status: next ? "published" : "draft" }).then(() =>
-                  router.refresh(),
-                ),
+                write({ status }, "Changing who can see this page"),
                 "Changing who can see this page",
               );
             }}
