@@ -112,13 +112,13 @@ export function PublishButton() {
   // Before the first answer there is nothing honest to say. The slot keeps its
   // width so the controls beside it do not jump when the answer lands.
   if (state === null) {
-    return <span className="text-graphite/60 text-xs">Checking…</span>;
+    return <span className="text-graphite/60 text-sm">Checking…</span>;
   }
 
   if (state.live && !pending) {
     return (
       <span
-        className="text-graphite flex items-center gap-1.5 text-xs"
+        className="text-graphite flex items-center gap-1.5 text-sm"
         title={state.publishedAt ? `Last published ${formatted(state.publishedAt)}` : undefined}
       >
         {/*
@@ -142,7 +142,7 @@ export function PublishButton() {
         type="button"
         onClick={publish}
         disabled={pending}
-        className="bg-accent text-accent-ink hover:bg-ink hover:text-paper px-3 py-1.5 text-xs transition-colors disabled:opacity-60"
+        className="bg-accent text-accent-ink hover:bg-ink hover:text-paper px-3 py-1.5 text-sm transition-colors disabled:opacity-60"
         title="Publish every change you have made since the site last went live"
       >
         {pending ? "Making live…" : "Make live"}

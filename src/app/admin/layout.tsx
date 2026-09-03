@@ -44,15 +44,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <div className="mr-auto flex items-center gap-3 md:mr-0">
               <Mark className="text-ink h-6 w-6" />
               {/*
-                Baseline, not centre. The wordmark is `text-sm` and the section
-                links are `text-xs`, and centring two different line-heights
-                puts their baselines 2px apart — which reads as the links
+                Baseline, not centre. The wordmark is `text-base` and the section
+                links are `text-sm`, and centring two different line-heights
+                puts their baselines apart — which reads as the links
                 floating above "Studio". The mark stays outside this group and
                 keeps centring on the bar, because an SVG has no baseline worth
                 sharing.
               */}
               <div className="flex items-baseline gap-3">
-                <Link href="/admin/portfolio" className="font-display text-sm tracking-tight">
+                <Link href="/admin/portfolio" className="font-display text-base tracking-tight">
                   Studio
                 </Link>
                 {/*
@@ -61,16 +61,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                   inches apart is the opposite of making it easy to find.
                 */}
                 <Link
-                  href="/admin"
-                  className="text-graphite hover:text-accent text-xs transition-colors"
-                >
-                  Store
-                </Link>
-                <Link
                   href="/admin/settings"
-                  className="text-graphite hover:text-accent text-xs transition-colors"
+                  className="text-graphite hover:text-accent text-sm transition-colors"
                 >
                   Settings
+                </Link>
+                <Link
+                  href="/admin/shop"
+                  className="text-graphite hover:text-accent text-sm transition-colors"
+                >
+                  Store
                 </Link>
               </div>
             </div>
@@ -86,9 +86,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
             <div className="flex items-center gap-4 md:justify-self-end">
               <PublishButton />
-              <Link href="/" className="text-graphite hover:text-accent text-xs transition-colors">
+              {/*
+                A plain `<a>`, not `<Link>`. This is the only route from the
+                admin into the public site, whose layout renders an inline
+                `<script>` that has to run while the browser parses the HTML —
+                see `fadeScript`. A client-side transition mounts that layout
+                without a parse ever happening, so the script tag lands inert
+                in the DOM and React refuses to render it, throwing "Encountered
+                a script tag while rendering React component" instead. A full
+                navigation is what the script was always built to expect.
+              */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- full navigation is the point, see above */}
+              <a href="/" className="text-graphite hover:text-accent text-sm transition-colors">
                 View site
-              </Link>
+              </a>
               {/*
                 `flex` so the form is not a line box. As a block it lays the
                 button out as inline content, which reserves room for a
@@ -96,7 +107,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 beside it.
               */}
               <form action={logout} className="flex">
-                <button type="submit" className="text-graphite hover:text-accent text-xs">
+                <button type="submit" className="text-graphite hover:text-accent text-sm">
                   Sign out
                 </button>
               </form>

@@ -72,7 +72,7 @@ function PageLink({
         onClick={(event) => {
           if (suppressClick()) event.preventDefault();
         }}
-        className={`hover:text-accent cursor-grab touch-none text-xs whitespace-nowrap transition-colors active:cursor-grabbing ${
+        className={`hover:text-accent cursor-grab touch-none text-sm whitespace-nowrap transition-colors active:cursor-grabbing ${
           active ? "text-ink" : "text-graphite"
         }`}
       >
@@ -158,7 +158,7 @@ export function NavPages({ pages }: { pages: SitePage[] }) {
       */}
       <Link
         href="/admin/portfolio"
-        className={`hover:text-accent text-xs whitespace-nowrap transition-colors ${
+        className={`hover:text-accent text-sm whitespace-nowrap transition-colors ${
           pathname === "/admin/portfolio" ? "text-ink" : "text-graphite"
         }`}
       >
