@@ -5,19 +5,23 @@ import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { claimMedia } from "@/lib/publish";
 import { hasValidSession } from "@/lib/auth";
+import { assetKey, contentHash, IMAGE_EXTENSIONS } from "@/lib/storage";
+import { measure, renderLqip, writeLadder } from "@/lib/image-ladder";
 
 export const dynamic = "force-dynamic";
 
-/** Client downscales before upload; this is a backstop, not the primary limit. */
-const MAX_BYTES = 12 * 1024 * 1024;
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
+/**
+ * One image, from the artist's machine into R2 and the database.
+ *
+ * The browser used to do the resizing and post four files. It now posts one —
+ * the original, downscaled only when it is too large to send at all — and
+ * every derivative is rendered here, by Cloudflare's image service, in AVIF
+ * and WebP. `src/lib/image-ladder.ts` has the reasoning.
+ */
 
-const EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/avif": "avif",
-};
+/** Generous, because the browser only reduces a file that exceeds its own cap. */
+const MAX_BYTES = 15 * 1024 * 1024;
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 
 export async function POST(request: Request) {
   // Route handlers bypass layouts, so this gates itself.
@@ -67,36 +71,33 @@ export async function POST(request: Request) {
 
   // Content-addressed: identical bytes reuse a key, and a key's bytes never
   // change, which is what makes /media safe to cache immutably.
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  const hash = Array.from(new Uint8Array(digest).slice(0, 8))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  const storageKey = `artworks/${hash}.${EXTENSIONS[file.type]}`;
+  const hash = await contentHash(bytes);
+  const storageKey = assetKey("artworks", hash, IMAGE_EXTENSIONS[file.type]);
 
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
   await env.MEDIA.put(storageKey, bytes, { httpMetadata: { contentType: file.type } });
 
   // The same bytes always produce the same key, so this upload may be reviving
   // one a delete had queued for removal. See claimMedia.
   await claimMedia([storageKey]);
 
-  // Responsive derivatives, rendered in the browser. Keyed by convention so
-  // src/image-loader.ts can address them without a database lookup.
-  const extension = EXTENSIONS[file.type];
-  await Promise.all(
-    Array.from(form.entries())
-      .filter(([name, value]) => name.startsWith("variant-") && value instanceof File)
-      .map(async ([name, value]) => {
-        const width = name.slice("variant-".length);
-        await env.MEDIA.put(
-          `artworks/${hash}-${width}.${extension}`,
-          await (value as File).arrayBuffer(),
-          {
-            httpMetadata: { contentType: file.type },
-          },
-        );
-      }),
-  );
+  /*
+    Two transformations before the response, and up to eight after it.
+
+    The size and the blur placeholder are columns on the row this request is
+    about to write, so they have to be in hand. The width ladder is not: an
+    image whose derivatives have not appeared yet resolves through /media's
+    fallback to the base object, so the artist sees her photograph on the wall
+    immediately and the smaller encodings arrive behind her. Making her wait
+    for eight encodes to see one picture is the wrong trade, and it is also
+    the one that risks the request outliving its own limits.
+  */
+  const measured = await measure(bytes);
+  const width = measured?.width ?? Number(form.get("width")) ?? 0;
+  const height = measured?.height ?? Number(form.get("height")) ?? 0;
+  const lqip = await renderLqip(bytes);
+
+  ctx.waitUntil(writeLadder(storageKey, bytes, width));
 
   const id = crypto.randomUUID();
   // Alt text is required to publish; seed it from the title so the field is
@@ -105,9 +106,9 @@ export async function POST(request: Request) {
     id,
     storageKey,
     alt: String(form.get("alt") ?? "").trim() || owner[0].title,
-    width: Number(form.get("width")) || 0,
-    height: Number(form.get("height")) || 0,
-    lqip: String(form.get("lqip") ?? "") || null,
+    width,
+    height,
+    lqip,
   };
 
   if (artworkId) {
@@ -126,5 +127,5 @@ export async function POST(request: Request) {
       .values({ ...shared, itemId: portfolioItemId, sortOrder: next });
   }
 
-  return Response.json({ id, src: `/media/${storageKey}` });
+  return Response.json({ id, src: `/media/${storageKey}`, width, height });
 }
