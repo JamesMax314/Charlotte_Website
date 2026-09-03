@@ -23,6 +23,19 @@ import {
   type TextAlign,
 } from "./rich-text";
 
+/**
+ * Blocks that `contenteditable` and pasted markup use to mean "new line".
+ *
+ * Hoisted, because two things now need the same answer: reading a document out
+ * of the DOM, and applying a paragraph-level mark to what a selection touches.
+ * Two lists would drift, and the failure is a spacing that lands on a block the
+ * reader does not treat as a paragraph — applied on screen, absent once saved.
+ */
+const BLOCK = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE)$/;
+
+/** The attribute a paragraph's line spacing is read back from. */
+const LEADING_ATTR = "data-rt-leading";
+
 const MARK_ATTR = {
   colour: "data-rt-colour",
   font: "data-rt-font",
@@ -176,6 +189,132 @@ export function alignOfBlock(el: HTMLElement): TextAlign | undefined {
 }
 
 /**
+ * The line spacing written on a block, as the multiple it stores.
+ *
+ * Read from the attribute rather than from `style.lineHeight`, for the same
+ * reason a font id is: the style is `em`, and the browser is free to hand back
+ * a computed pixel length instead of the value that was written. The attribute
+ * is exact.
+ *
+ * Unlike alignment, this is safe to read off the editor root as well — see
+ * `docFromElement`. `text-align` on the root is the *box's* setting, inherited
+ * rather than chosen, so taking it would stamp the box's default onto every
+ * paragraph; a `data-rt-leading` on the root can only have been put there by
+ * `applyLeading`, because the surface's own spacing is a class and never an
+ * attribute.
+ */
+export function leadingOfBlock(el: HTMLElement): number | undefined {
+  const written = el.getAttribute(LEADING_ATTR);
+  if (written === null) return undefined;
+  const leading = Number(written);
+  return Number.isFinite(leading) ? leading : undefined;
+}
+
+/**
+ * Writes a paragraph's line spacing, or clears it.
+ *
+ * The style is `em` and deliberately not the unitless number CSS would
+ * otherwise prefer. A unitless `line-height` is inherited as a *number* and
+ * recomputed against each descendant's own font-size, so a paragraph holding a
+ * 30pt run inside a 12pt box would space that line against 30pt — and the
+ * points the artist was shown when she picked it would be wrong for exactly
+ * the line she could see was wrong. An `em` is resolved to a length here, at
+ * the paragraph, and inherited as that length by every run inside it, so one
+ * paragraph gets one spacing whatever sizes are mixed into it.
+ *
+ * That it does not compound the way a nested size mark does is a property of
+ * where it is written, not luck: a paragraph block is always a direct child of
+ * the editor root, so its `em` is a multiple of the box and nothing else.
+ */
+export function setBlockLeading(el: HTMLElement, leading: number | undefined): void {
+  if (leading === undefined) {
+    el.removeAttribute(LEADING_ATTR);
+    el.style.removeProperty("line-height");
+    return;
+  }
+  el.setAttribute(LEADING_ATTR, String(leading));
+  el.style.lineHeight = `${leading}em`;
+}
+
+/**
+ * The paragraph blocks a selection touches.
+ *
+ * Only the root's own block children count. A nested block — a list item
+ * dragged in by a paste, say — is read as part of its parent paragraph by
+ * `docFromElement`, so spacing it individually would apply on screen and
+ * vanish on save.
+ */
+function blocksInRange(root: HTMLElement, range: Range): HTMLElement[] {
+  return Array.from(root.children).filter(
+    (child): child is HTMLElement => BLOCK.test(child.tagName) && range.intersectsNode(child),
+  );
+}
+
+/**
+ * Applies a line spacing to every paragraph the selection touches.
+ *
+ * There is no `execCommand` for this, so unlike alignment the multi-paragraph
+ * case has to be walked by hand. The caret alone counts as touching the
+ * paragraph it sits in, which is what makes this behave like the alignment
+ * buttons beside it: put the caret in a line and the line changes; select
+ * everything and the box does.
+ *
+ * With no block children the root *is* the paragraph — the shape a fresh
+ * editor holds before anything has seeded it — and `docFromElement` reads it
+ * back the same way.
+ */
+export function applyLeading(root: HTMLElement, leading: number | undefined): void {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.commonAncestorContainer)) return;
+
+  const blocks = blocksInRange(root, range);
+  if (blocks.length === 0) setBlockLeading(root, leading);
+  else for (const block of blocks) setBlockLeading(block, leading);
+}
+
+/**
+ * Re-writes each touched paragraph's spacing style from its own attribute.
+ *
+ * The guard against the failure this module has already had twice: a browser
+ * command that clears styles and leaves `data-rt-*` attributes behind, so the
+ * screen loses the formatting and the saved document keeps it. `removeFormat`
+ * is documented to work on inline formatting and should not reach a block's
+ * `line-height` — but "should not" is what was believed about the marks too,
+ * and re-writing a style from the value that is about to be read back is
+ * idempotent when nothing was lost.
+ */
+export function resyncLeading(root: HTMLElement, range: Range): void {
+  for (const block of blocksInRange(root, range)) {
+    setBlockLeading(block, leadingOfBlock(block));
+  }
+}
+
+/**
+ * The line spacing in force where the caret is.
+ *
+ * Walks outward as `activeAlign` does, but takes the root in as well, since
+ * that is where a bare editor's paragraph lives.
+ */
+export function activeLeading(node: Node | null, root: HTMLElement): number | undefined {
+  let el: HTMLElement | null =
+    node === null
+      ? null
+      : node.nodeType === Node.ELEMENT_NODE
+        ? (node as HTMLElement)
+        : node.parentElement;
+
+  while (el && root.contains(el)) {
+    const leading = leadingOfBlock(el);
+    if (leading !== undefined) return leading;
+    if (el === root) break;
+    el = el.parentElement;
+  }
+  return undefined;
+}
+
+/**
  * The alignment in force where the caret is.
  *
  * Walks outward exactly as `activeSpanMark` does, so the toolbar can show the
@@ -319,6 +458,7 @@ export function paragraphToNode(paragraph: RichParagraph, fonts: FontOption[]): 
   // Written as a style rather than an attribute, so it reads back through the
   // same branch `execCommand` writes on a block the artist aligns herself.
   if (paragraph.align !== undefined) block.style.textAlign = paragraph.align;
+  setBlockLeading(block, paragraph.leading);
   if (paragraph.runs.length === 0) {
     // An empty block collapses to nothing and cannot hold a caret; the <br>
     // is what makes a blank line editable rather than merely stored.
@@ -390,9 +530,6 @@ function collectRuns(node: Node, inherited: Omit<RichRun, "text">, out: RichRun[
   }
 }
 
-/** Blocks that `contenteditable` and pasted markup use to mean "new line". */
-const BLOCK = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE)$/;
-
 /**
  * Reads a `contenteditable` element back into a document.
  *
@@ -403,9 +540,13 @@ const BLOCK = /^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TR|SECTION|ARTICLE)$/;
 export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichDoc {
   const paragraphs: RichParagraph[] = [];
 
-  const pushBlock = (node: Node, align: TextAlign | undefined) => {
-    const push = (runs: RichRun[]) =>
-      paragraphs.push(align === undefined ? { runs } : { runs, align });
+  const pushBlock = (node: Node, align: TextAlign | undefined, leading: number | undefined) => {
+    const push = (runs: RichRun[]) => {
+      const paragraph: RichParagraph = { runs };
+      if (align !== undefined) paragraph.align = align;
+      if (leading !== undefined) paragraph.leading = leading;
+      paragraphs.push(paragraph);
+    };
 
     const runs: RichRun[] = [];
     collectRuns(node, {}, runs);
@@ -420,8 +561,8 @@ export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichD
 
     /*
       A run holding "\n" came from a <br>; split it into further paragraphs.
-      They inherit the block's alignment, because a shift+Enter line sits
-      inside the block the artist aligned and is painted with it.
+      They inherit the block's alignment and spacing, because a shift+Enter
+      line sits inside the block the artist formatted and is painted with it.
     */
     let current: RichRun[] = [];
     for (const run of runs) {
@@ -445,9 +586,17 @@ export function docFromElement(el: HTMLElement, fonts: FontOption[] = []): RichD
     box's default onto every paragraph the artist has expressed no opinion
     about — turning "follow the box" into a copy of it that then stops
     following.
+
+    Its spacing *is* read, and the asymmetry is the point: a `data-rt-leading`
+    can only have been written by `applyLeading`, so on the root it means the
+    artist spaced a bare editor's one paragraph rather than that a default
+    leaked in. See `leadingOfBlock`.
   */
-  if (blocks.length === 0) pushBlock(el, undefined);
-  else for (const block of blocks) pushBlock(block, alignOfBlock(block as HTMLElement));
+  if (blocks.length === 0) pushBlock(el, undefined, leadingOfBlock(el));
+  else
+    for (const block of blocks) {
+      pushBlock(block, alignOfBlock(block as HTMLElement), leadingOfBlock(block as HTMLElement));
+    }
 
   return sanitiseDoc(
     paragraphs.map((paragraph) => ({ ...paragraph, runs: mergeRuns(paragraph.runs) })),

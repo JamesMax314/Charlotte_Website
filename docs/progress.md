@@ -19,7 +19,8 @@ The product specification is `docs/project-brief.md`.
 
 - **Text is rich text, everywhere she types it.** Wall boxes and the About,
   Contact and Privacy copy all take bold, italic, underline, colour, face, size, links and
-  per-line alignment within a single box, with the controls along the top of the box.
+  per-line alignment and line spacing within a single box, with the controls along the top
+  of the box.
   Those controls are the whole of the formatting interface — a text box has nothing more
   behind a menu. It is stored as a document, not as HTML — see the invariants.
 
@@ -136,6 +137,7 @@ The product specification is `docs/project-brief.md`.
 | 29    | Multi-select on every free-form wall: a marquee or shift-click gathers images and text, and the group moves, scales — carrying its type — aligns, spaces evenly and deletes as one. Layout saves for a selection land in a single `db.batch`. The artist works at a desktop, not an iPad, which is what settled the gesture                                                                                                                                                                                                                                                                                  |
 | 31    | Deleting a piece works again. `parent_id` never had the `ON DELETE CASCADE` its schema declares, so deleting any of the 13 pieces that owned a page of their own raised a foreign-key error the artist saw only as React #441. D1 cannot be given the clause, so the cascade moved into the application — in the piece, selection and page deletes alike                                                                                                                                                                                                                                                     |
 | 30    | An alignment grid over every free-form wall, switched on in page settings and spaced in columns across the width. Its lines are snap targets in their own right, merged with the edge guides so the nearer of the two wins. Editor only — no visitor ever sees it. Drawn as two repeating gradients and three heavier columns — five elements at any spacing. One element per line, first as dashed borders and then as gradients, put twenty-five full-height fills in every raster tile and made scrolling the editor crawl                                                                                |
+| 33    | Line spacing, chosen in points from the same scrolling ladder the type size uses and applied to the paragraph the caret is in, exactly as the alignment buttons beside it are. Stored as a multiple of the box so it still scales with the wall, and written as an `em` on the block so one paragraph gets one spacing whatever sizes are mixed into it                                                                                                                                                                                                                                                      |
 | 32    | Performance. The 1102 the artist met in the studio was one server action per keystroke, each revalidating the layout, each layout render hashing the whole site: writes are now queued and coalesced, autosaves no longer revalidate, and the publish hash moved behind its own endpoint. Images are downscaled server-side by the IMAGES binding into AVIF and WebP, `/media` negotiates on `Accept` and caches at the edge, and the LQIP that had been stored since Phase 2 is finally rendered. A follow-up taught `derivativeKeys` about the new encodings, which a delete would otherwise have orphaned |
 
 ---
@@ -566,6 +568,17 @@ Non-obvious decisions that the code alone does not explain.
   merges the current size in when it is off the ladder, because a `<select>` whose value
   matches no option renders blank — and the home page's heading, seeded at 5.2cqw, is
   about 51pt.
+
+- **`SURFACE_LEADING` is a hand-kept copy of a Tailwind class, in a different file from
+  every class it copies.** Line spacing is quoted to the artist in points, so the control
+  has to state the surface's _own_ spacing before she has chosen one — and it cannot read
+  `leading-snug` off a class. Those numbers live in `type-scale.ts` while the classes live
+  on the wall (`portfolio-wall.tsx`, and twice in `portfolio-canvas.tsx`) and on the copy
+  fields (`rich-copy-field.tsx`, `about/page.tsx`, `privacy/page.tsx`). Change a class
+  without changing the constant and nothing breaks loudly: the control quotes a spacing
+  the surface is not set to, and — worse — the value that means "follow the surface" is
+  now a number she can no longer pick, so returning a paragraph to the default becomes
+  impossible while every control still looks right.
 
 - **Rich text is stored as a document and rendered as elements, never as HTML.** The
   obvious shape — keep a string of HTML, render it with `dangerouslySetInnerHTML` — puts a

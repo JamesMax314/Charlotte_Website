@@ -49,6 +49,20 @@ export type TextAlign = "left" | "center" | "right";
 export interface RichParagraph {
   runs: RichRun[];
   align?: TextAlign;
+  /**
+   * Line spacing, as a multiple of the *box's* type size.
+   *
+   * Stored as a multiple for the same reason a run's size is: the wall sizes
+   * its boxes in `cqw` so type scales with the arrangement, and a spacing in
+   * absolute points would stop scaling with it — the same box would open up or
+   * crush at another viewport width. The artist still chooses it in points;
+   * see `leadingInPt`, which is the view.
+   *
+   * Absent means "whatever the surface is set to" — `leading-snug` on the
+   * wall, `leading-relaxed` in the copy fields — which is what keeps every
+   * document written before line spacing existed rendering exactly as it did.
+   */
+  leading?: number;
 }
 export type RichDoc = RichParagraph[];
 
@@ -68,6 +82,15 @@ export const RICH_LIMITS = {
   paragraphs: 400,
   runsPerParagraph: 400,
   size: { min: 0.2, max: 6 },
+  /**
+   * Line spacing, as a multiple of the box.
+   *
+   * Wider at the top than `size` and much narrower at the bottom: leading well
+   * under the type size sets lines overlapping, which is a way to make a box
+   * unreadable rather than a look worth reaching. Four times the box is enough
+   * for the airiest thing a portfolio wants.
+   */
+  leading: { min: 0.5, max: 4 },
 } as const;
 
 /**
@@ -106,6 +129,23 @@ export const runSizeFromPt = (basePt: number, pt: number): number => {
   if (!(basePt > 0)) return 1;
   const multiple = round(pt / basePt);
   return Math.min(Math.max(multiple, RICH_LIMITS.size.min), RICH_LIMITS.size.max);
+};
+
+/**
+ * A paragraph's line spacing in points, given the size of the box it sits in.
+ *
+ * The same view `runSizeInPt` is: a paragraph stores a multiple so that
+ * spacing scales with the wall, and points only mean anything relative to
+ * something — on the wall that is the box's own size, and in a settings field
+ * it is body copy at 12pt.
+ */
+export const leadingInPt = (basePt: number, multiple: number): number => basePt * multiple;
+
+/** The multiple to store for a spacing in points the artist chose. */
+export const leadingFromPt = (basePt: number, pt: number): number => {
+  if (!(basePt > 0)) return 1;
+  const multiple = round(pt / basePt);
+  return Math.min(Math.max(multiple, RICH_LIMITS.leading.min), RICH_LIMITS.leading.max);
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -151,6 +191,23 @@ const clampSize = (value: unknown): number | undefined => {
   const rounded = round(value);
   if (rounded === 1) return undefined; // the default carries no information
   return Math.min(Math.max(rounded, RICH_LIMITS.size.min), RICH_LIMITS.size.max);
+};
+
+/**
+ * Line spacing, sanitised.
+ *
+ * Unlike `clampSize` there is no value that means "the default": a run at the
+ * box's own size is a redundant 1 and is dropped, but a paragraph's default
+ * spacing is whatever the surface renders at — `leading-snug` on the wall,
+ * `leading-relaxed` in the copy fields — and no single number stands for both.
+ * So absence is the only way to say "follow the surface", and every number in
+ * range is kept. Returning to the default is the editor's job; see
+ * `baseLeading` there.
+ */
+const clampLeading = (value: unknown): number | undefined => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const rounded = round(value);
+  return Math.min(Math.max(rounded, RICH_LIMITS.leading.min), RICH_LIMITS.leading.max);
 };
 
 /**
@@ -224,12 +281,14 @@ const sanitiseAlign = (value: unknown): TextAlign | undefined =>
  * always been — see serialiseDoc — so both shapes are current, and neither is
  * a legacy form that could ever be migrated away.
  */
-const storedParagraph = (raw: unknown): { runs: unknown[]; align?: TextAlign } | null => {
+const storedParagraph = (
+  raw: unknown,
+): { runs: unknown[]; align?: TextAlign; leading?: number } | null => {
   if (Array.isArray(raw)) return { runs: raw };
   if (typeof raw !== "object" || raw === null) return null;
-  const { runs, align } = raw as { runs?: unknown; align?: unknown };
+  const { runs, align, leading } = raw as { runs?: unknown; align?: unknown; leading?: unknown };
   if (!Array.isArray(runs)) return null;
-  return { runs, align: sanitiseAlign(align) };
+  return { runs, align: sanitiseAlign(align), leading: clampLeading(leading) };
 };
 
 /**
@@ -264,6 +323,7 @@ export const sanitiseDoc = (input: unknown, fonts: FontOption[] = []): RichDoc =
     // is trimmed below.
     const paragraph: RichParagraph = { runs: mergeRuns(runs) };
     if (stored.align !== undefined) paragraph.align = stored.align;
+    if (stored.leading !== undefined) paragraph.leading = stored.leading;
     doc.push(paragraph);
   }
 
@@ -292,15 +352,19 @@ export const parseDoc = (
 /**
  * The stored form.
  *
- * A paragraph with no alignment is written as the bare array of runs it has
- * always been, so every document already in the database stays byte-identical
- * and the published site's content hash does not move — otherwise the "Live"
- * badge would report changes to publish across the whole site the moment this
- * shipped, for content nobody had touched.
+ * A paragraph carrying neither an alignment nor a line spacing is written as
+ * the bare array of runs it has always been, so every document already in the
+ * database stays byte-identical and the published site's content hash does not
+ * move — otherwise the "Live" badge would report changes to publish across the
+ * whole site the moment this shipped, for content nobody had touched. Every
+ * paragraph property added from here on owes the same debt: it must be absent
+ * by default and it must be part of this test.
  */
 export const serialiseDoc = (doc: RichDoc): string =>
   JSON.stringify(
-    doc.map((paragraph) => (paragraph.align === undefined ? paragraph.runs : paragraph)),
+    doc.map((paragraph) =>
+      paragraph.align === undefined && paragraph.leading === undefined ? paragraph.runs : paragraph,
+    ),
   );
 
 /** Plain text with no marks — the shape every existing row is already in. */
@@ -351,5 +415,6 @@ export const hasFormatting = (doc: RichDoc): boolean =>
   doc.some(
     (paragraph) =>
       paragraph.align !== undefined ||
+      paragraph.leading !== undefined ||
       paragraph.runs.some((run) => MARK_KEYS.some((key) => run[key] !== undefined)),
   );

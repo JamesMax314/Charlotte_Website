@@ -4,17 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   activeAlign,
+  activeLeading,
   activeSpanMark,
   applyDocToElement,
+  applyLeading,
   applySpanMark,
   clearMarksInRange,
   docFromElement,
+  resyncLeading,
   type SpanMark,
 } from "@/lib/rich-dom";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import {
   RICH_LIMITS,
   docToPlain,
+  leadingFromPt,
+  leadingInPt,
   runSizeFromPt,
   runSizeInPt,
   safeHref,
@@ -22,6 +27,7 @@ import {
   type TextAlign,
 } from "@/lib/rich-text";
 import { DEFAULT_ACCENT, INK, PAPER } from "@/lib/colour";
+import { SURFACE_LEADING } from "@/lib/type-scale";
 import { SizeSelect } from "./size-select";
 
 /**
@@ -129,6 +135,7 @@ export function RichTextEditor({
   minHeight,
   style,
   basePt = 12,
+  baseLeading = SURFACE_LEADING.copy,
   toolbar = true,
   layout = "top",
 }: {
@@ -147,6 +154,17 @@ export function RichTextEditor({
    * settings field it is body copy at 12pt.
    */
   basePt?: number;
+  /**
+   * The line spacing this surface paints when a paragraph chooses none.
+   *
+   * The toolbar has to quote a spacing in points before the artist has picked
+   * one, and the honest number is whatever the surface is already set to —
+   * `leading-snug` on the wall, `leading-relaxed` in a copy field. It is also
+   * what she picks to get *back* to the default: choosing it writes no
+   * paragraph property at all, so the box goes on following the surface rather
+   * than freezing a copy of today's value.
+   */
+  baseLeading?: number;
   /** Off for the wall, whose boxes carry the toolbar in their own panel. */
   toolbar?: boolean;
   /**
@@ -283,6 +301,16 @@ export function RichTextEditor({
    */
   const [align, setAlign] = useState<TextAlign | undefined>(undefined);
 
+  /**
+   * The line spacing of the paragraph the caret is in.
+   *
+   * Undefined for the same reason `align` is: she has chosen none and the line
+   * follows the surface. The control shows the surface's own spacing in that
+   * case rather than a blank, because a spacing always has a value even when
+   * nobody has chosen it.
+   */
+  const [leading, setLeading] = useState<number | undefined>(undefined);
+
   useEffect(() => {
     const remember = () => {
       const selection = window.getSelection();
@@ -292,6 +320,7 @@ export function RichTextEditor({
       savedRange.current = range.cloneRange();
       setActive(activeSpanMark(selection.anchorNode, ref.current));
       setAlign(activeAlign(selection.anchorNode, ref.current));
+      setLeading(activeLeading(selection.anchorNode, ref.current));
     };
     document.addEventListener("selectionchange", remember);
     return () => document.removeEventListener("selectionchange", remember);
@@ -339,6 +368,28 @@ export function RichTextEditor({
     setAlign(option.value);
   };
 
+  /** The surface's own spacing, in the points the control is quoted in. */
+  const baseLeadingPt = Math.round(leadingInPt(basePt, baseLeading));
+
+  const leadingTo = (pt: number) => {
+    const el = ref.current;
+    if (!el) return;
+    /*
+      Picking the surface's own spacing clears the property rather than
+      writing a copy of it, which is the same rule the size control follows —
+      a run at the box's size stores no size mark. It matters more here: the
+      default is a class on the element, so a paragraph that froze today's
+      value would stop following a later change to it.
+    */
+    const next = pt === baseLeadingPt ? undefined : leadingFromPt(basePt, pt);
+    restoreSelection();
+    applyLeading(el, next);
+    read();
+    // Nothing moved the selection, so `selectionchange` may not fire and the
+    // control would go on reporting the spacing she just replaced.
+    setLeading(next);
+  };
+
   /**
    * Clear: back to the box's own type, for everything selected.
    *
@@ -353,7 +404,12 @@ export function RichTextEditor({
     const el = ref.current;
     const selection = window.getSelection();
     if (el && selection && selection.rangeCount > 0) {
-      clearMarksInRange(el, selection.getRangeAt(0));
+      const range = selection.getRangeAt(0);
+      clearMarksInRange(el, range);
+      // Line spacing is a paragraph's property, not a mark on the selection,
+      // so Clear leaves it alone — this only puts back a style `removeFormat`
+      // might have taken while leaving the attribute it is read from.
+      resyncLeading(el, range);
     }
     read();
     setActive({});
@@ -441,6 +497,34 @@ export function RichTextEditor({
           </button>
         ))}
       </div>
+
+      {/*
+        Beside the alignment buttons rather than beside the size field, because
+        it belongs to the same thing they do: this sets the paragraph the caret
+        is in, while size marks the selection. Quoted in points against the box,
+        exactly as the size above it is — see `leadingInPt`.
+      */}
+      <SizeSelect
+        label="Line spacing"
+        valuePt={Math.round(leadingInPt(basePt, leading ?? baseLeading))}
+        minPt={Math.ceil(leadingInPt(basePt, RICH_LIMITS.leading.min))}
+        maxPt={Math.floor(leadingInPt(basePt, RICH_LIMITS.leading.max))}
+        onChange={leadingTo}
+        prefix={
+          <svg
+            viewBox="0 0 16 16"
+            className="h-3.5 w-3.5 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            aria-hidden="true"
+          >
+            <path d="M6.5 3.5h8M6.5 8h8M6.5 12.5h8" />
+            <path d="M3 3.5v9M1.6 5 3 3.5 4.4 5M1.6 11 3 12.5 4.4 11" />
+          </svg>
+        }
+        className={layout === "top" ? "w-24" : "w-full"}
+      />
 
       <span
         className={layout === "side" ? "bg-line my-0.5 h-px w-full" : "bg-line mx-0.5 h-5 w-px"}
