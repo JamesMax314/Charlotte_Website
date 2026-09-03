@@ -2,6 +2,10 @@
 
 This file is the authoritative guide for Claude (and any AI coding assistant) working on the website codebase. Read it fully before making any changes.
 
+## Vernacular
+
+- Do not overuse the word genuinely
+
 ## Code style
 
 - Use named exports, not default exports, for components. Exception: Next.js
