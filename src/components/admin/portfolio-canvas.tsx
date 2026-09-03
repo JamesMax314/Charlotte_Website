@@ -14,7 +14,8 @@ import {
   type WallScope,
   type WallText,
 } from "@/lib/portfolio";
-import type { RichDoc } from "@/lib/rich-text";
+import { serialiseDoc, type RichDoc } from "@/lib/rich-text";
+import { createWriteQueue } from "@/lib/write-queue";
 import {
   collectGuides,
   mergeGuides,
@@ -112,6 +113,28 @@ type GroupDrag = {
 /** Below this, a pointer gesture is a tap (select or open), not a drag. */
 const DRAG_THRESHOLD_PX = 4;
 
+/** What one text box's autosave carries. */
+type TextPatch = Parameters<typeof updateWallText>[1];
+
+/**
+ * How long typing must pause before the text box is written.
+ *
+ * Short enough that leaving the keyboard for a moment saves, long enough that
+ * a word is one write rather than five. The editor emits on every `input`
+ * event, and each write costs a server action; before this there was one per
+ * character.
+ */
+const TEXT_SAVE_DELAY = 700;
+
+/**
+ * And the longest an unsaved change may wait, however continuously she types.
+ *
+ * A trailing debounce on its own never fires while the input keeps coming, so
+ * a paragraph typed without a pause would sit entirely in the browser. This is
+ * the ceiling that makes the delay safe.
+ */
+const TEXT_SAVE_CEILING = 4000;
+
 /**
  * Half the group handle's hit box, in pixels.
  *
@@ -177,6 +200,14 @@ export function PortfolioCanvas({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /*
+    The text queue's own busy flag, kept apart from the drag's. Both describe
+    "a write is out", but they start and finish independently — a shared
+    boolean means whichever settles first switches the indicator off while the
+    other is still away.
+  */
+  const [savingText, setSavingText] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [shown, setShown] = useState<{ vertical: number | null; horizontal: number | null }>({
     vertical: null,
     horizontal: null,
@@ -512,15 +543,80 @@ export function PortfolioCanvas({
     The optimistic copy applies the patch as typed; the action re-sanitises it
     server-side. `rich` is `unknown` on the action's signature because it comes
     off the wire, but locally it is always a document the editor just produced.
+
+    The write itself is queued rather than fired. The editor emits on every
+    `input` event, so calling the action here meant one server action — and,
+    through its layout revalidation, one whole-site read — per character. See
+    `src/lib/write-queue.ts`.
   */
-  function patchText(id: string, patch: Parameters<typeof updateWallText>[1]) {
+  const [saves] = useState(() =>
+    createWriteQueue<TextPatch>({
+      delay: TEXT_SAVE_DELAY,
+      maxDelay: TEXT_SAVE_CEILING,
+      send: (id, patch) => updateWallText(id, patch),
+      onError: (cause) => {
+        setSaveError(`Saving the text failed: ${cause instanceof Error ? cause.message : cause}`);
+        console.error("[admin] Saving the text failed", cause);
+      },
+      onBusy: setSavingText,
+    }),
+  );
+
+  /*
+    Flush on the way out, so a box left mid-sentence is not lost to the debounce.
+    `pagehide` rather than `beforeunload`: it fires on a mobile tab being
+    backgrounded as well as on a close, and it does not block the browser's
+    back/forward cache the way `beforeunload` does.
+  */
+  useEffect(() => {
+    const leaving = () => void saves.flush();
+    window.addEventListener("pagehide", leaving);
+    return () => {
+      window.removeEventListener("pagehide", leaving);
+      void saves.flush();
+    };
+  }, [saves]);
+
+  /*
+    And when she puts a box down. The debounce is for the keyboard, not for
+    the mouse: once the box is no longer being edited there is nothing left to
+    coalesce, and waiting would leave "Saving…" showing after the last visible
+    reason for it had gone.
+  */
+  useEffect(() => {
+    if (selectedTextId !== null) return;
+    void saves.flush();
+  }, [selectedTextId, saves]);
+
+  function patchText(id: string, patch: TextPatch) {
     const { rich, ...rest } = patch;
+
+    /*
+      A document identical to the one already held is not a change.
+
+      `read()` fires on blur as well as on input, unconditionally, so clicking
+      into a text box and straight back out used to write the row and revalidate
+      the whole site having altered nothing. Clicking through several boxes in a
+      row — which is what the artist was doing when she met the 1102 — was
+      therefore as expensive as typing in all of them.
+    */
+    const current = texts.find((t) => t.id === id);
+    if (
+      rich !== undefined &&
+      Object.keys(rest).length === 0 &&
+      current !== undefined &&
+      serialiseDoc(current.rich) === serialiseDoc(rich as RichDoc)
+    ) {
+      return;
+    }
+
     const local: Partial<WallText> = {
       ...rest,
       ...(rich === undefined ? {} : { rich: rich as RichDoc }),
     };
-    setTexts((current) => current.map((t) => (t.id === id ? { ...t, ...local } : t)));
-    run(updateWallText(id, patch), "Saving the text");
+    setTexts((currentTexts) => currentTexts.map((t) => (t.id === id ? { ...t, ...local } : t)));
+    setSaveError(null);
+    saves.push(id, patch);
   }
 
   const begin = (
@@ -946,7 +1042,7 @@ export function PortfolioCanvas({
   return (
     <div>
       <p className="text-graphite mb-3 h-5 text-xs" aria-live="polite">
-        {saving
+        {saving || savingText
           ? "Saving…"
           : isGroup
             ? "Drag any of them to move the group, or its corner to scale. Shift-click to add and remove."
@@ -1262,9 +1358,9 @@ export function PortfolioCanvas({
         </p>
       )}
 
-      {actionError && (
+      {(actionError ?? saveError) && (
         <p role="alert" className="mt-2 text-xs text-red-700">
-          {actionError}
+          {actionError ?? saveError}
         </p>
       )}
 
