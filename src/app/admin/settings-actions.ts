@@ -6,7 +6,7 @@ import * as schema from "@/db/schema";
 import { requireSession } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/catalogue";
 import { getDb } from "@/lib/db";
-import { releaseMedia } from "@/lib/publish";
+import { claimMedia, releaseMedia } from "@/lib/publish";
 import type { Backup } from "@/lib/undo-backup";
 import { captureSiteFonts } from "@/lib/undo-restore";
 import { cssFamilyName, isKnownFontId, mergeFonts, newFontId, type FontFormat } from "@/lib/fonts";
@@ -27,13 +27,21 @@ import { isSafeKey } from "@/lib/storage";
 const refresh = () => revalidatePath("/", "layout");
 
 /**
- * Removes an asset and the ladder rungs beside it.
+ * Swaps one asset for another: queues the old, claims the new.
  *
  * Guarded on the key actually changing, because keys are content-addressed:
  * re-uploading identical bytes yields the same key, and an unguarded delete
  * would destroy the object it had just written.
+ *
+ * The claim is what undo needs. Setting one of these back to the key it had is
+ * a write with no upload behind it, so nothing else would take that key out of
+ * the deletion queue — and a row left there is the "asset that cannot be
+ * deleted" the queue's own note describes. Nothing is ever wrongly removed
+ * either way, because the publish sweep checks the live revision again; this
+ * just stops the queue filling with keys the site is using.
  */
 async function discardAsset(previous: string | null, next: string | null): Promise<void> {
+  if (next !== null) await claimMedia([next]);
   if (!previous || previous === next) return;
   await releaseMedia([previous]);
 }
@@ -54,6 +62,15 @@ export interface AboutPhoto {
   width: number;
   height: number;
   lqip: string;
+  /**
+   * Only ever set by undo.
+   *
+   * Setting a photograph clears the description, deliberately — see below. So
+   * an undo that restored the picture alone would give the artist her
+   * photograph back with the words she wrote about it silently gone, which is
+   * the one thing an undo must not do.
+   */
+  alt?: string;
 }
 
 /** The photograph beside the About copy. Null removes it. */
@@ -71,8 +88,8 @@ export async function setAboutPhoto(photo: AboutPhoto | null): Promise<void> {
     aboutPhotoLqip: photo?.lqip ?? null,
     // A removed photo takes its description with it; a new one starts blank so
     // the artist is prompted rather than inheriting a description of a
-    // different picture.
-    aboutPhotoAlt: "",
+    // different picture. Undo is the exception, and says so by passing one.
+    aboutPhotoAlt: photo?.alt ?? "",
   });
   await discardAsset(current.aboutPhotoKey, photo?.key ?? null);
   refresh();
@@ -190,18 +207,24 @@ export async function setSiteFaces(patch: {
   refresh();
 }
 
-/** Adds an uploaded font to the list offered for wall text. */
+/**
+ * Adds an uploaded font to the list offered for wall text.
+ *
+ * Returns the id it generated: the browser cannot invent one, and undo has to
+ * name the font it removes again.
+ */
 export async function addSiteFont(input: {
   label: string;
   storageKey: string;
   format: FontFormat;
-}): Promise<void> {
+}): Promise<string> {
   await requireSession();
   if (!isSafeKey(input.storageKey)) throw new Error("That font could not be stored.");
 
   const db = await getDb();
+  const id = newFontId();
   await db.insert(schema.siteFonts).values({
-    id: newFontId(),
+    id,
     label: cssFamilyName(input.label),
     family: cssFamilyName(input.label),
     storageKey: input.storageKey,
@@ -209,6 +232,7 @@ export async function addSiteFont(input: {
   });
 
   refresh();
+  return id;
 }
 
 /**

@@ -5,6 +5,7 @@ import { updatePageSettings } from "@/app/admin/portfolio-actions";
 import { GRID_COLUMN_CHOICES } from "@/lib/grid";
 import { ScrollSelect } from "./size-select";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 /** The gap between pieces, as a percentage of the wall's width. */
 const GAP_CHOICES = [0.5, 1, 2, 3, 4, 5, 10, 15, 20];
@@ -56,11 +57,33 @@ function Toggle({
  */
 export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
   const [value, setValue] = useState(settings);
-  const { run, pending, error } = useAction();
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
+
+  /** Applies a patch to the panel and returns the write. */
+  const write = (patch: Partial<PageSettings>) => {
+    setValue((current) => ({ ...current, ...patch }));
+    return updatePageSettings(patch);
+  };
 
   function apply(patch: Partial<PageSettings>) {
-    setValue({ ...value, ...patch });
-    run(updatePageSettings(patch), "Saving the page settings");
+    /*
+      The inverse is the same keys with the values they had. Built from the
+      patch rather than from the whole settings object, so undoing one switch
+      writes one column — a whole-object restore would silently revert
+      anything else that changed in between.
+    */
+    const before = Object.fromEntries(
+      Object.keys(patch).map((key) => [key, value[key as keyof PageSettings]]),
+    ) as Partial<PageSettings>;
+
+    record({
+      label: "the page setting",
+      undo: () => track(write(before), "Undoing the page setting"),
+      redo: () => track(write(patch), "Redoing the page setting"),
+    });
+
+    run(write(patch), "Saving the page settings");
   }
 
   return (

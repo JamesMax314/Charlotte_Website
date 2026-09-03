@@ -4,6 +4,7 @@ import { useState } from "react";
 import { setAccentColour } from "@/app/admin/settings-actions";
 import { ACCENT_SUGGESTIONS, DEFAULT_ACCENT, judgeAccent, normaliseHex } from "@/lib/colour";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 import { FIELD } from "./styles";
 
 const WARNING: Record<"ok" | "faint" | "invisible", string | null> = {
@@ -31,17 +32,37 @@ const WARNING: Record<"ok" | "faint" | "invisible", string | null> = {
  */
 export function AccentField({ accentColour }: { accentColour: string }) {
   const [value, setValue] = useState(accentColour);
-  const { run, pending, error } = useAction();
+  /*
+    The colour as last written, which the prop only becomes once the
+    revalidation has come back. Undo needs the value it is reversing to, and
+    reading a prop that may still be a step behind would let two quick changes
+    record the same "before" twice.
+  */
+  const [saved, setSaved] = useState(() => normaliseHex(accentColour) ?? DEFAULT_ACCENT);
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
 
   const hex = normaliseHex(value) ?? DEFAULT_ACCENT;
   const verdict = judgeAccent(hex);
   const warning = WARNING[verdict.level];
 
+  const write = (next: string, what: string) => {
+    setValue(next);
+    setSaved(next);
+    return track(setAccentColour(next), what);
+  };
+
   const commit = (next: string) => {
     const safe = normaliseHex(next);
-    if (safe && safe !== normaliseHex(accentColour)) {
-      run(setAccentColour(safe), "Saving the highlight colour");
-    }
+    if (!safe || safe === saved) return;
+    const before = saved;
+    record({
+      label: "the highlight colour",
+      undo: () => write(before, "Undoing the highlight colour"),
+      redo: () => write(safe, "Redoing the highlight colour"),
+    });
+    setSaved(safe);
+    run(setAccentColour(safe), "Saving the highlight colour");
   };
 
   return (
