@@ -838,13 +838,28 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   not. Turning it back into a button with state is the obvious tidy-up and it reintroduces
   the bug.
 
-- **`summary::-webkit-details-marker` lives in `globals.css` because no variant reaches
-  it.** `list-none` hides the disclosure triangle in Blink and Gecko; WebKit draws its
-  marker through a pseudo-element instead. Omit the rule and the menu button has a triangle
-  beside it on every iPhone and nothing anywhere else — a fault that cannot be seen on the
-  machine it is written on. The summary also keeps its own `display` for a related reason:
-  setting a summary to `flex` has a history of taking the disclosure behaviour with it in
-  WebKit, so the flex box is a span inside it.
+- **A summary's marker takes three rules to remove, and `display: block` is the one that
+  works.** A summary is a `list-item` by default, so the marker goes when the box stops
+  being one; `list-style: none` covers Blink and Gecko, and `::-webkit-details-marker`
+  covers the WebKit that predates `::marker`. None is redundant — the first two are ignored
+  by a browser drawing the legacy pseudo-element and the third is a no-op everywhere else —
+  and `list-style: none` alone was tried first and was not enough on the artist's iPhone.
+  The `display` also fixes a second-order fault: the legacy marker is an inline-block
+  pseudo-element *inside* the summary, so a block-level child lands on the line beneath it,
+  which is why the hamburger appeared under the triangle rather than beside it. They are
+  element selectors, not utilities, because a class only reaches the summaries someone
+  remembered to put it on. The summary is still never laid out as `flex` — that has a
+  history of taking the disclosure behaviour with it in WebKit — so the flex box is a span
+  inside it.
+
+- **The menu glyph is aligned to the start of its tap target, never centred in it.** A 40px
+  box around a 22px glyph is there for the thumb, and centring the glyph inside it makes
+  the glyph's position depend on the box having a resolved width — so the one browser where
+  that width did not land put the hamburger in the middle of the screen while every other
+  browser looked perfect. Aligned to the start the box may be any width at all and the bars
+  stay flush with the content column, which is where they belong regardless. The rule
+  generalises past this button: an icon positioned by centring inside a sized box fails
+  visibly when the size fails, and one positioned by alignment does not.
 
 - **A glyph carries `width` and `height` attributes as well as classes.** An `<svg>` with a
   `viewBox` and no intrinsic size collapses to nothing in WebKit inside a flex container

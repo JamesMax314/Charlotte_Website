@@ -78,21 +78,26 @@ export function MobileNav({
     <div className="relative w-full text-[length:var(--header-nav-size,14px)] md:hidden">
       <details ref={details} className="group w-full">
         {/*
-          The summary keeps its own `display`. Setting it to flex is the usual
-          way to lay a summary out and it has a history of taking the disclosure
-          behaviour with it in WebKit, so the flex box is a span inside instead.
-          `w-fit` keeps it off the right-hand end of the line, where the
-          Instagram link is — a full-width summary would swallow taps meant for
-          it. The marker is hidden by `list-none` here and by a rule in
-          globals.css for WebKit, which no Tailwind variant reaches.
+          The summary's `display: block` and its missing marker both come from
+          globals.css, for the reasons written there. It is not set to flex: a
+          summary that is laid out as flex has a history of taking the
+          disclosure behaviour with it in WebKit, so the flex box is a span
+          inside instead. `w-fit` keeps it off the right-hand end of the line,
+          where the Instagram link is.
         */}
-        <summary className="w-fit cursor-pointer list-none">
+        <summary className="w-fit cursor-pointer">
           {/*
-            A 40px box with the glyph centred in it, pulled back by half the
-            slack so the bars still line up with the content column. The glyph
-            alone is a 22px tap target, which is under any thumb's idea of one.
+            A 40px tap target, because the glyph alone is 22px and that is under
+            any thumb's idea of one — but the glyph is aligned to the *start* of
+            that box rather than centred in it, and that is not a style choice.
+            Centred, the box has to have a real width or the glyph walks to the
+            middle of the screen: the artist's iPhone showed exactly that, and
+            the same markup was correct in Chrome, which makes it a fault that
+            depends on a width utility resolving. Aligned to the start it cannot
+            happen — however wide the box turns out to be, the bars stay flush
+            with the content column, which is where they belong anyway.
           */}
-          <span className="hover:text-accent -ml-2 flex h-10 w-10 items-center justify-center transition-colors">
+          <span className="hover:text-accent flex h-10 w-10 items-center justify-start transition-colors">
             <MenuGlyph className="h-[1.6em] w-[1.6em] shrink-0" />
             {/* A summary announces its own expanded state, so this does not. */}
             <span className="sr-only">Menu</span>
@@ -135,7 +140,7 @@ export function MobileNav({
       */}
       {instagramUrl && (
         <a
-          className="hover:text-accent absolute top-0 right-0 -mr-2 flex h-10 w-10 items-center justify-center transition-colors"
+          className="hover:text-accent absolute top-0 right-0 flex h-10 w-10 items-center justify-end transition-colors"
           href={instagramUrl}
           target="_blank"
           rel="noopener noreferrer"
