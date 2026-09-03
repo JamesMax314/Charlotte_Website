@@ -123,7 +123,7 @@ export default async function AboutPage() {
         <div className="max-w-prose">
           <h1 className="font-display text-4xl tracking-tight sm:text-5xl">About</h1>
 
-          <div className="mt-6 space-y-5 leading-relaxed text-pretty">
+          <div className="mt-6 space-y-5 leading-none text-pretty">
             <RichTextBlocks doc={body} fonts={registry} className="whitespace-pre-line" />
           </div>
 
@@ -141,7 +141,7 @@ export default async function AboutPage() {
               Contact
             </h2>
 
-            <div className="mt-6 space-y-5 leading-relaxed text-pretty">
+            <div className="mt-6 space-y-5 leading-none text-pretty">
               <RichTextBlocks doc={contact} fonts={registry} className="whitespace-pre-line" />
             </div>
 

@@ -58,9 +58,10 @@ export interface RichParagraph {
    * crush at another viewport width. The artist still chooses it in points;
    * see `leadingInPt`, which is the view.
    *
-   * Absent means "whatever the surface is set to" — `leading-snug` on the
-   * wall, `leading-relaxed` in the copy fields — which is what keeps every
-   * document written before line spacing existed rendering exactly as it did.
+   * Absent means "whatever the surface is set to" — `leading-none` on both
+   * the wall and the copy fields, which is a ratio of 1: the default tracks
+   * the paragraph's own type size, so it moves with the size until the artist
+   * sets a spacing for that paragraph specifically. See `SURFACE_LEADING`.
    */
   leading?: number;
 }
@@ -89,8 +90,18 @@ export const RICH_LIMITS = {
    * under the type size sets lines overlapping, which is a way to make a box
    * unreadable rather than a look worth reaching. Four times the box is enough
    * for the airiest thing a portfolio wants.
+   *
+   * The bottom has to clear 5pt — the lowest rung `PT_STEPS` offers — for a
+   * default-sized wall text box, not only the settings copy fields. Those are
+   * fixed at 12pt, where even 0.4 would do; a freshly placed wall box seeds at
+   * 2.4cqw, which is ~23.3pt, and `ceil(23.3 * 0.4)` is 10 — the floor the
+   * artist actually hit. 0.2 clears both: `ceil(12 * 0.2)` and
+   * `ceil(23.3 * 0.2)` are 3 and 5, the first filtered away by `PT_STEPS`
+   * itself. A much larger box's floor still rises proportionally — this
+   * bounds the *ratio*, not the point size — so an oversized heading is not
+   * offered a spacing that crushes it.
    */
-  leading: { min: 0.5, max: 4 },
+  leading: { min: 0.2, max: 4 },
 } as const;
 
 /**
@@ -197,12 +208,12 @@ const clampSize = (value: unknown): number | undefined => {
  * Line spacing, sanitised.
  *
  * Unlike `clampSize` there is no value that means "the default": a run at the
- * box's own size is a redundant 1 and is dropped, but a paragraph's default
- * spacing is whatever the surface renders at — `leading-snug` on the wall,
- * `leading-relaxed` in the copy fields — and no single number stands for both.
- * So absence is the only way to say "follow the surface", and every number in
- * range is kept. Returning to the default is the editor's job; see
- * `baseLeading` there.
+ * box's own size is a redundant 1 and is dropped, but an explicit spacing of
+ * 1 is not redundant even though it happens to equal `SURFACE_LEADING` today
+ * — the two are independent constants that could diverge again, and only
+ * *absence* is allowed to mean "follow whichever the surface is set to". So
+ * every number in range is kept, 1 included. Returning to the default is the
+ * editor's job; see `baseLeading` there.
  */
 const clampLeading = (value: unknown): number | undefined => {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;

@@ -36,14 +36,21 @@ export const PT_STEPS: readonly number[] = [
  * These are the Tailwind classes those surfaces already carry, written out as
  * numbers because the toolbar has to *quote* the default in points before the
  * artist has chosen anything — and it cannot read a class. They must be kept in
- * step with the markup by hand: change `leading-snug` on the wall's text and
+ * step with the markup by hand: change `leading-none` on the wall's text and
  * this is the other half of that edit.
+ *
+ * Both are 1: the default is the paragraph's own type size, so the toolbar's
+ * spacing control tracks whatever size is chosen until the artist overrides
+ * it for that paragraph specifically. `leadingInPt`/`leadingFromPt` already
+ * compute against the current size on every call, so a ratio of 1 is what
+ * makes "spacing" and "size" read the same number without any extra code —
+ * changing the size moves both, because both are one multiplication of it.
  */
 export const SURFACE_LEADING = {
-  /** `leading-snug`, on the wall's text boxes — the editor and the public wall. */
-  wall: 1.375,
-  /** `leading-relaxed`, on the About, Contact and Privacy copy. */
-  copy: 1.625,
+  /** `leading-none`, on the wall's text boxes — the editor and the public wall. */
+  wall: 1,
+  /** `leading-none`, on the About, Contact and Privacy copy. */
+  copy: 1,
 } as const;
 
 /**

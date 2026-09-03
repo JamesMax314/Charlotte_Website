@@ -574,7 +574,7 @@ Non-obvious decisions that the code alone does not explain.
 - **`SURFACE_LEADING` is a hand-kept copy of a Tailwind class, in a different file from
   every class it copies.** Line spacing is quoted to the artist in points, so the control
   has to state the surface's _own_ spacing before she has chosen one — and it cannot read
-  `leading-snug` off a class. Those numbers live in `type-scale.ts` while the classes live
+  `leading-none` off a class. Those numbers live in `type-scale.ts` while the classes live
   on the wall (`portfolio-wall.tsx`, and twice in `portfolio-canvas.tsx`) and on the copy
   fields (`rich-copy-field.tsx`, `about/page.tsx`, `privacy/page.tsx`). Change a class
   without changing the constant and nothing breaks loudly: the control quotes a spacing

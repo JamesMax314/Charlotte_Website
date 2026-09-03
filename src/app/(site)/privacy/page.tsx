@@ -28,7 +28,7 @@ export default async function PrivacyPage() {
       <div className="max-w-prose">
         <h1 className="font-display text-4xl tracking-tight sm:text-5xl">Privacy</h1>
 
-        <div className="mt-6 space-y-5 leading-relaxed text-pretty">
+        <div className="mt-6 space-y-5 leading-none text-pretty">
           <RichTextBlocks doc={body} fonts={registry} className="whitespace-pre-line" />
         </div>
       </div>

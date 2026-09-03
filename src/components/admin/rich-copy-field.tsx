@@ -38,9 +38,9 @@ export function RichCopyField({
         fonts={fonts}
         ariaLabel={label}
         minHeight="14rem"
-        // The `leading-relaxed` below, and on the page this copy renders on.
+        // The `leading-none` below, and on the page this copy renders on.
         baseLeading={SURFACE_LEADING.copy}
-        className="border-line max-w-none border p-3 leading-relaxed"
+        className="border-line max-w-none border p-3 leading-none"
       />
     </div>
   );

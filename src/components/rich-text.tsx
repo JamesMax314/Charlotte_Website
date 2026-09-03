@@ -93,7 +93,7 @@ export function RichTextInline({ doc, fonts }: { doc: RichDoc; fonts: FontOption
               as a ratio and recomputed against each run's own size, so one
               paragraph mixing two sizes would get two spacings; an `em`
               resolves here, against the box, and is inherited as that length.
-              Absent leaves the `leading-snug` on the element above.
+              Absent leaves the `leading-none` on the element above.
             */
             ...(paragraph.leading === undefined ? {} : { lineHeight: `${paragraph.leading}em` }),
           }}

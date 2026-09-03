@@ -282,7 +282,7 @@ export function PortfolioWall({
         return (
           <div key={text.id} className="wall-item" style={place(text)}>
             <Tag
-              className="wall-text leading-snug whitespace-pre-wrap"
+              className="wall-text leading-none whitespace-pre-wrap"
               style={
                 {
                   ...textStyle(text, { includeFontSize: false, fonts }),
