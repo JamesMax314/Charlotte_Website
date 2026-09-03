@@ -140,6 +140,7 @@ The product specification is `docs/project-brief.md`.
 | 33    | Line spacing, chosen in points from the same scrolling ladder the type size uses and applied to the paragraph the caret is in, exactly as the alignment buttons beside it are. Stored as a multiple of the box so it still scales with the wall, and written as an `em` on the block so one paragraph gets one spacing whatever sizes are mixed into it                                                                                                                                                                                                                                                      |
 | 34    | Archive, on the home page and the artist's own custom pages. "Archive image" (or "Archive N images" on a selection) puts a piece away without deleting it — its own page and photographs untouched — and "Add from archive" restores it at the cursor, on any wall, from a shared box of thumbnails with delete-forever on right-click. Not offered on a piece's own page, which has nothing of its own to put away                                                                                                                                                                                        |
 | 32    | Performance. The 1102 the artist met in the studio was one server action per keystroke, each revalidating the layout, each layout render hashing the whole site: writes are now queued and coalesced, autosaves no longer revalidate, and the publish hash moved behind its own endpoint. Images are downscaled server-side by the IMAGES binding into AVIF and WebP, `/media` negotiates on `Accept` and caches at the edge, and the LQIP that had been stored since Phase 2 is finally rendered. A follow-up taught `derivativeKeys` about the new encodings, which a delete would otherwise have orphaned |
+| 36    | The top bar on a phone: the mark and the artist's name centred on their own line, with the menu button and Instagram at either end of the line below. The pages, the shop and About drop from the button as one list in reading order, in the flow so the page moves down rather than being covered. Built as a native `<details>` after the first version — a button with an `onClick` — was found on a phone as a hamburger that could be seen and not pressed. Desktop is untouched                                                                                                                                             |
 | 35    | Fixed "View site": it used `<Link>`, so leaving the admin was a client-side transition into a layout whose inline fade-in `<script>` never gets a parse pass — React refused to render it. Swapped for a plain `<a>` to force a full navigation. `/admin` now redirects to the wall (`/admin/portfolio`) instead of opening the shop grid, which moved to `/admin/shop` |
 
 ---
@@ -824,6 +825,54 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   cover image so artwork cannot be distorted, but a text box has no aspect ratio to
   protect, which is why `snapResizeFree` exists alongside `snapResize`.
 
+- **The mobile menu is a `<details>`, because navigation must not depend on hydration.**
+  The same rule the fade already carries, and the top bar has the stronger claim to it:
+  a fade that does not run is a page that appears plainly, while a menu that does not run
+  is a site with no way around it. The first version was a `<button>` with an `onClick`,
+  and on a phone it was a hamburger that could be seen and not pressed — the artist found
+  it, and the giveaway was that the lightbox was dead on the same page while the Instagram
+  link beside the button, being a plain `<a>`, still worked. A summary is also a button
+  with an expanded state already announced, so there is no `aria-expanded` of ours to keep
+  in step. The element is uncontrolled and closed by writing `open` on the node: React must
+  not hold a second opinion about a thing whose whole purpose is to work when React does
+  not. Turning it back into a button with state is the obvious tidy-up and it reintroduces
+  the bug.
+
+- **A summary's marker takes three rules to remove, and they belong on the element, never
+  on `summary`.** A summary is a `list-item` by default, so `display: block` is what removes
+  the marker; `list-none` covers Blink and Gecko, and `[&::-webkit-details-marker]:hidden`
+  covers the WebKit that predates `::marker`. None is redundant — the first two are ignored
+  by a browser drawing the legacy pseudo-element and the third is a no-op everywhere else —
+  and `list-style: none` alone was tried first and was not enough on the artist's iPhone.
+  The `display` also fixes a second-order fault: the legacy marker is an inline-block
+  pseudo-element *inside* the summary, so a block-level child lands on the line beneath it,
+  which is why the hamburger appeared under the triangle rather than beside it.
+
+  Writing them as `summary { … }` in `globals.css` is the obvious tidy-up and it is wrong
+  twice over. The studio's shop dialog has a "More details" expander whose entire affordance
+  is its native triangle, so an element selector reaches a summary that wants the opposite
+  of this one and silently strips it — on a desktop surface nobody is looking at while
+  working on a phone. And a rule that lives only in the stylesheet can fall out of step with
+  the markup that needs it: moving the class there brought the triangle back in *every*
+  browser, because a dev stylesheet can be stale while the HTML beside it is not — see
+  "Running it locally". The summary is still never laid out as `flex`, which has a history
+  of taking the disclosure behaviour with it in WebKit, so the flex box is a span inside it.
+
+- **The menu glyph is aligned to the start of its tap target, never centred in it.** A 40px
+  box around a 22px glyph is there for the thumb, and centring the glyph inside it makes
+  the glyph's position depend on the box having a resolved width — so the one browser where
+  that width did not land put the hamburger in the middle of the screen while every other
+  browser looked perfect. Aligned to the start the box may be any width at all and the bars
+  stay flush with the content column, which is where they belong regardless. The rule
+  generalises past this button: an icon positioned by centring inside a sized box fails
+  visibly when the size fails, and one positioned by alignment does not.
+
+- **A glyph carries `width` and `height` attributes as well as classes.** An `<svg>` with a
+  `viewBox` and no intrinsic size collapses to nothing in WebKit inside a flex container
+  while Blink gives it a default box — so a stylesheet that has not arrived is an icon
+  missing on an iPhone and merely mis-sized on Android, which arrives as two bug reports
+  rather than one. The attributes lose to any class that does arrive, so they cost nothing.
+
 - **The reveal is one shared scroll sweep, and must never split into two mechanisms.**
   It used to pick per element: on screen at mount meant a timer, below the fold meant an
   IntersectionObserver. Which path dominates is decided by the breakpoint. Above `md` the
@@ -1103,6 +1152,17 @@ pnpm dev          # fast iteration on http://localhost:3000
 pnpm preview      # the real Worker on http://localhost:8787 — build first, slower
 pnpm preview:lan  # the same, reachable from a phone at http://<this-machine>:8787
 ```
+
+**A CSS change in `pnpm dev` can be cached stale while the HTML is not.** Turbopack serves
+one stylesheet at a stable URL — `[root-of-the-server]__<hash>._.css`, where the hash names
+the chunk and not its contents — so the address does not change when the file does. A
+browser holding the previous copy therefore pairs it with freshly rendered HTML, and the
+symptom is a rule that is provably in the file, provably served, and provably not applied.
+It cost real time on the mobile menu: a marker suppressed by a utility class was moved into
+`globals.css`, and the disclosure triangle came back on every browser at once. Curling the
+stylesheet proves what the _server_ has and nothing about what the browser is using —
+hard-reload before believing a CSS change did not work, and prefer keeping a rule on the
+element that needs it.
 
 **Test in `preview` before believing anything.** `next dev` does not run the deployed
 worker and will happily hide production-only failures. The missing image optimiser in
