@@ -844,6 +844,10 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   covers the WebKit that predates `::marker`. None is redundant — the first two are ignored
   by a browser drawing the legacy pseudo-element and the third is a no-op everywhere else —
   and `list-style: none` alone was tried first and was not enough on the artist's iPhone.
+  All three also ride on the summary's own `className`, and that duplication is deliberate:
+  moving them out of the markup and into the stylesheet alone brought the triangle back in
+  *every* browser, because a dev stylesheet can be stale while the HTML beside it is not —
+  see "Running it locally". A class in the markup cannot fall out of step with the markup.
   The `display` also fixes a second-order fault: the legacy marker is an inline-block
   pseudo-element *inside* the summary, so a block-level child lands on the line beneath it,
   which is why the hamburger appeared under the triangle rather than beside it. They are
@@ -1146,6 +1150,17 @@ pnpm dev          # fast iteration on http://localhost:3000
 pnpm preview      # the real Worker on http://localhost:8787 — build first, slower
 pnpm preview:lan  # the same, reachable from a phone at http://<this-machine>:8787
 ```
+
+**A CSS change in `pnpm dev` can be cached stale while the HTML is not.** Turbopack serves
+one stylesheet at a stable URL — `[root-of-the-server]__<hash>._.css`, where the hash names
+the chunk and not its contents — so the address does not change when the file does. A
+browser holding the previous copy therefore pairs it with freshly rendered HTML, and the
+symptom is a rule that is provably in the file, provably served, and provably not applied.
+It cost real time on the mobile menu: a marker suppressed by a utility class was moved into
+`globals.css`, and the disclosure triangle came back on every browser at once. Curling the
+stylesheet proves what the _server_ has and nothing about what the browser is using —
+hard-reload before believing a CSS change did not work, and prefer keeping a rule on the
+element that needs it.
 
 **Test in `preview` before believing anything.** `next dev` does not run the deployed
 worker and will happily hide production-only failures. The missing image optimiser in

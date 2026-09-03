@@ -78,14 +78,24 @@ export function MobileNav({
     <div className="relative w-full text-[length:var(--header-nav-size,14px)] md:hidden">
       <details ref={details} className="group w-full">
         {/*
-          The summary's `display: block` and its missing marker both come from
-          globals.css, for the reasons written there. It is not set to flex: a
-          summary that is laid out as flex has a history of taking the
-          disclosure behaviour with it in WebKit, so the flex box is a span
-          inside instead. `w-fit` keeps it off the right-hand end of the line,
+          The three marker rules ride on the element itself, not only in
+          globals.css, and that is the point rather than belt-and-braces
+          nerves: this element's markup and the rule that suppresses its marker
+          must ship together. They did not once — the class was moved into the
+          stylesheet, and Turbopack's dev chunk keeps one stable URL whatever
+          its contents, so browsers went on serving the previous stylesheet
+          beside the new HTML and the triangle came back in every browser at
+          once. A class in the markup cannot fall out of step with the markup.
+
+          `block` is the one that does the work: a summary is a `list-item` by
+          default and a box that is not one has no marker to draw. `list-none`
+          and the arbitrary variant cover Blink/Gecko and the WebKit that
+          predates `::marker`. It is never laid out as flex — that has a history
+          of taking the disclosure behaviour with it in WebKit — so the flex box
+          is a span inside. `w-fit` keeps it off the right-hand end of the line,
           where the Instagram link is.
         */}
-        <summary className="w-fit cursor-pointer">
+        <summary className="block w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">
           {/*
             A 40px tap target, because the glyph alone is 22px and that is under
             any thumb's idea of one — but the glyph is aligned to the *start* of
