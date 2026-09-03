@@ -7,6 +7,8 @@ import { requireSession } from "@/lib/auth";
 import { getSiteSettings } from "@/lib/catalogue";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
+import type { Backup } from "@/lib/undo-backup";
+import { captureSiteFonts } from "@/lib/undo-restore";
 import { cssFamilyName, isKnownFontId, mergeFonts, newFontId, type FontFormat } from "@/lib/fonts";
 import { headerStyle, type HeaderStyle } from "@/lib/header-style";
 import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
@@ -217,21 +219,18 @@ export async function addSiteFont(input: {
  * was written for. Sweeping the table would be a migration that could not be
  * undone if the artist re-uploaded the same face.
  */
-export async function deleteSiteFont(id: string): Promise<void> {
+export async function deleteSiteFont(id: string): Promise<Backup> {
   await requireSession();
 
   const db = await getDb();
-  const rows = await db
-    .select({ storageKey: schema.siteFonts.storageKey })
-    .from(schema.siteFonts)
-    .where(eq(schema.siteFonts.id, id))
-    .limit(1);
+  const backup = await captureSiteFonts([id]);
 
   await db.delete(schema.siteFonts).where(eq(schema.siteFonts.id, id));
 
-  await releaseMedia([rows[0]?.storageKey]);
+  await releaseMedia((backup.site_fonts ?? []).map((row) => row.storageKey as string));
 
   refresh();
+  return backup;
 }
 
 export interface SettingsFormState {

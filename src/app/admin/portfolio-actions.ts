@@ -7,6 +7,8 @@ import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
 import { deletePiecesWithPages } from "@/lib/portfolio-deletes";
+import { mergeBackups, type Backup } from "@/lib/undo-backup";
+import { capturePieces, capturePortfolioImages, captureWallTexts } from "@/lib/undo-restore";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { resolveGridColumns } from "@/lib/grid";
@@ -183,12 +185,12 @@ export async function savePortfolioItemDetails(
  * Removes the R2 objects as well; the rows alone would leave the bucket
  * accumulating everything the artist ever replaced.
  */
-export async function clearPortfolioImages(id: string): Promise<void> {
+export async function clearPortfolioImages(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
 
   const images = await db
-    .select({ storageKey: schema.portfolioImages.storageKey })
+    .select()
     .from(schema.portfolioImages)
     .where(eq(schema.portfolioImages.itemId, id));
 
@@ -196,6 +198,7 @@ export async function clearPortfolioImages(id: string): Promise<void> {
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.itemId, id));
   refresh();
+  return { portfolio_images: images as unknown as Record<string, unknown>[] };
 }
 
 export async function updatePortfolioItem(id: string, formData: FormData): Promise<void> {
@@ -266,9 +269,14 @@ export async function bringPortfolioItemToFront(id: string): Promise<void> {
   refresh();
 }
 
-export async function deletePortfolioItem(id: string): Promise<void> {
+export async function deletePortfolioItem(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+
+  // Read before removing, so undo has the rows to put back. Inside the delete
+  // rather than as a call of its own: a separate capture is a second round
+  // trip with a gap in the middle where the two answers can disagree.
+  const backup = await capturePieces([id]);
 
   // Remove the R2 objects too, or the bucket accumulates orphans forever.
   // Neither the rows nor the objects cascade, so the whole family is collected
@@ -290,6 +298,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   refresh();
   // No redirect: this is called from the wall, where cancelling a new image
   // must not navigate the artist away from what she was doing.
+  return backup;
 }
 
 /**
@@ -478,11 +487,13 @@ export async function saveWallTextLayout(
   // Autosave: no revalidation, and no re-render. See the note by `refresh`.
 }
 
-export async function deleteWallText(id: string): Promise<void> {
+export async function deleteWallText(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+  const backup = await captureWallTexts([id]);
   await db.delete(schema.wallTexts).where(eq(schema.wallTexts.id, id));
   refresh();
+  return backup;
 }
 
 // ---------------------------------------------------------------- images
@@ -512,20 +523,17 @@ export async function updatePortfolioImageAlt(id: string, alt: string): Promise<
   refresh();
 }
 
-export async function deletePortfolioImage(id: string): Promise<void> {
+export async function deletePortfolioImage(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
 
-  const rows = await db
-    .select({ storageKey: schema.portfolioImages.storageKey })
-    .from(schema.portfolioImages)
-    .where(eq(schema.portfolioImages.id, id))
-    .limit(1);
+  const backup = await capturePortfolioImages([id]);
 
-  await releaseMedia([rows[0]?.storageKey]);
+  await releaseMedia((backup.portfolio_images ?? []).map((row) => row.storageKey as string));
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.id, id));
   refresh();
+  return backup;
 }
 
 // ---------------------------------------------------------------- selections
@@ -599,9 +607,16 @@ export async function saveWallLayouts(layout: {
 export async function deleteWallSelection(selection: {
   items: string[];
   texts: string[];
-}): Promise<void> {
+}): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+
+  // Both halves captured up front, before either is removed — a group delete
+  // is one action to the artist and must be one entry to undo.
+  const backup = mergeBackups(
+    await capturePieces(selection.items),
+    await captureWallTexts(selection.texts),
+  );
 
   if (selection.items.length > 0) {
     const family = await db
@@ -624,4 +639,5 @@ export async function deleteWallSelection(selection: {
   }
 
   refresh();
+  return backup;
 }

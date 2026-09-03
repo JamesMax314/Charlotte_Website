@@ -14,6 +14,7 @@ import {
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { uploadImage } from "@/lib/client-upload";
+import type { Backup } from "@/lib/undo-backup";
 
 type Item = { id: string; src: string; alt: string; width: number; height: number };
 
@@ -31,7 +32,8 @@ type Props = {
   images: Item[];
   reorder: (parentId: string, ids: string[]) => Promise<void>;
   updateAlt: (id: string, alt: string) => Promise<void>;
-  remove: (id: string) => Promise<void>;
+  /** Returns the rows it removed, so the deletion can be undone. */
+  remove: (id: string) => Promise<Backup>;
   heading?: string;
   hint?: string;
 };
