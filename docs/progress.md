@@ -56,8 +56,9 @@ The product specification is `docs/project-brief.md`.
   publish.
 
 - **Everything lives in D1 and R2.** Artwork is in a private bucket, served only through
-  `/media` on content-addressed keys, with a responsive width ladder written in the
-  browser at upload — there is no image optimiser on Workers.
+  `/media` on content-addressed keys. The responsive width ladder is rendered at upload
+  by Cloudflare's image service, in AVIF and WebP, and `/media` picks the encoding from
+  the request's `Accept` header and caches the answer at the edge.
 
 - **The admin.** Passphrase sign-in; a Home page editor with page settings — gap,
   snapping, an alignment grid, hover names and an optional content fade-in — plus right-click menus, an
@@ -135,12 +136,89 @@ The product specification is `docs/project-brief.md`.
 | 29    | Multi-select on every free-form wall: a marquee or shift-click gathers images and text, and the group moves, scales — carrying its type — aligns, spaces evenly and deletes as one. Layout saves for a selection land in a single `db.batch`. The artist works at a desktop, not an iPad, which is what settled the gesture                                                                                                                                                                                                   |
 | 31    | Deleting a piece works again. `parent_id` never had the `ON DELETE CASCADE` its schema declares, so deleting any of the 13 pieces that owned a page of their own raised a foreign-key error the artist saw only as React #441. D1 cannot be given the clause, so the cascade moved into the application — in the piece, selection and page deletes alike                                                                                                                                                                      |
 | 30    | An alignment grid over every free-form wall, switched on in page settings and spaced in columns across the width. Its lines are snap targets in their own right, merged with the edge guides so the nearer of the two wins. Editor only — no visitor ever sees it. Drawn as two repeating gradients and three heavier columns — five elements at any spacing. One element per line, first as dashed borders and then as gradients, put twenty-five full-height fills in every raster tile and made scrolling the editor crawl |
+| 32    | Performance. The 1102 the artist met in the studio was one server action per keystroke, each revalidating the layout, each layout render hashing the whole site: writes are now queued and coalesced, autosaves no longer revalidate, and the publish hash moved behind its own endpoint. Images are downscaled server-side by the IMAGES binding into AVIF and WebP, `/media` negotiates on `Accept` and caches at the edge, and the LQIP that had been stored since Phase 2 is finally rendered                             |
 
 ---
 
 ## Architectural Invariants
 
 Non-obvious decisions that the code alone does not explain.
+
+- **`revalidatePath` is the only thing that makes a server action re-render the
+  page.** Next's action handler sets `skipPageRendering` from
+  `workStore.pathWasRevalidated` and nothing else, so an action that revalidates
+  nothing returns its result and no RSC tree at all. That is why the wall's
+  autosaves — `updateWallText`, `savePortfolioLayout`, `saveWallTextLayout`,
+  `saveWallLayouts` — deliberately do not call it: they write back values the
+  canvas has already applied optimistically, so the render was a full trip
+  through both layouts and the wall to be told what the browser was showing.
+  Nothing goes stale, because `force-dynamic` leaves no route cache and Next's
+  `staleTimes.dynamic` defaults to 0. A write that creates or removes a row
+  still refreshes; the canvas cannot invent an id. Adding `refresh()` back to an
+  autosave restores the cost with no symptom to notice it by.
+
+- **Nothing expensive may sit on the admin layout's render path.** It re-renders
+  on every mutation that revalidates, which is the multiplier that turned
+  `getPublishState` — nine queries, a canonical serialisation of the entire site
+  and a SHA-256 — into a whole-site read per keystroke, and then into
+  `1102 Worker exceeded resource limit`. The publish state is still a content
+  hash and still never a dirty flag; it is fetched by `PublishButton` from
+  `/api/admin/publish-state`, so it costs its own invocation with its own CPU
+  budget. The same rule sent `DraftMarker`'s half into `DraftPill`. The free
+  tier allows roughly 10ms of CPU per request: a layout is the wrong place to
+  spend it, however correct the answer.
+
+- **An editor that emits on `input` must not write on `input`.** The rich text
+  editor fires `onChange` per keystroke _and_ unconditionally on blur, so the
+  canvas queues rather than sends: `src/lib/write-queue.ts` coalesces a burst
+  into one patch, holds at most one write per row in flight, and `patchText`
+  compares the document before queueing at all. The ordering guarantee is not
+  decoration — concurrent updates to one row let the earlier land second and
+  revert the artist's last keystrokes. The `maxDelay` ceiling is not decoration
+  either: a trailing debounce alone never fires while typing continues.
+
+- **R2's `put` refuses a body of unknown length, which is exactly what the
+  IMAGES binding returns.** "Provided readable stream must have a known length"
+  arrives asynchronously, inside `waitUntil`, so an upload still succeeds and a
+  visitor still gets an image through `/media`'s fallback — while no derivative
+  is ever written and every request regenerates the same rung. Nothing looks
+  broken; the site is simply never optimised again. `render` in
+  `image-ladder.ts` returns bytes rather than a stream for this reason, and a
+  derivative is small enough that holding one is cheap.
+
+- **The negotiated format goes in the cache key, never into `Vary`.**
+  Cloudflare's edge cache honours `Vary` on nothing but `Accept-Encoding`, so
+  one entry for `-800.jpg` would be handed to every later visitor whatever their
+  browser can decode — AVIF bytes under a `.jpg` URL, which renders as a broken
+  image. It is invisible in testing because any machine testing it accepts AVIF.
+  `cacheKeyFor` appends `?fmt=`; the `Vary: Accept` header is still sent, for
+  the browser and proxy caches that do respect it.
+
+- **`caches` does not exist while Next collects page data.** That pass runs in
+  plain Node, outside any request, so reading `caches.default` at module scope
+  is a `ReferenceError` that fails the build with "Failed to collect
+  configuration for /media/[...key]" and no mention of caching. It is read
+  inside the handler, and returns null rather than throwing so the route still
+  serves images where no cache exists.
+
+- **Cloudflare Images is affordable here because it runs once per image, not
+  once per request.** The old comment in `image-loader.ts` ruled it out for
+  costing "money per transformation", which is true only of transforming on the
+  way out. The ladder is rendered at upload and stored in R2, so a fifty-piece
+  catalogue is a few hundred transformations in its lifetime against a free
+  allowance of thousands a month — and the work happens in the image service
+  rather than in the Worker's own 10ms of CPU. `/media` generating a missing
+  rung on first request obeys the same rule: it writes the result back, so it
+  happens once.
+
+- **A wall tile's `sizes` is its own width above `md` and a flat figure below
+  it.** The two halves have opposite reasoning and neither generalises to the
+  other. Above the breakpoint the arrangement exists and is stored in
+  percentages of canvas width, so quoting the real number stops a small piece
+  fetching a rung four times what it paints and stops a wide one being served
+  something too small to be sharp. Below it there is no arrangement — the wall
+  is a stack — and the figure is deliberately _under_ the slot, for the decode
+  memory reason recorded further down. Do not unify them.
 
 - **A canonical URL belongs in the root layout, and only as `"./"`.** Next's
   `mergeMetadata` clones the parent's resolved metadata and overwrites only the keys a
@@ -349,13 +427,17 @@ Non-obvious decisions that the code alone does not explain.
   constraint, not an omission — do not add `prefers-color-scheme` handling without
   discussing it.
 
-- **There is no image optimizer on Cloudflare Workers.** `/_next/image` returns 404 in
-  the deployed Worker, and Cloudflare Images charges per transformation. Instead the
-  browser renders a fixed width ladder at upload time, `src/image-loader.ts` addresses
-  those objects by naming convention, and `/media` falls back to the base object when a
-  derivative is missing. Removing the custom loader silently breaks every image in
-  production while leaving `next dev` working — which is exactly how this was missed
-  until the worker was actually exercised.
+- **`/_next/image` returns 404 in the deployed Worker, so the loader is not optional.**
+  `src/image-loader.ts` addresses the ladder's objects by naming convention and `/media`
+  falls back to the base object when a rung is missing. Removing the custom loader
+  silently breaks every image in production while leaving `next dev` working — which is
+  exactly how this was missed until the worker was actually exercised.
+
+  Superseded, in part: the rungs used to be rendered by the _browser_ at upload, on the
+  grounds that Cloudflare Images charges per transformation. That reasoning held only
+  for transforming on the way out — see the invariant about it running once per image —
+  and its cost was real: a canvas cannot encode AVIF at all, so the site served JPEG
+  everywhere while the brief called for AVIF/WebP.
 
 - **Every page is `force-dynamic`, and that is deliberate.** D1 is unreachable during
   `next build` (no binding outside the Worker), so nothing can be prerendered against
