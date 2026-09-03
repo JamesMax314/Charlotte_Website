@@ -3,6 +3,7 @@ import { claimMedia } from "@/lib/publish";
 import { hasValidSession } from "@/lib/auth";
 import { extensionForFormat, fontFormatFor, type FontFormat } from "@/lib/fonts";
 import { assetKey, contentHash, IMAGE_EXTENSIONS } from "@/lib/storage";
+import { measure, renderLqip, writeLadder } from "@/lib/image-ladder";
 
 export const dynamic = "force-dynamic";
 
@@ -111,30 +112,42 @@ export async function POST(request: Request) {
   const bytes = await file.arrayBuffer();
   const storageKey = assetKey(PREFIX[kind], await contentHash(bytes), extension);
 
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
   await env.MEDIA.put(storageKey, bytes, { httpMetadata: { contentType } });
 
   // As in the image upload: an identical file yields an identical key, which
   // may be one a delete had queued. See claimMedia.
   await claimMedia([storageKey]);
 
-  // The About photo carries a ladder; the other two deliberately do not.
-  if (kind === "aboutPhoto") {
-    const dot = storageKey.lastIndexOf(".");
-    for (const [field, value] of form.entries()) {
-      const match = /^variant-(\d+)$/.exec(field);
-      if (!match || !(value instanceof File)) continue;
-      await env.MEDIA.put(
-        `${storageKey.slice(0, dot)}-${match[1]}${storageKey.slice(dot)}`,
-        await value.arrayBuffer(),
-        { httpMetadata: { contentType } },
-      );
-    }
+  /*
+    The About photo carries a ladder and a blur placeholder; the other two
+    deliberately do not. A font is not an image, and a mark is stored exactly
+    as uploaded — re-encoding it would cost the transparency it depends on,
+    which is the invariant behind its `unoptimized` rendering.
+
+    Same shape as the image upload: what the caller's *row* needs is awaited,
+    and the eight encodings that only /media reads follow behind the response.
+  */
+  if (kind !== "aboutPhoto") {
+    return Response.json({
+      key: storageKey,
+      src: `/media/${storageKey}`,
+      ...(format ? { format } : {}),
+    });
   }
+
+  const measured = await measure(bytes);
+  const width = measured?.width ?? Number(form.get("width")) ?? 0;
+  const height = measured?.height ?? Number(form.get("height")) ?? 0;
+  const lqip = await renderLqip(bytes);
+
+  ctx.waitUntil(writeLadder(storageKey, bytes, width));
 
   return Response.json({
     key: storageKey,
     src: `/media/${storageKey}`,
-    ...(format ? { format } : {}),
+    width,
+    height,
+    ...(lqip === null ? {} : { lqip }),
   });
 }

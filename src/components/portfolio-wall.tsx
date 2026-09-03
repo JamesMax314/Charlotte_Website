@@ -12,6 +12,7 @@ import {
   opensFullScreen,
   showsHoverName,
   textStyle,
+  wallSizeVw,
   type PortfolioItem,
   type WallText,
 } from "@/lib/portfolio";
@@ -61,16 +62,32 @@ function Tile({
         // next/image rejects both at once — priority already implies eager.
         {...(priority ? {} : { loading: "lazy" as const })}
         /*
-          The mobile figure is deliberately smaller than the slot the image
-          actually fills. At 90vw a 3x phone asks for ~1050px, and the ladder in
-          image-loader.ts rounds that up to 1600 — eight of which decode to
-          roughly 60MB of bitmap, past what a phone will hold. It evicts them
-          and refetches, which is the artwork flickering as you scroll. At 60vw
-          both 2x and 3x land on the 800 rung: a quarter of the memory, and
-          still over twice the density of the slot.
+          Above `md`, the piece's own width on the wall. A flat 50vw was being
+          quoted for every piece regardless of how the artist had sized it, so a
+          decorative mark 12% across the wall asked for half the viewport and
+          was served a rung four times wider than it would ever paint. The
+          arrangement is stored in percentages of the canvas width, which is
+          what a `vw` figure wants, so the honest number is simply available.
+
+          Below `md` there is no arrangement — the wall is a stack — and the
+          figure is deliberately smaller than the slot the image fills. At 90vw
+          a 3x phone asks for ~1050px, and the ladder in image-loader.ts rounds
+          that up to 1600 — eight of which decode to roughly 60MB of bitmap,
+          past what a phone will hold. It evicts them and refetches, which is
+          the artwork flickering as you scroll. At 60vw both 2x and 3x land on
+          the 800 rung: a quarter of the memory, and still over twice the
+          density of the slot.
         */
-        sizes="(min-width: 768px) 50vw, 60vw"
+        sizes={`(min-width: 768px) ${wallSizeVw(item.width)}vw, 60vw`}
         className="h-auto w-full"
+        /*
+          The blur the upload already rendered. It has been stored on every
+          image row since Phase 2, published in every revision and shipped in
+          every payload, and until now was rendered on the About photograph and
+          nowhere else — so the wall, which is the whole home page, faded in
+          from nothing while the placeholder for it sat in the row unused.
+        */
+        {...(cover.lqip ? { placeholder: "blur" as const, blurDataURL: cover.lqip } : {})}
       />
 
       {/*

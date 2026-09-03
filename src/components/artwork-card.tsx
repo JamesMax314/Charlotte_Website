@@ -35,6 +35,10 @@ export function ArtworkCard({
               priority={priority}
               sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 45vw"
               className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.015]"
+              // The blur is stored on every image row and was rendered on none
+              // of them but the About photograph. A grid of empty 3:4 boxes is
+              // the first thing a visitor to the shop sees.
+              {...(image.lqip ? { placeholder: "blur" as const, blurDataURL: image.lqip } : {})}
             />
           ) : (
             <div className="text-graphite flex h-full items-center justify-center px-4 text-center text-xs">

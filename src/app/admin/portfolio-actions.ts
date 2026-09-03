@@ -31,6 +31,30 @@ import { getSiteFonts, upsertSiteSettings } from "@/lib/site-settings";
 
 const refresh = () => revalidatePath("/", "layout");
 
+/*
+  Not every write calls it, and which ones do is a decision worth stating once.
+
+  `revalidatePath` is the only switch that decides whether Next re-renders the
+  whole route tree into an action's response: `skipPageRendering` in Next's
+  action handler is set from nothing else. So on an autosave — a write that
+  only sends back values the canvas has *already* applied optimistically —
+  calling it buys a full round trip through the root layout, the admin layout
+  and the wall to be told what the browser is already showing. That happened on
+  every keystroke and on every drag.
+
+  Nothing goes stale without it. There is no route cache to invalidate, because
+  every page is `force-dynamic`; and no client router cache either, because
+  Next's `staleTimes.dynamic` defaults to 0, so a navigation to the public site
+  always refetches. The re-render was the whole effect — and the canvas does
+  not want it, since fresh props reset its local state, which mid-sentence
+  means the server's re-sanitised document pushed back into the box the artist
+  is still typing in.
+
+  A write that creates or removes a row is different and still calls
+  `refresh()`: the canvas cannot invent an id, so it needs the render. The
+  autosaves below are marked where they end.
+*/
+
 async function uniqueSlug(base: string, excludeId?: string, id?: string): Promise<string> {
   const db = await getDb();
   // A piece may legitimately have no title — an icon or a decorative mark — so
@@ -225,7 +249,7 @@ export async function savePortfolioLayout(
     })
     .where(eq(schema.portfolioItems.id, id));
 
-  refresh();
+  // Autosave: no revalidation, and no re-render. See the note by `refresh`.
 }
 
 /** Brings a piece to the front, so overlapping work can be reordered. */
@@ -365,7 +389,7 @@ export async function updateWallText(
   };
 
   await db.update(schema.wallTexts).set(values).where(eq(schema.wallTexts.id, id));
-  refresh();
+  // Autosave: no revalidation, and no re-render. See the note by `refresh`.
 }
 
 export async function saveWallTextLayout(
@@ -387,7 +411,7 @@ export async function saveWallTextLayout(
     })
     .where(eq(schema.wallTexts.id, id));
 
-  refresh();
+  // Autosave: no revalidation, and no re-render. See the note by `refresh`.
 }
 
 export async function deleteWallText(id: string): Promise<void> {
@@ -497,7 +521,7 @@ export async function saveWallLayouts(layout: {
   // `batch` is typed as a non-empty tuple; the guard above is what makes this
   // true, and there is no way to express that to TypeScript.
   await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
-  refresh();
+  // Autosave: no revalidation, and no re-render. See the note by `refresh`.
 }
 
 /**

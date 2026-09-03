@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { fadeScript } from "@/lib/fade-script";
 import { SiteFooter } from "@/components/site-footer";
@@ -6,7 +5,8 @@ import { getSiteSettings } from "@/lib/catalogue";
 import { fontMimeType, mergeFonts, resolveSiteFaces } from "@/lib/fonts";
 import { headerStyleFromSettings, headerTokenCss } from "@/lib/header-style";
 import { getSiteFonts } from "@/lib/site-settings";
-import { getPublishState, getSiteSource } from "@/lib/publish";
+import { getSiteSource } from "@/lib/publish";
+import { DraftPill } from "@/components/admin/draft-pill";
 
 /** Chrome for the public site. The admin deliberately does not get this. */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -125,30 +125,23 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
  *
  * So it reports the difference, not the mode. Shown whenever she is signed in,
  * it would be a permanent fixture claiming the site is unpublished on a site
- * that is fully published, and a marker that is always on says nothing. It
- * costs her a snapshot build per page view and costs a visitor nothing, since
- * only a request carrying her session gets this far.
+ * that is fully published, and a marker that is always on says nothing.
  *
- * Fixed and out of the flow on purpose. A banner along the top would push the
- * page down and change the spacing above the header, so she would be checking
- * a layout no visitor will ever see — the one thing this must not do.
+ * All this decides is whether she is being served the draft at all. What it
+ * costs a visitor is nothing, because only a request carrying her session
+ * reaches the component that asks the expensive half.
  */
 async function DraftMarker() {
   const source = await getSiteSource();
   if (source.kind !== "draft" || source.reason !== "session") return null;
 
-  const { live } = await getPublishState();
-  if (live) return null;
-
-  return (
-    <div className="fixed bottom-3 left-3 z-50 print:hidden">
-      <Link
-        href="/admin"
-        className="border-line bg-paper text-graphite hover:border-ink flex items-center gap-1.5 border px-2.5 py-1.5 text-xs shadow-sm transition-colors"
-      >
-        <span aria-hidden className="bg-accent size-1.5 rounded-full" />
-        Unpublished changes — only you can see this
-      </Link>
-    </div>
-  );
+  /*
+    Whether the draft differs from the live site is decided in the browser, by
+    `DraftPill`. Deciding it here meant hashing every content table before this
+    page could be sent — a whole-site read added to each of the artist's own
+    page views, inside the same 10ms of CPU the page itself has to render in.
+    `getSiteSource` above is free by comparison: it is memoised and the layout
+    has already read it.
+  */
+  return <DraftPill />;
 }

@@ -204,6 +204,35 @@ export type PublishState = {
 };
 
 /**
+ * The published revision's identity, without its contents.
+ *
+ * `getPublishedRevision` selects the whole row, so reading it to answer "is
+ * the draft live?" pulls the entire public site out of D1 and `JSON.parse`s
+ * it — a megabyte of work to compare two hex strings. Everything that only
+ * needs to *identify* the live site reads this instead; only a caller that
+ * has to serve the live site's content pays for the snapshot.
+ *
+ * Not memoised, because its two callers each ask once and one of them wants a
+ * value that a write earlier in the same request may have changed.
+ */
+const getPublishedMeta = async (): Promise<{ hash: string; publishedAt: Date } | null> => {
+  try {
+    const db = await getDb();
+    const rows = await db
+      .select({ hash: schema.siteRevisions.hash, publishedAt: schema.siteRevisions.publishedAt })
+      .from(schema.siteRevisions)
+      .orderBy(desc(schema.siteRevisions.id))
+      .limit(1);
+    return rows.length === 0 ? null : rows[0];
+  } catch (cause) {
+    // Never swallow Next's own control-flow errors — see the invariant.
+    unstable_rethrow(cause);
+    console.error("[publish] could not read the published revision's hash", cause);
+    return null;
+  }
+};
+
+/**
  * What the studio's badge reports.
  *
  * Compares a hash of the draft against the hash stored with the published
@@ -212,12 +241,22 @@ export type PublishState = {
  * when one forgets is a button that tells the artist her site is live when it
  * is not. A hash cannot drift out of step with the content, because it is the
  * content.
+ *
+ * Expensive, and deliberately so — it reads every content table to hash what
+ * they hold. That is why nothing renders it synchronously any more: it is
+ * behind `/api/admin/publish-state`, which the badge asks for once, rather
+ * than in the admin layout, where it ran on every render and therefore on
+ * every keystroke. See the invariant in docs/progress.md.
+ *
+ * The published side is read hash-only, and the draft is not built at all when
+ * there is nothing to compare it against — which is every request on a site
+ * that has never been published, local development included.
  */
 export const getPublishState = async (): Promise<PublishState> => {
-  const [published, draft] = await Promise.all([getPublishedRevision(), buildDraftSnapshot()]);
+  const published = await getPublishedMeta();
   if (published === null) return { live: false, publishedAt: null };
   return {
-    live: published.hash === (await hashSnapshot(draft)),
+    live: published.hash === (await hashSnapshot(await buildDraftSnapshot())),
     publishedAt: published.publishedAt,
   };
 };
@@ -231,7 +270,13 @@ export const getPublishState = async (): Promise<PublishState> => {
  */
 export const publishSite = async (): Promise<PublishState> => {
   const db = await getDb();
-  const [published, draft] = await Promise.all([getPublishedRevision(), buildDraftSnapshot()]);
+  /*
+    Hash-only on the published side. Publishing does read a full snapshot, but
+    it is the *draft* one — `sweepPendingDeletions` asks what the new live site
+    still needs, never what the old one did — so parsing the outgoing revision
+    was a megabyte of work whose only use was one string comparison.
+  */
+  const [published, draft] = await Promise.all([getPublishedMeta(), buildDraftSnapshot()]);
   const hash = await hashSnapshot(draft);
 
   if (published !== null && published.hash === hash) {

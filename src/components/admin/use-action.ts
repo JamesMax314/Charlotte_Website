@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { announceWrite } from "./write-bus";
 
 /**
  * Runs a server action and surfaces its failure.
@@ -25,6 +26,11 @@ export function useAction() {
     outstanding.current += 1;
     setPending(true);
     void work
+      .then(() => {
+        // Tells the "Live" badge there is a new answer to fetch. Only on
+        // success: a write that failed changed nothing to publish.
+        announceWrite();
+      })
       .catch((cause: unknown) => {
         const detail = cause instanceof Error ? cause.message : String(cause);
         setError(`${what} failed: ${detail}`);

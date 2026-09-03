@@ -415,3 +415,24 @@ export const WALL_LIMITS = {
 /** Holds `value` inside `bounds`. */
 export const clampTo = (value: number, bounds: { min: number; max: number }): number =>
   Math.min(Math.max(value, bounds.min), bounds.max);
+
+/**
+ * The `sizes` figure for one piece on the wall, above `md`, in `vw`.
+ *
+ * A wall element's width is a percentage of the *canvas*, and the canvas is a
+ * `Container` — 90% of the viewport. So the slot is `width * 0.9` viewport
+ * percent, and quoting the stored number directly is that with a tenth of
+ * headroom already in it. Erring high is the right direction: an over-estimate
+ * costs a rung, an under-estimate costs sharpness, and sharpness is the point
+ * of the site.
+ *
+ * The floor exists because the ladder's smallest rung is 400px, so anything
+ * below roughly a quarter of the viewport already resolves to the same object
+ * — asking for less buys nothing and risks a piece the artist later enlarges
+ * being served the rung it had when it was small. The ceiling is the viewport.
+ *
+ * Replaces a flat `50vw` quoted for every piece however she had sized it,
+ * which had a mark 12% across the wall fetching a 1600px object to paint about
+ * 130 CSS pixels.
+ */
+export const wallSizeVw = (width: number): number => Math.round(Math.min(100, Math.max(25, width)));
