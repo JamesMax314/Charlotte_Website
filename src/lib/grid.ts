@@ -19,7 +19,7 @@ import { collapse, type Guide, type Guides } from "./snap";
  * be drawn heavier. A free percentage would put them between lines at most
  * values, and the emphasis would read as a mistake.
  */
-export const GRID_COLUMN_CHOICES = [4, 8, 12, 16, 20, 24] as const;
+export const GRID_COLUMN_CHOICES = [4, 8, 12, 16, 20, 24, 48] as const;
 
 export const DEFAULT_GRID_COLUMNS = 12;
 

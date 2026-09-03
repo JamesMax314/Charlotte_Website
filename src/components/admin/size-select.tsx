@@ -5,7 +5,7 @@ import { ptOptions } from "@/lib/type-scale";
 import { centreScrollTop, nearestScrollTop, type RowBox } from "@/lib/list-scroll";
 
 /**
- * The point size control: a button, and a scrolling list of sizes.
+ * A button-and-scrolling-list control for picking a number off a fixed ladder.
  *
  * It was a native `<select>` first, and that is worth recording because the
  * reasoning looked sound. A native control is reliable on a tablet and needs
@@ -17,11 +17,11 @@ import { centreScrollTop, nearestScrollTop, type RowBox } from "@/lib/list-scrol
  * own.
  *
  * It is deliberately not a `FloatingLayer`. That closes on any pointerdown
- * outside itself, and this control sits *inside* one — the wall's formatting
- * panel — so a portalled list would read as a click elsewhere and take the
- * whole toolbar down with it on the way to picking a size. Rendered inline and
- * absolutely positioned, a click on an option is a click inside the panel,
- * which is what `ColourControl` beside it already relies on.
+ * outside itself, and the type-size control sits *inside* one — the wall's
+ * formatting panel — so a portalled list would read as a click elsewhere and
+ * take the whole toolbar down with it on the way to picking a size. Rendered
+ * inline and absolutely positioned, a click on an option is a click inside
+ * the panel, which is what `ColourControl` beside it already relies on.
  */
 /** `max-h-48`, and roughly what one row of `py-1.5 text-xs` measures. */
 const LIST_MAX_HEIGHT = 192;
@@ -46,25 +46,24 @@ const rowBox = (list: HTMLElement, row: HTMLElement): RowBox => ({
   height: row.offsetHeight,
 });
 
-export function SizeSelect({
-  valuePt,
-  minPt,
-  maxPt,
+export function ScrollSelect({
+  value,
+  options,
   onChange,
   label,
+  format,
   prefix,
   className = "",
+  disabled = false,
 }: {
-  /** The size currently in force, in points, rounded for display. */
-  valuePt: number;
-  /**
-   * The range this field can actually reach. Steps outside it are not offered
-   * rather than clamped — see `ptOptions`.
-   */
-  minPt: number;
-  maxPt: number;
-  onChange: (pt: number) => void;
+  /** The value currently in force. */
+  value: number;
+  /** The steps on offer, with `value` guaranteed present — see each caller. */
+  options: number[];
+  onChange: (value: number) => void;
   label: string;
+  /** How a value reads in the button and in the list, e.g. `${pt} pt`. */
+  format: (value: number) => string;
   /**
    * A glyph before the value, for when two of these sit side by side.
    *
@@ -74,8 +73,8 @@ export function SizeSelect({
    */
   prefix?: React.ReactNode;
   className?: string;
+  disabled?: boolean;
 }) {
-  const options = ptOptions(valuePt, minPt, maxPt);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   /** Opens upward when there is no room below; measured, never guessed. */
@@ -91,8 +90,8 @@ export function SizeSelect({
     if (focusButton) buttonRef.current?.focus();
   };
 
-  const commit = (pt: number) => {
-    onChange(pt);
+  const commit = (v: number) => {
+    onChange(v);
     setOpen(false);
     /*
       Focus is deliberately not returned to the button. On the wall, choosing a
@@ -200,27 +199,28 @@ export function SizeSelect({
       <button
         ref={buttonRef}
         type="button"
+        disabled={disabled}
         aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => {
           if (open) return setOpen(false);
-          setActive(Math.max(0, options.indexOf(valuePt)));
+          setActive(Math.max(0, options.indexOf(value)));
           setDropUp(opensUpward());
           setOpen(true);
         }}
         onKeyDown={(e) => {
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
           e.preventDefault();
-          setActive(Math.max(0, options.indexOf(valuePt)));
+          setActive(Math.max(0, options.indexOf(value)));
           setDropUp(opensUpward());
           setOpen(true);
         }}
-        className="border-line focus:border-ink flex h-7 w-full items-center justify-between gap-1 border bg-transparent px-2 text-xs outline-none"
+        className="border-line focus:border-ink flex h-7 w-full items-center justify-between gap-1 border bg-transparent px-2 text-xs outline-none disabled:cursor-not-allowed"
       >
         <span className="flex items-center gap-1">
           {prefix}
-          {valuePt} pt
+          {format(value)}
         </span>
         <span aria-hidden className="text-graphite/70 text-[9px]">
           ▼
@@ -244,29 +244,65 @@ export function SizeSelect({
             dropUp ? "bottom-full mb-1" : "top-full mt-1"
           }`}
         >
-          {options.map((pt, i) => (
+          {options.map((v, i) => (
             <div
-              key={pt}
-              id={`${listId}-${pt}`}
+              key={v}
+              id={`${listId}-${v}`}
               role="option"
-              aria-selected={pt === valuePt}
-              data-current={pt === valuePt}
+              aria-selected={v === value}
+              data-current={v === value}
               onPointerDown={(e) => {
                 // The list has focus; taking it on pointerdown would blur and
                 // unmount the row before the click could land on it.
                 e.preventDefault();
-                commit(pt);
+                commit(v);
               }}
               onPointerEnter={() => setActive(i)}
               className={`cursor-pointer px-2 py-1.5 text-xs ${
                 i === active ? "bg-paper-sunk" : ""
-              } ${pt === valuePt ? "font-semibold" : ""}`}
+              } ${v === value ? "font-semibold" : ""}`}
             >
-              {pt} pt
+              {format(v)}
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** `ScrollSelect` fixed to the studio's point ladder — the type-size control. */
+export function SizeSelect({
+  valuePt,
+  minPt,
+  maxPt,
+  onChange,
+  label,
+  prefix,
+  className,
+}: {
+  /** The size currently in force, in points, rounded for display. */
+  valuePt: number;
+  /**
+   * The range this field can actually reach. Steps outside it are not offered
+   * rather than clamped — see `ptOptions`.
+   */
+  minPt: number;
+  maxPt: number;
+  onChange: (pt: number) => void;
+  label: string;
+  prefix?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <ScrollSelect
+      value={valuePt}
+      options={ptOptions(valuePt, minPt, maxPt)}
+      onChange={onChange}
+      label={label}
+      format={(pt) => `${pt} pt`}
+      prefix={prefix}
+      className={className}
+    />
   );
 }

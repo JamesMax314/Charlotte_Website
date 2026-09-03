@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { updatePageSettings } from "@/app/admin/portfolio-actions";
 import { GRID_COLUMN_CHOICES } from "@/lib/grid";
+import { ScrollSelect } from "./size-select";
 import { useAction } from "./use-action";
+
+/** The gap between pieces, as a percentage of the wall's width. */
+const GAP_CHOICES = [0.5, 1, 2, 3, 4, 5, 10, 15, 20];
 
 export interface PageSettings {
   gutterEnabled: boolean;
@@ -88,17 +92,19 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
             }`}
           >
             Gap
-            <input
-              type="number"
-              min={0}
-              max={20}
-              step={0.5}
+            <ScrollSelect
               value={value.gutter}
+              options={
+                GAP_CHOICES.includes(value.gutter)
+                  ? GAP_CHOICES
+                  : [...GAP_CHOICES, value.gutter].sort((a, b) => a - b)
+              }
+              onChange={(gutter) => apply({ gutter })}
               disabled={!value.gutterEnabled}
-              onChange={(e) => apply({ gutter: Number(e.target.value) })}
-              className="border-line focus:border-ink w-16 border bg-transparent px-2 py-1 text-xs outline-none disabled:cursor-not-allowed"
+              label="Gap between pieces"
+              format={(v) => `${v}%`}
+              className="w-20"
             />
-            % of width
           </label>
         </div>
 
@@ -129,18 +135,15 @@ export function PageSettingsPanel({ settings }: { settings: PageSettings }) {
             }`}
           >
             Spacing
-            <select
+            <ScrollSelect
               value={value.gridColumns}
+              options={[...GRID_COLUMN_CHOICES]}
+              onChange={(gridColumns) => apply({ gridColumns })}
               disabled={!value.gridEnabled}
-              onChange={(e) => apply({ gridColumns: Number(e.target.value) })}
-              className="border-line focus:border-ink border bg-transparent px-2 py-1 text-xs outline-none disabled:cursor-not-allowed"
-            >
-              {GRID_COLUMN_CHOICES.map((columns) => (
-                <option key={columns} value={columns}>
-                  {columns} columns
-                </option>
-              ))}
-            </select>
+              label="Grid spacing"
+              format={(v) => `${v} columns`}
+              className="w-28"
+            />
           </label>
         </div>
 
