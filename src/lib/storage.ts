@@ -1,3 +1,5 @@
+import { MODERN_FORMATS } from "./image-formats";
+
 /**
  * R2 key arithmetic, shared by every upload path.
  *
@@ -31,15 +33,41 @@ export const assetKey = (prefix: string, hash: string, extension: string): strin
   `${prefix}/${hash}.${extension}`;
 
 /**
- * The width-ladder derivatives that accompany a base key.
+ * Every object that accompanies a base key: each rung, in each encoding.
  *
- * Deletes have only ever removed the base object, orphaning `-400` and `-800`
- * in the bucket. New code paths delete both.
+ * A rung exists in up to three forms — the original extension, written by the
+ * upload, and one per modern format, written either at upload or by `/media`
+ * the first time a browser asks for it. All of them have to be named here,
+ * because this is the only list a delete consults.
+ *
+ * The failure when a form is missing from it has happened twice now. First the
+ * deletes removed the base object alone and left `-400` and `-800` in the
+ * bucket forever; then AVIF and WebP arrived and this function still described
+ * only the original extension, so the encodings that make up most of the
+ * bucket's objects were the ones never swept. Both leaks are silent: nothing
+ * reads an orphan, nothing reports it, and the only symptom is a bill.
+ *
+ * Over-naming is free — R2's delete ignores a key that is not there — so a
+ * format that turns out never to have been written costs nothing, while one
+ * that is omitted leaks for good.
  */
 export const derivativeKeys = (storageKey: string, widths: readonly number[]): string[] => {
   const dot = storageKey.lastIndexOf(".");
   if (dot === -1) return [];
-  return widths.map((width) => `${storageKey.slice(0, dot)}-${width}${storageKey.slice(dot)}`);
+
+  const stem = storageKey.slice(0, dot);
+  const original = storageKey.slice(dot);
+  // De-duplicated, because a source that is *already* one of the modern
+  // formats — a WebP upload, a WebP mark — would otherwise have its own
+  // extension named twice.
+  return [
+    ...new Set(
+      widths.flatMap((width) => [
+        `${stem}-${width}${original}`,
+        ...MODERN_FORMATS.map((format) => `${stem}-${width}.${format.extension}`),
+      ]),
+    ),
+  ];
 };
 
 /**
