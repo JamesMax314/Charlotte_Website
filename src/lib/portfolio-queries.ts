@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, type SQL } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "./db";
 import { mergeFonts, type FontOption } from "./fonts";
@@ -8,6 +8,7 @@ import { getSiteFonts } from "./site-settings";
 import { getSiteSource } from "./publish";
 import type { Timeless } from "./site-snapshot";
 import {
+  hasOwnPage,
   HOME_WALL,
   isOnWall,
   type PortfolioImage,
@@ -139,7 +140,16 @@ export const getPublishedWall = async (scope: WallScope = HOME_WALL): Promise<Po
   return hydrate(rows);
 };
 
-/** Admin needs drafts too, on whichever wall she is editing. */
+/**
+ * Admin needs drafts too, on whichever wall she is editing — but never an
+ * archived piece.
+ *
+ * Archiving clears a piece's `parent_id`/`page_id` pair back to the home
+ * wall's pair of nulls, deliberately, so a restore can put it on any wall —
+ * which means an archived row matches `onWall(HOME_WALL)` exactly as a home
+ * piece does. Without the extra clause every archived piece would reappear on
+ * the home wall the moment it was put away.
+ */
 export const getAllPortfolioItems = async (
   scope: WallScope = HOME_WALL,
 ): Promise<PortfolioItem[]> => {
@@ -147,8 +157,25 @@ export const getAllPortfolioItems = async (
   const rows = await db
     .select()
     .from(schema.portfolioItems)
-    .where(onWall(schema.portfolioItems, scope))
+    .where(and(onWall(schema.portfolioItems, scope), ne(schema.portfolioItems.status, "archived")))
     .orderBy(asc(schema.portfolioItems.z));
+  return hydrate(rows);
+};
+
+/**
+ * Every piece the artist has archived, from any wall.
+ *
+ * One archive, not one per page — an archived row carries no scope of its
+ * own, so there is nothing to filter by. Newest-archived first, which is
+ * `updatedAt`: nothing else touches a row once it is archived.
+ */
+export const getArchivedPortfolioItems = async (): Promise<PortfolioItem[]> => {
+  const db = await getDb();
+  const rows = await db
+    .select()
+    .from(schema.portfolioItems)
+    .where(eq(schema.portfolioItems.status, "archived"))
+    .orderBy(desc(schema.portfolioItems.updatedAt), desc(schema.portfolioItems.id));
   return hydrate(rows);
 };
 
@@ -161,13 +188,6 @@ export const getPortfolioItemById = async (id: string): Promise<PortfolioItem | 
     .limit(1);
   return rows.length === 0 ? undefined : (await hydrate(rows))[0];
 };
-
-// Children have no page of their own, and a piece that is not clickable has
-// its page hidden rather than deleted — both must 404 rather than resolve.
-// A piece on a custom page is not a child and does resolve: `page_id` says
-// where it is shown, not whether it has a page.
-const hasOwnPage = (row: Timeless<schema.PortfolioItemRow>): boolean =>
-  row.status !== "draft" && row.parentId === null && row.clickable;
 
 export const getPortfolioItemBySlug = async (slug: string): Promise<PortfolioItem | undefined> => {
   const source = await getSiteSource();

@@ -70,13 +70,23 @@ export interface PortfolioImage {
   lqip?: string | null;
 }
 
+/**
+ * The three kinds of hidden a piece can be, and the one kind of shown.
+ *
+ * `archived` is not a second name for `draft`. A draft has never been
+ * finished; an archived piece is finished and put away, images, page and all,
+ * so that the artist can bring the whole thing back onto any wall later. It is
+ * the only status she can return from without recomposing anything.
+ */
+export type PortfolioStatus = "draft" | "published" | "archived";
+
 export interface PortfolioItem {
   id: string;
   slug: string;
   /** May be blank. A blank title means no hover overlay on the site. */
   name: string;
   information: string;
-  status: "draft" | "published";
+  status: PortfolioStatus;
   /** Percentages of canvas width. See the schema for why y uses width too. */
   x: number;
   y: number;
@@ -167,6 +177,28 @@ export const eagerIds = (items: PortfolioItem[]): Set<string> => {
  */
 export const isInteractive = (item: PortfolioItem): boolean =>
   item.clickable && item.parentId === null;
+
+/**
+ * Whether `/work/<slug>` resolves for a piece.
+ *
+ * Three separate ways for it not to: the piece is an element on another
+ * piece's page and so has no page of its own; the artist has turned its link
+ * off, which hides its page without deleting it; or its status is anything but
+ * `published` — a draft has never been shown, and an archive is a place work
+ * goes to become unreachable.
+ *
+ * The status test is `=== "published"` rather than `!== "draft"` deliberately.
+ * The looser form was correct while `draft` and `published` were the only two
+ * values, and adding a third would have silently left every archived piece's
+ * page answering at its URL — which is half the feature missing, with nothing
+ * to see it by. A structural parameter rather than a row type so this can be
+ * unit tested and so it reads the same against D1 and against a snapshot.
+ */
+export const hasOwnPage = (piece: {
+  status: PortfolioStatus;
+  parentId: string | null;
+  clickable: boolean;
+}): boolean => piece.status === "published" && piece.parentId === null && piece.clickable;
 
 /**
  * Whether tapping a piece opens it full screen.

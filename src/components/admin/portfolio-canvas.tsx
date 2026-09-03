@@ -42,11 +42,13 @@ import {
   type SelectedElement,
 } from "@/lib/selection";
 import {
+  archivePortfolioItems,
   createPortfolioItemDraft,
   createWallText,
   deletePortfolioItem,
   deleteWallSelection,
   deleteWallText,
+  restorePortfolioItem,
   savePortfolioItemDetails,
   savePortfolioLayout,
   saveWallLayouts,
@@ -57,6 +59,7 @@ import { RichTextEditor } from "./rich-text-editor";
 import { RichTextInline } from "@/components/rich-text";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { useAction } from "./use-action";
+import { ArchivePopup } from "./archive-popup";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImageDialog, type ImageDetails } from "./image-dialog";
@@ -161,9 +164,23 @@ type Menu = {
   entries: MenuEntry[];
 };
 
+/**
+ * The default for a caller that never passes `archived` — a piece's own
+ * page, which offers no archive UI at all.
+ *
+ * A literal `[]` default is evaluated fresh on every call a prop is omitted,
+ * so it would give `initialArchived` a new identity on every render. The sync
+ * effect below writes state whenever `initialArchived !== lastArchived`,
+ * which a fresh array fails unconditionally — a state update during render,
+ * every render, forever. One stable array is what makes the identity check
+ * mean "the server sent something new" rather than "a function ran again".
+ */
+const NO_ARCHIVED: PortfolioItem[] = [];
+
 export function PortfolioCanvas({
   items: initialItems,
   texts: initialTexts,
+  archived: initialArchived = NO_ARCHIVED,
   snapEnabled,
   gutter,
   gridEnabled = false,
@@ -174,6 +191,14 @@ export function PortfolioCanvas({
 }: {
   items: PortfolioItem[];
   texts: WallText[];
+  /**
+   * Every piece put away from any wall, offered by "Add from archive".
+   *
+   * Not fetched here — a piece's own page has no such menu entry at all, so
+   * a caller that never passes this simply gets none, rather than the
+   * component having to know it should not ask.
+   */
+  archived?: PortfolioItem[];
   snapEnabled: boolean;
   /** Already resolved to 0 when the artist has the gap turned off. */
   gutter: number;
@@ -198,6 +223,7 @@ export function PortfolioCanvas({
   const canvasRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState(initialItems);
   const [texts, setTexts] = useState(initialTexts);
+  const [archived, setArchived] = useState(initialArchived);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -215,6 +241,12 @@ export function PortfolioCanvas({
   });
   const [menu, setMenu] = useState<Menu | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  /** The archive popup, and where a restored piece should land. */
+  const [archivePopup, setArchivePopup] = useState<{
+    x: number;
+    y: number;
+    at: { x: number; y: number };
+  } | null>(null);
 
   /**
    * The multi-selection.
@@ -261,6 +293,11 @@ export function PortfolioCanvas({
   if (initialTexts !== lastTexts) {
     setLastTexts(initialTexts);
     setTexts(initialTexts);
+  }
+  const [lastArchived, setLastArchived] = useState(initialArchived);
+  if (initialArchived !== lastArchived) {
+    setLastArchived(initialArchived);
+    setArchived(initialArchived);
   }
 
   // Height comes from the committed lists, never the live drag — otherwise the
@@ -909,6 +946,18 @@ export function PortfolioCanvas({
           icon: Icons.text,
           onSelect: () => run(createWallText(at, scope), "Adding the text"),
         },
+        // Only on a main wall: a piece's own page composes that piece, and an
+        // archived piece is put away from a main wall, not from one of these.
+        ...(linksOnward
+          ? [
+              {
+                label: "Add from archive",
+                icon: Icons.archive,
+                disabled: archived.length === 0,
+                onSelect: () => setArchivePopup({ x: clientX, y: clientY, at }),
+              },
+            ]
+          : []),
       ],
     });
   };
@@ -921,10 +970,30 @@ export function PortfolioCanvas({
    * six selected pieces would be answering a question the artist did not ask.
    */
   const openGroupMenu = (clientX: number, clientY: number) => {
+    // Text has no page of its own to preserve, so only the images in the
+    // selection are offered — the same reason a text box has no archive entry
+    // of its own below.
+    const selectedImages = selectedElements.filter((element) => element.kind === "item");
+
     setMenu({
       x: clientX,
       y: clientY,
       entries: [
+        ...(linksOnward && selectedImages.length > 0
+          ? [
+              {
+                label: `Archive ${selectedImages.length} images`,
+                icon: Icons.archive,
+                onSelect: () => {
+                  const ids = selectedImages.map((element) => element.id);
+                  const doomed = new Set(ids);
+                  setItems((current) => current.filter((item) => !doomed.has(item.id)));
+                  setSelectedIds(new Set());
+                  run(archivePortfolioItems(ids), "Archiving the images");
+                },
+              },
+            ]
+          : []),
         {
           label: `Delete ${selectedElements.length} items`,
           icon: Icons.trash,
@@ -956,6 +1025,18 @@ export function PortfolioCanvas({
                 label: "Open its page",
                 icon: Icons.image,
                 onSelect: () => router.push(`/admin/portfolio/${item.id}`),
+              },
+            ]
+          : []),
+        ...(linksOnward
+          ? [
+              {
+                label: "Archive image",
+                icon: Icons.archive,
+                onSelect: () => {
+                  setItems((current) => current.filter((i) => i.id !== item.id));
+                  run(archivePortfolioItems([item.id]), "Archiving the image");
+                },
               },
             ]
           : []),
@@ -1392,6 +1473,23 @@ export function PortfolioCanvas({
         <ContextMenu x={menu.x} y={menu.y} entries={menu.entries} onClose={() => setMenu(null)} />
       )}
 
+      {archivePopup && (
+        <ArchivePopup
+          x={archivePopup.x}
+          y={archivePopup.y}
+          items={archived}
+          onClose={() => setArchivePopup(null)}
+          onRestore={(item) => {
+            setArchived((current) => current.filter((i) => i.id !== item.id));
+            run(restorePortfolioItem(item.id, archivePopup.at, scope), "Restoring the piece");
+          }}
+          // Same confirmation as deleting a piece from the wall — a right
+          // click here reaches the identical dialog below, which does not
+          // care whether the id it is given was ever on this wall.
+          onDeleteForever={(item) => setPendingDelete({ id: item.id, name: item.name })}
+        />
+      )}
+
       <ConfirmDialog
         open={pendingGroupDelete !== null}
         title={`Delete ${pendingGroupDelete?.length ?? 0} items?`}
@@ -1427,7 +1525,11 @@ export function PortfolioCanvas({
           const id = pendingDelete?.id;
           setPendingDelete(null);
           if (!id) return;
+          // The id may be a wall piece or an archived one — this dialog
+          // serves both "Delete image" and the archive's "Delete forever",
+          // so both lists are filtered and only the one that has it changes.
           setItems((c) => c.filter((i) => i.id !== id));
+          setArchived((c) => c.filter((i) => i.id !== id));
           run(deletePortfolioItem(id), "Deleting the image");
         }}
       />

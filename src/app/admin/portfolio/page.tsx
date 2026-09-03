@@ -1,7 +1,11 @@
 import { Container } from "@/components/container";
 import { PortfolioCanvas } from "@/components/admin/portfolio-canvas";
 import { PageSettingsPanel } from "@/components/admin/page-settings";
-import { getAllPortfolioItems, getWallTexts } from "@/lib/portfolio-queries";
+import {
+  getAllPortfolioItems,
+  getArchivedPortfolioItems,
+  getWallTexts,
+} from "@/lib/portfolio-queries";
 import { getSiteSettings } from "@/lib/catalogue";
 import { mergeFonts } from "@/lib/fonts";
 import { getSiteFonts } from "@/lib/site-settings";
@@ -11,9 +15,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PortfolioAdminPage() {
   await requireSession();
-  const [items, texts, settings, fonts] = await Promise.all([
+  const [items, texts, archived, settings, fonts] = await Promise.all([
     getAllPortfolioItems(),
     getWallTexts(),
+    getArchivedPortfolioItems(),
     getSiteSettings(),
     getSiteFonts(),
   ]);
@@ -47,6 +52,7 @@ export default async function PortfolioAdminPage() {
       <PortfolioCanvas
         items={items}
         texts={texts}
+        archived={archived}
         snapEnabled={settings.snapEnabled}
         gutter={settings.gutterEnabled ? settings.gutter : 0}
         gridEnabled={settings.gridEnabled}

@@ -7,6 +7,8 @@ export interface MenuEntry {
   icon: React.ReactNode;
   onSelect: () => void;
   danger?: boolean;
+  /** Shown but unreachable — "Add from archive" with nothing archived yet. */
+  disabled?: boolean;
 }
 
 /** Simple line icons, sized to the menu's text. */
@@ -92,6 +94,17 @@ export const Icons = {
       <path d="M11.2 2.3l2.5 2.5L5.5 13H3v-2.5z" />
     </svg>
   ),
+  archive: (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+    >
+      <path d="M1.5 3h13v3h-13zM2.5 6v7h11V6M6.5 8.5h3" />
+    </svg>
+  ),
 };
 
 /** A right-click menu. Positioning and dismissal come from FloatingLayer. */
@@ -114,12 +127,17 @@ export function ContextMenu({
             key={entry.label}
             type="button"
             role="menuitem"
+            aria-disabled={entry.disabled}
+            disabled={entry.disabled}
             onClick={() => {
+              if (entry.disabled) return;
               entry.onSelect();
               onClose();
             }}
-            className={`hover:bg-paper-sunk flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
-              entry.danger ? "text-red-700" : ""
+            className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
+              entry.disabled
+                ? "text-graphite/50 cursor-default"
+                : `hover:bg-paper-sunk ${entry.danger ? "text-red-700" : ""}`
             }`}
           >
             <span className="text-graphite shrink-0">{entry.icon}</span>
