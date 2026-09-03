@@ -32,15 +32,18 @@ export function useAction() {
    * for any other failed write, which is why this reports before it rethrows
    * rather than leaving that to the history.
    */
-  const track = useCallback((work: Promise<unknown>, what: string): Promise<void> => {
+  const track = useCallback(<T>(work: Promise<T>, what: string): Promise<T> => {
     setError(null);
     outstanding.current += 1;
     setPending(true);
     return work
-      .then(() => {
+      .then((value) => {
         // Tells the "Live" badge there is a new answer to fetch. Only on
         // success: a write that failed changed nothing to publish.
         announceWrite();
+        // Passed through, unlike `run`: an undo entry that reverses a delete
+        // needs the rows the delete gave back.
+        return value;
       })
       .catch((cause: unknown) => {
         const detail = cause instanceof Error ? cause.message : String(cause);

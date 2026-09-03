@@ -331,6 +331,44 @@ export async function archivePortfolioItems(ids: string[]): Promise<void> {
 }
 
 /**
+ * Puts archived pieces back exactly where they were. The inverse of the above.
+ *
+ * Deliberately not `restorePortfolioItem` in a loop. That one places a piece
+ * at the pointer, which is right for the archive popup and wrong here — undo
+ * has to return the arrangement, and the position is still in the row, because
+ * archiving only ever wrote `status` and the scope pair. So this restores
+ * exactly those, and nothing else.
+ *
+ * The status comes back per piece rather than as a constant: a draft that was
+ * archived is a draft when it returns, and publishing it as a side effect of
+ * an undo would put work on the live site the artist never published.
+ *
+ * One `db.batch`, like every other group write here: half an undo applied is
+ * an arrangement the artist cannot see the shape of.
+ */
+export async function unarchivePortfolioItems(
+  entries: { id: string; status: "draft" | "published" }[],
+  scope: WallScope = HOME_WALL,
+): Promise<void> {
+  await requireSession();
+  if (entries.length === 0) return;
+  const db = await getDb();
+  const now = new Date();
+
+  const statements: BatchItem<"sqlite">[] = entries.map((entry) =>
+    db
+      .update(schema.portfolioItems)
+      .set({ status: entry.status, ...scopeColumns(scope), updatedAt: now })
+      .where(eq(schema.portfolioItems.id, entry.id)),
+  );
+
+  // `batch` is typed as a non-empty tuple; the guard above is what makes that
+  // true, and there is no way to express it to TypeScript.
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+  refresh();
+}
+
+/**
  * Brings an archived piece back, at the point the artist right-clicked.
  *
  * Restores to whichever wall the menu was opened on — the archive is shared,
@@ -379,17 +417,23 @@ async function nextZ(): Promise<number> {
   return Math.max(pieces.top, texts.top) + 1;
 }
 
-/** Placed where the artist opened the menu, not in a fixed corner. */
+/**
+ * Placed where the artist opened the menu, not in a fixed corner.
+ *
+ * Returns the id it generated. The canvas cannot invent one, and undo has to
+ * name the box it is removing again.
+ */
 export async function createWallText(
   at?: { x: number; y: number },
   scope: WallScope = HOME_WALL,
-): Promise<void> {
+): Promise<string> {
   await requireSession();
   const db = await getDb();
 
+  const id = crypto.randomUUID();
   const seed = docFromPlain("New text");
   await db.insert(schema.wallTexts).values({
-    id: crypto.randomUUID(),
+    id,
     content: docToPlain(seed),
     rich: serialiseDoc(seed),
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
@@ -403,6 +447,7 @@ export async function createWallText(
   });
 
   refresh();
+  return id;
 }
 
 export async function updateWallText(
@@ -552,8 +597,16 @@ export async function deletePortfolioImage(id: string): Promise<Backup> {
  * is a suggestion.
  */
 export async function saveWallLayouts(layout: {
-  items: { id: string; x: number; y: number; width: number }[];
-  texts: { id: string; x: number; y: number; width: number; height: number; fontSize: number }[];
+  items: { id: string; x: number; y: number; width: number; z?: number }[];
+  texts: {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fontSize: number;
+    z?: number;
+  }[];
 }): Promise<void> {
   await requireSession();
   const db = await getDb();
@@ -567,6 +620,14 @@ export async function saveWallLayouts(layout: {
           x: clampTo(item.x, WALL_LIMITS.x),
           y: Math.max(item.y, 0),
           width: clampTo(item.width, WALL_LIMITS.width),
+          /*
+            Carried only when the caller has one to give. A drag brings its
+            element to the front, so undoing a drag has to put the layer back
+            as well as the position — but a group move changes no layering at
+            all, and writing a z there would flatten the stack the artist
+            built.
+          */
+          ...(item.z === undefined ? {} : { z: Math.round(item.z) }),
           updatedAt: now,
         })
         .where(eq(schema.portfolioItems.id, item.id)),
@@ -582,6 +643,7 @@ export async function saveWallLayouts(layout: {
           // A group scale carries the type with the box, so this arrives on a
           // layout save rather than only from the formatting panel.
           fontSize: clampTo(text.fontSize, WALL_TEXT_CQW),
+          ...(text.z === undefined ? {} : { z: Math.round(text.z) }),
           updatedAt: now,
         })
         .where(eq(schema.wallTexts.id, text.id)),
