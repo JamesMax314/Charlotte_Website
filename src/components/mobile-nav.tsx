@@ -78,14 +78,17 @@ export function MobileNav({
     <div className="relative w-full text-[length:var(--header-nav-size,14px)] md:hidden">
       <details ref={details} className="group w-full">
         {/*
-          The three marker rules ride on the element itself, not only in
-          globals.css, and that is the point rather than belt-and-braces
-          nerves: this element's markup and the rule that suppresses its marker
-          must ship together. They did not once — the class was moved into the
-          stylesheet, and Turbopack's dev chunk keeps one stable URL whatever
-          its contents, so browsers went on serving the previous stylesheet
-          beside the new HTML and the triangle came back in every browser at
-          once. A class in the markup cannot fall out of step with the markup.
+          The three marker rules are on the element, and they must never be
+          written as `summary { … }` in globals.css. Twice now that has been the
+          obvious tidy-up and twice it has been wrong. The studio's shop dialog
+          has a "More details" expander whose whole affordance is its native
+          triangle, so an element selector reaches a summary that wants the
+          opposite of this one and quietly strips it — on a surface nobody is
+          looking at while working on a phone. And a rule that lives only in the
+          stylesheet can fall out of step with the markup: when the class was
+          moved there, Turbopack's dev chunk kept its one stable URL, browsers
+          went on serving the previous stylesheet beside the new HTML, and the
+          triangle came back in every browser at once.
 
           `block` is the one that does the work: a summary is a `list-item` by
           default and a box that is not one has no marker to draw. `list-none`

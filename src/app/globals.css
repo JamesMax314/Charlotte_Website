@@ -255,36 +255,6 @@ dialog::backdrop {
 }
 
 /*
-  The disclosure triangle on the mobile menu, killed three times over because
-  WebKit has changed how it draws one twice and the artist's phone gets to
-  decide which version it is running.
-
-  `display: block` is the one that does the work: a summary is `list-item` by
-  default and a box that is not a list item has no marker to draw. That also
-  fixes a second-order fault, because the older marker is an *inline-block
-  pseudo-element inside the summary* — so a block-level child sits on the line
-  beneath it, which is why the artist's hamburger appeared under the triangle
-  rather than beside it.
-
-  `list-style: none` covers Blink and Gecko, and the `::-webkit-details-marker`
-  rule covers the WebKit that predates `::marker`. Neither is redundant: the
-  first two are ignored by a browser using the legacy pseudo-element, and the
-  third is a no-op everywhere else.
-
-  Element selectors rather than classes, deliberately. A utility class only
-  reaches the summaries someone remembered to put it on, and this is the kind
-  of fault that cannot be seen on the machine it is written on.
-*/
-summary {
-  display: block;
-  list-style: none;
-}
-
-summary::-webkit-details-marker {
-  display: none;
-}
-
-/*
   The shop's two-handle price slider.
 
   Both inputs are stacked over one track so the handles share it, which means

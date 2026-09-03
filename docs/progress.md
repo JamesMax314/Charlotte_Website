@@ -838,23 +838,25 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   not. Turning it back into a button with state is the obvious tidy-up and it reintroduces
   the bug.
 
-- **A summary's marker takes three rules to remove, and `display: block` is the one that
-  works.** A summary is a `list-item` by default, so the marker goes when the box stops
-  being one; `list-style: none` covers Blink and Gecko, and `::-webkit-details-marker`
+- **A summary's marker takes three rules to remove, and they belong on the element, never
+  on `summary`.** A summary is a `list-item` by default, so `display: block` is what removes
+  the marker; `list-none` covers Blink and Gecko, and `[&::-webkit-details-marker]:hidden`
   covers the WebKit that predates `::marker`. None is redundant — the first two are ignored
   by a browser drawing the legacy pseudo-element and the third is a no-op everywhere else —
   and `list-style: none` alone was tried first and was not enough on the artist's iPhone.
-  All three also ride on the summary's own `className`, and that duplication is deliberate:
-  moving them out of the markup and into the stylesheet alone brought the triangle back in
-  *every* browser, because a dev stylesheet can be stale while the HTML beside it is not —
-  see "Running it locally". A class in the markup cannot fall out of step with the markup.
   The `display` also fixes a second-order fault: the legacy marker is an inline-block
   pseudo-element *inside* the summary, so a block-level child lands on the line beneath it,
-  which is why the hamburger appeared under the triangle rather than beside it. They are
-  element selectors, not utilities, because a class only reaches the summaries someone
-  remembered to put it on. The summary is still never laid out as `flex` — that has a
-  history of taking the disclosure behaviour with it in WebKit — so the flex box is a span
-  inside it.
+  which is why the hamburger appeared under the triangle rather than beside it.
+
+  Writing them as `summary { … }` in `globals.css` is the obvious tidy-up and it is wrong
+  twice over. The studio's shop dialog has a "More details" expander whose entire affordance
+  is its native triangle, so an element selector reaches a summary that wants the opposite
+  of this one and silently strips it — on a desktop surface nobody is looking at while
+  working on a phone. And a rule that lives only in the stylesheet can fall out of step with
+  the markup that needs it: moving the class there brought the triangle back in *every*
+  browser, because a dev stylesheet can be stale while the HTML beside it is not — see
+  "Running it locally". The summary is still never laid out as `flex`, which has a history
+  of taking the disclosure behaviour with it in WebKit, so the flex box is a span inside it.
 
 - **The menu glyph is aligned to the start of its tap target, never centred in it.** A 40px
   box around a 22px glyph is there for the thumb, and centring the glyph inside it makes
