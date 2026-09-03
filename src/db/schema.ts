@@ -228,57 +228,71 @@ export const portfolioImages = sqliteTable(
  * `fontSize` is also a percentage of canvas width, which is what keeps type in
  * proportion as the wall scales.
  */
-export const wallTexts = sqliteTable("wall_texts", {
-  id: text("id").primaryKey(),
-  /**
-   * The plain-text mirror of `rich`, kept in step on every write.
-   *
-   * Not legacy: the wall picks its `<h1>` by comparing text, metadata needs
-   * words without marks, and a `rich` column that fails to parse degrades to
-   * this rather than to a blank page.
-   */
-  content: text("content").notNull().default(""),
-  /**
-   * The rich document, as JSON — see src/lib/rich-text.ts.
-   *
-   * Null for every row written before rich text existed, which is why
-   * `parseDoc` takes the plain mirror as its fallback rather than throwing.
-   */
-  rich: text("rich"),
+export const wallTexts = sqliteTable(
+  "wall_texts",
+  {
+    id: text("id").primaryKey(),
+    /**
+     * The plain-text mirror of `rich`, kept in step on every write.
+     *
+     * Not legacy: the wall picks its `<h1>` by comparing text, metadata needs
+     * words without marks, and a `rich` column that fails to parse degrades to
+     * this rather than to a blank page.
+     */
+    content: text("content").notNull().default(""),
+    /**
+     * The rich document, as JSON — see src/lib/rich-text.ts.
+     *
+     * Null for every row written before rich text existed, which is why
+     * `parseDoc` takes the plain mirror as its fallback rather than throwing.
+     */
+    rich: text("rich"),
 
-  /** NULL means the home wall; set means that piece's own page. */
-  parentId: text("parent_id").references(() => portfolioItems.id, { onDelete: "cascade" }),
-  /** NULL means the home wall; set means that custom page's wall. */
-  pageId: text("page_id").references(() => sitePages.id, { onDelete: "cascade" }),
+    /** NULL means the home wall; set means that piece's own page. */
+    parentId: text("parent_id").references(() => portfolioItems.id, { onDelete: "cascade" }),
+    /** NULL means the home wall; set means that custom page's wall. */
+    pageId: text("page_id").references(() => sitePages.id, { onDelete: "cascade" }),
 
-  x: real("x").notNull().default(4),
-  y: real("y").notNull().default(4),
-  width: real("width").notNull().default(40),
-  height: real("height").notNull().default(10),
-  z: integer("z").notNull().default(0),
+    x: real("x").notNull().default(4),
+    y: real("y").notNull().default(4),
+    width: real("width").notNull().default(40),
+    height: real("height").notNull().default(10),
+    z: integer("z").notNull().default(0),
 
-  fontSize: real("font_size").notNull().default(2.4),
-  align: text("align", { enum: ["left", "center", "right"] })
-    .notNull()
-    .default("left"),
-  bold: integer("bold", { mode: "boolean" }).notNull().default(false),
-  italic: integer("italic", { mode: "boolean" }).notNull().default(false),
-  underline: integer("underline", { mode: "boolean" }).notNull().default(false),
-  colour: text("colour").notNull().default("#101010"),
-  /**
-   * A key into the font registry (src/lib/fonts.ts), not an enum: the artist
-   * will be able to upload her own fonts, and an enum would need a schema
-   * migration for each one.
-   */
-  font: text("font").notNull().default("sans"),
+    fontSize: real("font_size").notNull().default(2.4),
+    align: text("align", { enum: ["left", "center", "right"] })
+      .notNull()
+      .default("left"),
+    bold: integer("bold", { mode: "boolean" }).notNull().default(false),
+    italic: integer("italic", { mode: "boolean" }).notNull().default(false),
+    underline: integer("underline", { mode: "boolean" }).notNull().default(false),
+    colour: text("colour").notNull().default("#101010"),
+    /**
+     * A key into the font registry (src/lib/fonts.ts), not an enum: the artist
+     * will be able to upload her own fonts, and an enum would need a schema
+     * migration for each one.
+     */
+    font: text("font").notNull().default("sans"),
 
-  createdAt: integer("created_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-});
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  /*
+    The same pair `portfolio_items` has carried since Phase 5, and for the same
+    reason: every read of this table is scoped to one wall and ordered by `z`,
+    and `wall_texts` had no index at all — so each was a scan and a sort. It is
+    a small table and always will be, but the read is on the home page and on
+    the publish snapshot, which are the two hottest paths there are.
+  */
+  (t) => [
+    index("wall_texts_parent_idx").on(t.parentId, t.z),
+    index("wall_texts_page_idx").on(t.pageId, t.z),
+  ],
+);
 
 export type WallTextRow = typeof wallTexts.$inferSelect;
 export type SitePageRow = typeof sitePages.$inferSelect;

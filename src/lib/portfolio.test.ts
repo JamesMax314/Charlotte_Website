@@ -17,6 +17,7 @@ import {
   scopeColumns,
   scopeOf,
   showsHoverName,
+  wallSizeVw,
   type PortfolioItem,
   type WallText,
 } from "./portfolio";
@@ -449,5 +450,27 @@ describe("point sizes", () => {
     const minPt = Math.ceil(cqwToPt(WALL_TEXT_CQW.min));
     const maxPt = Math.floor(cqwToPt(WALL_TEXT_CQW.max));
     expect(ptOptions(minPt, minPt, maxPt)).toEqual([...PT_STEPS]);
+  });
+});
+
+describe("wallSizeVw", () => {
+  it("quotes the piece's own width, so a small piece asks for a small rung", () => {
+    expect(wallSizeVw(30)).toBe(30);
+    expect(wallSizeVw(64)).toBe(64);
+  });
+
+  it("floors at the width below which the ladder cannot go smaller anyway", () => {
+    // A decorative mark 12% across the wall used to be quoted 50vw.
+    expect(wallSizeVw(12)).toBe(25);
+    expect(wallSizeVw(5)).toBe(25);
+  });
+
+  it("never asks for more than the viewport, however far a piece bleeds", () => {
+    // WALL_LIMITS.width allows up to 120: work may overflow the wall on purpose.
+    expect(wallSizeVw(120)).toBe(100);
+  });
+
+  it("is a whole number, because it goes straight into a CSS length", () => {
+    expect(Number.isInteger(wallSizeVw(33.333))).toBe(true);
   });
 });

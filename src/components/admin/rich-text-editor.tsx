@@ -208,16 +208,41 @@ export function RichTextEditor({
       setAnchor({ left: Math.max(8, left), top: Math.max(8, box.top) });
     };
 
+    /*
+      Coalesced to one measurement per frame.
+
+      `getBoundingClientRect` forces a synchronous layout and the `setAnchor`
+      that follows it schedules a render, and this ran on every scroll event —
+      which a trackpad or a high-refresh wheel delivers faster than frames. The
+      panel cannot move more often than it is painted, so the extra work bought
+      nothing and was spent inside the wall editor, over a canvas of forty-odd
+      pieces, exactly while the artist was dragging the page around to see what
+      she was typing.
+    */
+    let frame = 0;
+    const schedule = () => {
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        place();
+      });
+    };
+
     place();
-    const observer = new ResizeObserver(place);
+    const observer = new ResizeObserver(schedule);
     observer.observe(el);
-    // Capture, because the canvas scrolls inside the page rather than with it.
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
+    /*
+      Capture, because the canvas scrolls inside the page rather than with it.
+      Passive because this only measures — declaring so lets the browser scroll
+      without waiting to find out whether the handler will cancel it.
+    */
+    window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    window.addEventListener("resize", schedule);
     return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", schedule, { capture: true });
+      window.removeEventListener("resize", schedule);
     };
   }, [toolbar, layout]);
 

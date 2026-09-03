@@ -72,6 +72,10 @@ export function ArtworkViewer({ images, title }: { images: ArtworkImage[]; title
             priority
             sizes="(min-width: 1024px) 60vw, 100vw"
             className="h-auto w-full"
+            // Only the main image. The 64px thumbnails below arrive faster
+            // than a placeholder for them would be worth, and blurring a
+            // strip of them reads as a fault rather than as loading.
+            {...(active.lqip ? { placeholder: "blur" as const, blurDataURL: active.lqip } : {})}
           />
         </button>
 
