@@ -5,7 +5,10 @@ import { addSiteFont, deleteSiteFont } from "@/app/admin/settings-actions";
 import { uploadSiteFile } from "@/lib/client-upload";
 import { type FontFormat, type UploadedFont } from "@/lib/fonts";
 import { ConfirmDialog } from "./confirm-dialog";
+import { restoreDeleted } from "@/app/admin/undo-actions";
+import type { Backup } from "@/lib/undo-backup";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 import { SECONDARY_BUTTON } from "./styles";
 
 const MAX_FONTS = 12;
@@ -49,7 +52,8 @@ export function FontsField({
   headingFontId: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { run, pending, error } = useAction();
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<UploadedFont | null>(null);
 
@@ -59,10 +63,27 @@ export function FontsField({
     setBusy(true);
     try {
       const uploaded = await uploadSiteFile(file, "font");
-      await addSiteFont({
+      const id = await addSiteFont({
         label: file.name.replace(/\.\w+$/, ""),
         storageKey: uploaded.key,
         format: uploaded.format as FontFormat,
+      });
+
+      /*
+        Undo removes the font; redo puts back the row that removal returned.
+        A text box that had chosen this face keeps its id through the whole
+        cycle — `resolveFontFamily` falls back to Inter while the row is gone
+        and finds the face again when it returns.
+      */
+      let removed: Backup | null = null;
+      record({
+        label: "adding the font",
+        undo: async () => {
+          removed = await track(deleteSiteFont(id), "Undoing the font");
+        },
+        redo: async () => {
+          if (removed !== null) await track(restoreDeleted(removed), "Redoing the font");
+        },
       });
     } finally {
       setBusy(false);
@@ -139,7 +160,19 @@ export function FontsField({
         confirmLabel="Remove"
         onCancel={() => setConfirming(null)}
         onConfirm={() => {
-          if (confirming) run(deleteSiteFont(confirming.id), "Removing the font");
+          if (confirming) {
+            const removal = deleteSiteFont(confirming.id);
+            record({
+              label: "removing the font",
+              undo: () => track(removal.then(restoreDeleted), "Undoing the removal"),
+              redo: () =>
+                track(
+                  deleteSiteFont(confirming.id).then(() => undefined),
+                  "Redoing the removal",
+                ),
+            });
+            run(removal, "Removing the font");
+          }
           setConfirming(null);
         }}
       />

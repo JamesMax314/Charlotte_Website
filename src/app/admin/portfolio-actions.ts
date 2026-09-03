@@ -7,6 +7,8 @@ import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
 import { deletePiecesWithPages } from "@/lib/portfolio-deletes";
+import { mergeBackups, type Backup } from "@/lib/undo-backup";
+import { capturePieces, capturePortfolioImages, captureWallTexts } from "@/lib/undo-restore";
 import { toSlug, isPlaceholderSlug } from "@/lib/artworks";
 import { isKnownFontId, mergeFonts } from "@/lib/fonts";
 import { resolveGridColumns } from "@/lib/grid";
@@ -183,12 +185,12 @@ export async function savePortfolioItemDetails(
  * Removes the R2 objects as well; the rows alone would leave the bucket
  * accumulating everything the artist ever replaced.
  */
-export async function clearPortfolioImages(id: string): Promise<void> {
+export async function clearPortfolioImages(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
 
   const images = await db
-    .select({ storageKey: schema.portfolioImages.storageKey })
+    .select()
     .from(schema.portfolioImages)
     .where(eq(schema.portfolioImages.itemId, id));
 
@@ -196,6 +198,7 @@ export async function clearPortfolioImages(id: string): Promise<void> {
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.itemId, id));
   refresh();
+  return { portfolio_images: images as unknown as Record<string, unknown>[] };
 }
 
 export async function updatePortfolioItem(id: string, formData: FormData): Promise<void> {
@@ -266,9 +269,14 @@ export async function bringPortfolioItemToFront(id: string): Promise<void> {
   refresh();
 }
 
-export async function deletePortfolioItem(id: string): Promise<void> {
+export async function deletePortfolioItem(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+
+  // Read before removing, so undo has the rows to put back. Inside the delete
+  // rather than as a call of its own: a separate capture is a second round
+  // trip with a gap in the middle where the two answers can disagree.
+  const backup = await capturePieces([id]);
 
   // Remove the R2 objects too, or the bucket accumulates orphans forever.
   // Neither the rows nor the objects cascade, so the whole family is collected
@@ -290,6 +298,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   refresh();
   // No redirect: this is called from the wall, where cancelling a new image
   // must not navigate the artist away from what she was doing.
+  return backup;
 }
 
 /**
@@ -318,6 +327,44 @@ export async function archivePortfolioItems(ids: string[]): Promise<void> {
     .set({ status: "archived", parentId: null, pageId: null, updatedAt: new Date() })
     .where(inArray(schema.portfolioItems.id, ids));
 
+  refresh();
+}
+
+/**
+ * Puts archived pieces back exactly where they were. The inverse of the above.
+ *
+ * Deliberately not `restorePortfolioItem` in a loop. That one places a piece
+ * at the pointer, which is right for the archive popup and wrong here — undo
+ * has to return the arrangement, and the position is still in the row, because
+ * archiving only ever wrote `status` and the scope pair. So this restores
+ * exactly those, and nothing else.
+ *
+ * The status comes back per piece rather than as a constant: a draft that was
+ * archived is a draft when it returns, and publishing it as a side effect of
+ * an undo would put work on the live site the artist never published.
+ *
+ * One `db.batch`, like every other group write here: half an undo applied is
+ * an arrangement the artist cannot see the shape of.
+ */
+export async function unarchivePortfolioItems(
+  entries: { id: string; status: "draft" | "published" }[],
+  scope: WallScope = HOME_WALL,
+): Promise<void> {
+  await requireSession();
+  if (entries.length === 0) return;
+  const db = await getDb();
+  const now = new Date();
+
+  const statements: BatchItem<"sqlite">[] = entries.map((entry) =>
+    db
+      .update(schema.portfolioItems)
+      .set({ status: entry.status, ...scopeColumns(scope), updatedAt: now })
+      .where(eq(schema.portfolioItems.id, entry.id)),
+  );
+
+  // `batch` is typed as a non-empty tuple; the guard above is what makes that
+  // true, and there is no way to express it to TypeScript.
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
   refresh();
 }
 
@@ -370,17 +417,23 @@ async function nextZ(): Promise<number> {
   return Math.max(pieces.top, texts.top) + 1;
 }
 
-/** Placed where the artist opened the menu, not in a fixed corner. */
+/**
+ * Placed where the artist opened the menu, not in a fixed corner.
+ *
+ * Returns the id it generated. The canvas cannot invent one, and undo has to
+ * name the box it is removing again.
+ */
 export async function createWallText(
   at?: { x: number; y: number },
   scope: WallScope = HOME_WALL,
-): Promise<void> {
+): Promise<string> {
   await requireSession();
   const db = await getDb();
 
+  const id = crypto.randomUUID();
   const seed = docFromPlain("New text");
   await db.insert(schema.wallTexts).values({
-    id: crypto.randomUUID(),
+    id,
     content: docToPlain(seed),
     rich: serialiseDoc(seed),
     x: at ? Math.min(Math.max(at.x, 0), 95) : 4,
@@ -394,6 +447,7 @@ export async function createWallText(
   });
 
   refresh();
+  return id;
 }
 
 export async function updateWallText(
@@ -478,11 +532,13 @@ export async function saveWallTextLayout(
   // Autosave: no revalidation, and no re-render. See the note by `refresh`.
 }
 
-export async function deleteWallText(id: string): Promise<void> {
+export async function deleteWallText(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+  const backup = await captureWallTexts([id]);
   await db.delete(schema.wallTexts).where(eq(schema.wallTexts.id, id));
   refresh();
+  return backup;
 }
 
 // ---------------------------------------------------------------- images
@@ -512,20 +568,17 @@ export async function updatePortfolioImageAlt(id: string, alt: string): Promise<
   refresh();
 }
 
-export async function deletePortfolioImage(id: string): Promise<void> {
+export async function deletePortfolioImage(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
 
-  const rows = await db
-    .select({ storageKey: schema.portfolioImages.storageKey })
-    .from(schema.portfolioImages)
-    .where(eq(schema.portfolioImages.id, id))
-    .limit(1);
+  const backup = await capturePortfolioImages([id]);
 
-  await releaseMedia([rows[0]?.storageKey]);
+  await releaseMedia((backup.portfolio_images ?? []).map((row) => row.storageKey as string));
 
   await db.delete(schema.portfolioImages).where(eq(schema.portfolioImages.id, id));
   refresh();
+  return backup;
 }
 
 // ---------------------------------------------------------------- selections
@@ -544,8 +597,16 @@ export async function deletePortfolioImage(id: string): Promise<void> {
  * is a suggestion.
  */
 export async function saveWallLayouts(layout: {
-  items: { id: string; x: number; y: number; width: number }[];
-  texts: { id: string; x: number; y: number; width: number; height: number; fontSize: number }[];
+  items: { id: string; x: number; y: number; width: number; z?: number }[];
+  texts: {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    fontSize: number;
+    z?: number;
+  }[];
 }): Promise<void> {
   await requireSession();
   const db = await getDb();
@@ -559,6 +620,14 @@ export async function saveWallLayouts(layout: {
           x: clampTo(item.x, WALL_LIMITS.x),
           y: Math.max(item.y, 0),
           width: clampTo(item.width, WALL_LIMITS.width),
+          /*
+            Carried only when the caller has one to give. A drag brings its
+            element to the front, so undoing a drag has to put the layer back
+            as well as the position — but a group move changes no layering at
+            all, and writing a z there would flatten the stack the artist
+            built.
+          */
+          ...(item.z === undefined ? {} : { z: Math.round(item.z) }),
           updatedAt: now,
         })
         .where(eq(schema.portfolioItems.id, item.id)),
@@ -574,6 +643,7 @@ export async function saveWallLayouts(layout: {
           // A group scale carries the type with the box, so this arrives on a
           // layout save rather than only from the formatting panel.
           fontSize: clampTo(text.fontSize, WALL_TEXT_CQW),
+          ...(text.z === undefined ? {} : { z: Math.round(text.z) }),
           updatedAt: now,
         })
         .where(eq(schema.wallTexts.id, text.id)),
@@ -599,9 +669,16 @@ export async function saveWallLayouts(layout: {
 export async function deleteWallSelection(selection: {
   items: string[];
   texts: string[];
-}): Promise<void> {
+}): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+
+  // Both halves captured up front, before either is removed — a group delete
+  // is one action to the artist and must be one entry to undo.
+  const backup = mergeBackups(
+    await capturePieces(selection.items),
+    await captureWallTexts(selection.texts),
+  );
 
   if (selection.items.length > 0) {
     const family = await db
@@ -624,4 +701,5 @@ export async function deleteWallSelection(selection: {
   }
 
   refresh();
+  return backup;
 }

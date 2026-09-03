@@ -14,6 +14,10 @@ import {
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { uploadImage } from "@/lib/client-upload";
+import type { Backup } from "@/lib/undo-backup";
+import { restoreDeleted } from "@/app/admin/undo-actions";
+import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 type Item = { id: string; src: string; alt: string; width: number; height: number };
 
@@ -31,7 +35,8 @@ type Props = {
   images: Item[];
   reorder: (parentId: string, ids: string[]) => Promise<void>;
   updateAlt: (id: string, alt: string) => Promise<void>;
-  remove: (id: string) => Promise<void>;
+  /** Returns the rows it removed, so the deletion can be undone. */
+  remove: (id: string) => Promise<Backup>;
   heading?: string;
   hint?: string;
 };
@@ -39,11 +44,12 @@ type Props = {
 function Thumb({
   item,
   onDelete,
-  updateAlt,
+  onAlt,
 }: {
   item: Item;
   onDelete: (id: string) => void;
-  updateAlt: (id: string, alt: string) => Promise<void>;
+  /** Called on blur with the old and new description; see `describe` below. */
+  onAlt: (id: string, from: string, to: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -78,7 +84,7 @@ function Thumb({
           <input
             value={alt}
             onChange={(e) => setAlt(e.target.value)}
-            onBlur={() => alt !== item.alt && void updateAlt(item.id, alt)}
+            onBlur={() => alt !== item.alt && onAlt(item.id, item.alt, alt)}
             className="border-line focus:border-ink mt-1 w-full border bg-transparent px-2 py-1 text-xs outline-none"
           />
         </label>
@@ -109,6 +115,8 @@ export function ImageManager({
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const { run, track } = useAction();
+  const { record } = useUndo();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -139,26 +147,92 @@ export function ImageManager({
     if (inputRef.current) inputRef.current.value = "";
   }
 
+  /** Puts one ordering on screen and writes it. */
+  const reorderTo = (order: Item[], what: string) => {
+    setItems(order);
+    return track(
+      reorder(
+        parentId,
+        order.map((i) => i.id),
+      ),
+      what,
+    );
+  };
+
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
+    const before = items;
     const next = arrayMove(
       items,
       items.findIndex((i) => i.id === active.id),
       items.findIndex((i) => i.id === over.id),
     );
+
+    record({
+      label: "the image order",
+      undo: () => reorderTo(before, "Undoing the image order"),
+      redo: () => reorderTo(next, "Redoing the image order"),
+    });
+
     setItems(next);
     startTransition(() => {
-      void reorder(
-        parentId,
-        next.map((i) => i.id),
+      run(
+        reorder(
+          parentId,
+          next.map((i) => i.id),
+        ),
+        "Saving the image order",
       );
     });
   }
 
+  /** Saves a description and records the change, so it can be typed back. */
+  function describe(id: string, from: string, to: string) {
+    const write = (alt: string, what: string) => {
+      setItems((current) => current.map((i) => (i.id === id ? { ...i, alt } : i)));
+      return track(updateAlt(id, alt), what);
+    };
+    record({
+      label: "the description",
+      undo: () => write(from, "Undoing the description"),
+      redo: () => write(to, "Redoing the description"),
+    });
+    run(write(to, "Saving the description"), "Saving the description");
+  }
+
   function handleDelete(id: string) {
+    const at = items.findIndex((i) => i.id === id);
+    const going = at === -1 ? undefined : items[at];
     setItems((current) => current.filter((i) => i.id !== id));
+
+    const removal = remove(id);
+    record({
+      label: "the photograph",
+      undo: () =>
+        track(removal.then(restoreDeleted), "Undoing the photograph").then(() => {
+          /*
+            The dialog holds this list in its own state and is not re-rendered
+            from the server while it is open, so putting the row back has to
+            put the thumbnail back too — and back where it was. The restored
+            row keeps its own `sortOrder`, so appending it would leave the
+            strip disagreeing with the database until the dialog was reopened,
+            and the first image is the one the shop shows.
+          */
+          if (going !== undefined) {
+            setItems((current) => [...current.slice(0, at), going, ...current.slice(at)]);
+          }
+        }),
+      redo: () => {
+        setItems((current) => current.filter((i) => i.id !== id));
+        return track(
+          remove(id).then(() => undefined),
+          "Redoing the photograph",
+        );
+      },
+    });
+
     startTransition(() => {
-      void remove(id);
+      run(removal, "Removing the photograph");
     });
   }
 
@@ -177,7 +251,7 @@ export function ImageManager({
           <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
             <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {items.map((item) => (
-                <Thumb key={item.id} item={item} onDelete={handleDelete} updateAlt={updateAlt} />
+                <Thumb key={item.id} item={item} onDelete={handleDelete} onAlt={describe} />
               ))}
             </ul>
           </SortableContext>

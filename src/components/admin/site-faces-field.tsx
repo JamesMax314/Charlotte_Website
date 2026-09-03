@@ -4,6 +4,7 @@ import { useState } from "react";
 import { setSiteFaces } from "@/app/admin/settings-actions";
 import { resolveRoleFamily, type FaceRole, type FontOption, type UploadedFont } from "@/lib/fonts";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 const SELECT =
   "border-line focus:border-ink w-full max-w-xs border bg-transparent px-3 py-2 text-sm outline-none";
@@ -73,9 +74,27 @@ export function SiteFacesField({
   uploaded: UploadedFont[];
 }) {
   const [value, setValue] = useState({ bodyFontId, headingFontId });
-  const { run, pending, error } = useAction();
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
+
+  const write = (patch: Partial<typeof value>, what: string) => {
+    setValue((current) => ({ ...current, ...patch }));
+    return track(setSiteFaces(patch), what);
+  };
 
   const apply = (patch: Partial<typeof value>, what: string) => {
+    // Only the keys the patch touches, so undoing the body face cannot also
+    // revert a heading face changed in between.
+    const before = Object.fromEntries(
+      Object.keys(patch).map((key) => [key, value[key as keyof typeof value]]),
+    ) as Partial<typeof value>;
+
+    record({
+      label: "the typeface",
+      undo: () => write(before, "Undoing the typeface"),
+      redo: () => write(patch, "Redoing the typeface"),
+    });
+
     setValue({ ...value, ...patch });
     run(setSiteFaces(patch), what);
   };

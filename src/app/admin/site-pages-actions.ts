@@ -5,6 +5,8 @@ import { eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { releaseMedia } from "@/lib/publish";
+import type { Backup } from "@/lib/undo-backup";
+import { captureSitePage } from "@/lib/undo-restore";
 import { deletePiecesWithPages } from "@/lib/portfolio-deletes";
 import { toSlug } from "@/lib/artworks";
 import { requireSession } from "@/lib/auth";
@@ -138,9 +140,12 @@ export async function reorderSitePages(ids: string[]): Promise<void> {
  * R2 objects cascade nowhere, so the family's images are swept first. Missing
  * that leaves the bucket holding artwork nothing can ever reference again.
  */
-export async function deleteSitePage(id: string): Promise<void> {
+export async function deleteSitePage(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
+
+  // The page and the whole wall built on it, read before any of it goes.
+  const backup = await captureSitePage(id);
 
   const onPage = await db
     .select({ id: schema.portfolioItems.id })
@@ -174,4 +179,5 @@ export async function deleteSitePage(id: string): Promise<void> {
   await deletePiecesWithPages(onPage.map((item) => item.id));
   await db.delete(schema.sitePages).where(eq(schema.sitePages.id, id));
   refresh();
+  return backup;
 }

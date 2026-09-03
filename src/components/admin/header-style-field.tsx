@@ -15,6 +15,7 @@ import {
   type HeaderStyle,
 } from "@/lib/header-style";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 /**
  * The top bar's proportions, with a working miniature of the real thing.
@@ -100,21 +101,48 @@ export function HeaderStyleField({
   displayFamily: string;
 }) {
   const [style, setStyle] = useState(initial);
-  const { run, pending, error } = useAction();
+  /* The proportions as last written; see the same field on AccentField. */
+  const [saved, setSaved] = useState(initial);
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
 
   const patch = (next: Partial<HeaderStyle>) =>
     setStyle((current) => headerStyle({ ...current, ...next }));
 
+  const write = (next: HeaderStyle, what: string) => {
+    setStyle(next);
+    setSaved(next);
+    return track(setHeaderStyle(next), what);
+  };
+
+  /**
+   * Records a committed change and writes it.
+   *
+   * One step per commit, not per slider frame: the sliders write on release,
+   * so a drag from 76 to 120 is one thing the artist did and one press to take
+   * back.
+   */
+  const commitTo = (next: HeaderStyle) => {
+    const before = saved;
+    record({
+      label: "the header proportions",
+      undo: () => write(before, "Undoing the header proportions"),
+      redo: () => write(next, "Redoing the header proportions"),
+    });
+    setSaved(next);
+    run(setHeaderStyle(next), "Saving the header");
+  };
+
   const commit = () => {
     if (
-      style.height === initial.height &&
-      style.nameSize === initial.nameSize &&
-      style.navSize === initial.navSize &&
-      style.contentSpace === initial.contentSpace
+      style.height === saved.height &&
+      style.nameSize === saved.nameSize &&
+      style.navSize === saved.navSize &&
+      style.contentSpace === saved.contentSpace
     ) {
       return;
     }
-    run(setHeaderStyle(style), "Saving the header");
+    commitTo(style);
   };
 
   const outgrown = exceedsHeight(style);
@@ -244,7 +272,7 @@ export function HeaderStyleField({
           type="button"
           onClick={() => {
             setStyle(HEADER_DEFAULTS);
-            run(setHeaderStyle(HEADER_DEFAULTS), "Restoring the header");
+            commitTo(HEADER_DEFAULTS);
           }}
           className="text-graphite hover:text-accent text-xs transition-colors"
         >

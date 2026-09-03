@@ -2,7 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { saveArtworkDetails } from "@/app/admin/actions";
-import { deleteImage, reorderImages, updateImageAlt } from "@/app/admin/actions";
+import {
+  deleteArtworkPermanently,
+  deleteImage,
+  reorderImages,
+  updateImageAlt,
+} from "@/app/admin/actions";
+import { restoreDeleted } from "@/app/admin/undo-actions";
+import type { Backup } from "@/lib/undo-backup";
+import { useUndo } from "./undo-provider";
 import type { Artwork, ArtworkDetails } from "@/lib/artworks";
 import { isSoldOut, soleListing } from "@/lib/artworks";
 import { ImageManager } from "./image-manager";
@@ -55,6 +63,7 @@ export function ArtworkDialog({
   const [details, setDetails] = useState<ArtworkDetails>(() => detailsOf(artwork));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { record } = useUndo();
 
   // Reset when the dialog is opened for a different piece.
   const [lastId, setLastId] = useState(artwork.id);
@@ -74,13 +83,56 @@ export function ArtworkDialog({
   const set = <K extends keyof ArtworkDetails>(key: K, value: ArtworkDetails[K]) =>
     setDetails((current) => ({ ...current, [key]: value }));
 
+  /**
+   * Records the save, once it is known to have succeeded.
+   *
+   * After the write rather than before it, unlike the wall's deletes: this
+   * action reports a rejected field by returning an error rather than by
+   * throwing, so a save that came back with one changed nothing and has
+   * nothing to take back. Nothing can reach the shortcut in between either —
+   * the dialog is modal, and `swallowsUndo` hands the key to the browser for
+   * as long as it is open.
+   */
+  function remember() {
+    if (isNew) {
+      /*
+        The row has existed since "Add a piece", but it is this save that puts
+        it in the grid — so this is the step to reverse, and reversing it takes
+        the row with it. Redo restores what that delete returned, which is the
+        same piece with the same id and the same photographs.
+      */
+      let removed: Backup | null = null;
+      record({
+        label: "adding the piece",
+        undo: async () => {
+          removed = await deleteArtworkPermanently(artwork.id);
+        },
+        redo: async () => {
+          if (removed !== null) await restoreDeleted(removed);
+        },
+      });
+      return;
+    }
+
+    const before = detailsOf(artwork);
+    const after = details;
+    record({
+      label: "the piece's details",
+      undo: () => saveArtworkDetails(artwork.id, before).then(() => undefined),
+      redo: () => saveArtworkDetails(artwork.id, after).then(() => undefined),
+    });
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
     try {
       const result = await saveArtworkDetails(artwork.id, details);
       if (result.error) setError(result.error);
-      else onSaved();
+      else {
+        remember();
+        onSaved();
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Saving failed.");
     } finally {

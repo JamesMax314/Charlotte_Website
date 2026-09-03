@@ -6,6 +6,7 @@ import { setFavicon } from "@/app/admin/settings-actions";
 import { uploadSiteFile } from "@/lib/client-upload";
 import { Mark } from "@/components/mark";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 import { SECONDARY_BUTTON } from "./styles";
 
 /**
@@ -17,7 +18,24 @@ import { SECONDARY_BUTTON } from "./styles";
  */
 export function FaviconField({ faviconKey }: { faviconKey: string | null }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { run, pending, error } = useAction();
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
+
+  /**
+   * Records a swap of the mark, in either direction.
+   *
+   * Putting the old key back is enough to restore it: a delete only ever
+   * queues an R2 object now, and never removes one before the next publish —
+   * so the bytes the previous mark points at are still there. `discardAsset`
+   * takes the key it is given back out of that queue.
+   */
+  const swap = (before: string | null, after: string | null) => {
+    record({
+      label: "the mark",
+      undo: () => track(setFavicon(before), "Undoing the mark"),
+      redo: () => track(setFavicon(after), "Redoing the mark"),
+    });
+  };
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -33,7 +51,9 @@ export function FaviconField({ faviconKey }: { faviconKey: string | null }) {
       if (lopsided) setNote("That image is not square, so the circle will crop its edges.");
 
       const uploaded = await uploadSiteFile(file, "favicon");
+      const before = faviconKey;
       await setFavicon(uploaded.key);
+      swap(before, uploaded.key);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -72,7 +92,10 @@ export function FaviconField({ faviconKey }: { faviconKey: string | null }) {
             <button
               type="button"
               disabled={busy || pending}
-              onClick={() => run(setFavicon(null), "Removing the mark")}
+              onClick={() => {
+                swap(faviconKey, null);
+                run(setFavicon(null), "Removing the mark");
+              }}
               className="text-graphite px-2 py-2 text-sm underline underline-offset-4 hover:text-red-700"
             >
               Remove

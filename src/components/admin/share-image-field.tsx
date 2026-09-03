@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { useRef, useState } from "react";
-import { setShareImage } from "@/app/admin/settings-actions";
+import { setShareImage, type ShareImage } from "@/app/admin/settings-actions";
 import { uploadSiteImage } from "@/lib/client-upload";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 import { SECONDARY_BUTTON } from "./styles";
 
 /**
@@ -25,14 +26,31 @@ export function ShareImageField({
   height: number | null;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { run, pending, error } = useAction();
+  const { run, track, pending, error } = useAction();
+  const { record } = useUndo();
   const [busy, setBusy] = useState(false);
+
+  const current = (): ShareImage | null =>
+    imageKey === null || width === null || height === null
+      ? null
+      : { key: imageKey, width, height };
+
+  const swap = (before: ShareImage | null, after: ShareImage | null) => {
+    record({
+      label: "the share picture",
+      undo: () => track(setShareImage(before), "Undoing the share picture"),
+      redo: () => track(setShareImage(after), "Redoing the share picture"),
+    });
+  };
 
   async function upload(file: File) {
     setBusy(true);
     try {
       const uploaded = await uploadSiteImage(file);
-      await setShareImage({ key: uploaded.key, width: uploaded.width, height: uploaded.height });
+      const before = current();
+      const after = { key: uploaded.key, width: uploaded.width, height: uploaded.height };
+      await setShareImage(after);
+      swap(before, after);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -67,7 +85,10 @@ export function ShareImageField({
             <button
               type="button"
               disabled={busy || pending}
-              onClick={() => run(setShareImage(null), "Removing the picture")}
+              onClick={() => {
+                swap(current(), null);
+                run(setShareImage(null), "Removing the picture");
+              }}
               className="text-graphite px-2 py-2 text-sm underline underline-offset-4 hover:text-red-700"
             >
               Remove

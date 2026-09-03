@@ -8,6 +8,8 @@ import * as schema from "@/db/schema";
 import type { ListingRow } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { publishSite, releaseMedia } from "@/lib/publish";
+import type { Backup } from "@/lib/undo-backup";
+import { captureArtworkImages, captureArtworks } from "@/lib/undo-restore";
 import {
   isPlaceholderSlug,
   isValidEtsyUrl,
@@ -229,20 +231,21 @@ export async function setArtworkSoldOut(id: string, soldOut: boolean) {
   refreshPublicPages();
 }
 
-export async function deleteArtworkPermanently(id: string) {
+export async function deleteArtworkPermanently(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
 
-  // Remove the R2 objects too, or the bucket accumulates orphans forever.
-  const images = await db
-    .select({ storageKey: schema.artworkImages.storageKey })
-    .from(schema.artworkImages)
-    .where(eq(schema.artworkImages.artworkId, id));
+  // Read before removing, so undo has the piece, its photographs and its
+  // listing to put back. The images cascade in the database; the backup has
+  // to collect them anyway, because a cascade leaves nothing to read after.
+  const backup = await captureArtworks([id]);
 
-  await releaseMedia(images.map((i) => i.storageKey));
+  // Remove the R2 objects too, or the bucket accumulates orphans forever.
+  await releaseMedia((backup.artwork_images ?? []).map((row) => row.storageKey as string));
 
   await db.delete(schema.artworks).where(eq(schema.artworks.id, id));
   refreshPublicPages();
+  return backup;
 }
 
 /**
@@ -299,18 +302,15 @@ export async function updateImageAlt(id: string, alt: string) {
   refreshPublicPages();
 }
 
-export async function deleteImage(id: string) {
+export async function deleteImage(id: string): Promise<Backup> {
   await requireSession();
   const db = await getDb();
 
-  const rows = await db
-    .select({ storageKey: schema.artworkImages.storageKey })
-    .from(schema.artworkImages)
-    .where(eq(schema.artworkImages.id, id))
-    .limit(1);
+  const backup = await captureArtworkImages([id]);
 
-  await releaseMedia([rows[0]?.storageKey]);
+  await releaseMedia((backup.artwork_images ?? []).map((row) => row.storageKey as string));
 
   await db.delete(schema.artworkImages).where(eq(schema.artworkImages.id, id));
   refreshPublicPages();
+  return backup;
 }

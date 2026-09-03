@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { announceWrite } from "./write-bus";
 
 /**
@@ -21,20 +21,35 @@ export function useAction() {
   const [pending, setPending] = useState(false);
   const outstanding = useRef(0);
 
-  const run = useCallback((work: Promise<unknown>, what: string) => {
+  /**
+   * `run` with the rejection left intact, for a caller that needs to know.
+   *
+   * The undo history is the caller that needs to know: an entry whose write
+   * failed must not be treated as applied and moved onto the redo side, or
+   * the shortcut ends up one step out of step with the site for the rest of
+   * the session. `run` deliberately swallows, so it cannot be the path an
+   * entry takes — but the artist should still see the same message she would
+   * for any other failed write, which is why this reports before it rethrows
+   * rather than leaving that to the history.
+   */
+  const track = useCallback(<T>(work: Promise<T>, what: string): Promise<T> => {
     setError(null);
     outstanding.current += 1;
     setPending(true);
-    void work
-      .then(() => {
+    return work
+      .then((value) => {
         // Tells the "Live" badge there is a new answer to fetch. Only on
         // success: a write that failed changed nothing to publish.
         announceWrite();
+        // Passed through, unlike `run`: an undo entry that reverses a delete
+        // needs the rows the delete gave back.
+        return value;
       })
       .catch((cause: unknown) => {
         const detail = cause instanceof Error ? cause.message : String(cause);
         setError(`${what} failed: ${detail}`);
         console.error(`[admin] ${what} failed`, cause);
+        throw cause;
       })
       .finally(() => {
         outstanding.current -= 1;
@@ -42,5 +57,14 @@ export function useAction() {
       });
   }, []);
 
-  return { run, pending, error };
+  const run = useCallback(
+    (work: Promise<unknown>, what: string): void => {
+      // Reported by `track` already; this only stops the rejection escaping as
+      // an unhandled one.
+      void track(work, what).catch(() => {});
+    },
+    [track],
+  );
+
+  return useMemo(() => ({ run, track, pending, error }), [run, track, pending, error]);
 }

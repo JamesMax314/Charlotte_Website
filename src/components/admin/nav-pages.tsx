@@ -24,6 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { navLabel, type SitePage } from "@/lib/site-pages";
 import { createSitePage, reorderSitePages } from "@/app/admin/site-pages-actions";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 /**
  * The artist's own pages, in the middle of the studio's top bar.
@@ -90,7 +91,8 @@ export function NavPages({ pages }: { pages: SitePage[] }) {
   const [items, setItems] = useState(pages);
   const [adding, setAdding] = useState(false);
   const [, startTransition] = useTransition();
-  const { run, error } = useAction();
+  const { run, track, error } = useAction();
+  const { record } = useUndo();
 
   /*
     A drag ends with a click on the link that was dragged, because pointerdown
@@ -123,11 +125,28 @@ export function NavPages({ pages }: { pages: SitePage[] }) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
+    const before = items;
     const next = arrayMove(
       items,
       items.findIndex((p) => p.id === active.id),
       items.findIndex((p) => p.id === over.id),
     );
+
+    /*
+      Recorded even though the bar lives in the layout above every page. The
+      history is cleared on navigation, so an ordering undone here is always
+      one made here — the entry cannot outlive the page it was recorded on.
+    */
+    const reorderTo = (order: SitePage[], what: string) => {
+      setItems(order);
+      return track(reorderSitePages(order.map((p) => p.id)), what);
+    };
+    record({
+      label: "the order of your pages",
+      undo: () => reorderTo(before, "Undoing the order of your pages"),
+      redo: () => reorderTo(next, "Redoing the order of your pages"),
+    });
+
     setItems(next);
 
     startTransition(() => {

@@ -14,7 +14,7 @@ import {
   type WallScope,
   type WallText,
 } from "@/lib/portfolio";
-import { serialiseDoc, type RichDoc } from "@/lib/rich-text";
+import { docToPlain, serialiseDoc, type RichDoc } from "@/lib/rich-text";
 import { SURFACE_LEADING } from "@/lib/type-scale";
 import { createWriteQueue } from "@/lib/write-queue";
 import {
@@ -53,12 +53,16 @@ import {
   savePortfolioLayout,
   saveWallLayouts,
   saveWallTextLayout,
+  unarchivePortfolioItems,
   updateWallText,
 } from "@/app/admin/portfolio-actions";
+import { restoreDeleted } from "@/app/admin/undo-actions";
+import type { Backup } from "@/lib/undo-backup";
 import { RichTextEditor } from "./rich-text-editor";
 import { RichTextInline } from "@/components/rich-text";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
 import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 import { ArchivePopup } from "./archive-popup";
 import { ContextMenu, Icons, type MenuEntry } from "./context-menu";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -88,6 +92,15 @@ type Drag = {
   originWidth: number;
   originHeight: number;
   z: number;
+  /**
+   * The layer the element was on before it was picked up.
+   *
+   * Every drag brings its element to the front, so undoing one has to put the
+   * layering back as well as the position — otherwise a piece the artist
+   * merely nudged stays in front of everything it used to sit behind, and no
+   * further undo can reach it.
+   */
+  originZ: number;
   /** Only meaningful for pieces, whose height follows the cover image. */
   aspect: number;
   moved: boolean;
@@ -114,11 +127,59 @@ type GroupDrag = {
   latest: SelectedElement[];
 };
 
+/**
+ * Where one element sits, as the wall stores it.
+ *
+ * `SelectedElement` with a layer on top. The group operations produce that
+ * shape already and change no layering, while a single drag brings its element
+ * to the front — so `z` is optional rather than a second type, and a save that
+ * carries none leaves the stack alone.
+ *
+ * This is the currency of undo on the wall: a move, a resize, a group scale,
+ * an align and a distribute are all "these elements were there, now they are
+ * here", and one pair of before-and-after lists reverses every one of them.
+ */
+type Placement = SelectedElement & { z?: number };
+
 /** Below this, a pointer gesture is a tap (select or open), not a drag. */
 const DRAG_THRESHOLD_PX = 4;
 
 /** What one text box's autosave carries. */
 type TextPatch = Parameters<typeof updateWallText>[1];
+
+/**
+ * Everything about a text box that editing it can change.
+ *
+ * Its placement is deliberately absent: that is moved by dragging, which is
+ * already one undo step of its own, and folding the two together would make a
+ * nudge and a sentence a single thing to take back.
+ */
+type TextState = Pick<
+  WallText,
+  "rich" | "fontSize" | "align" | "bold" | "italic" | "underline" | "colour" | "font"
+>;
+
+const textStateOf = (text: WallText): TextState => ({
+  rich: text.rich,
+  fontSize: text.fontSize,
+  align: text.align,
+  bold: text.bold,
+  italic: text.italic,
+  underline: text.underline,
+  colour: text.colour,
+  font: text.font,
+});
+
+/** Whether an editing session changed anything worth an undo step. */
+const textStatesDiffer = (a: TextState, b: TextState): boolean =>
+  serialiseDoc(a.rich) !== serialiseDoc(b.rich) ||
+  a.fontSize !== b.fontSize ||
+  a.align !== b.align ||
+  a.bold !== b.bold ||
+  a.italic !== b.italic ||
+  a.underline !== b.underline ||
+  a.colour !== b.colour ||
+  a.font !== b.font;
 
 /**
  * How long typing must pause before the text box is written.
@@ -271,7 +332,8 @@ export function PortfolioCanvas({
   const fileRef = useRef<HTMLInputElement>(null);
   const dropPointRef = useRef<{ x: number; y: number } | null>(null);
   const [adding, setAdding] = useState(false);
-  const { run, error: actionError } = useAction();
+  const { run, track, error: actionError } = useAction();
+  const { record } = useUndo();
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
@@ -363,15 +425,17 @@ export function PortfolioCanvas({
   const isGroup = selectedElements.length > 1;
   const selectionBounds = isGroup ? boundsOf(selectedElements) : null;
 
-  /** Writes a group result into the optimistic copies the canvas renders. */
-  const applyElements = (next: SelectedElement[]) => {
+  /** Writes a set of placements into the optimistic copies the canvas renders. */
+  const applyElements = (next: Placement[]) => {
     const byId = new Map(next.map((element) => [element.id, element]));
     setItems((current) =>
       current.map((item) => {
         const moved = byId.get(item.id);
         // Height is never stored — it comes from the cover image — so a piece
         // takes only the three fields the wall actually keeps.
-        return moved ? { ...item, x: moved.x, y: moved.y, width: moved.width } : item;
+        return moved
+          ? { ...item, x: moved.x, y: moved.y, width: moved.width, z: moved.z ?? item.z }
+          : item;
       }),
     );
     setTexts((current) =>
@@ -385,42 +449,169 @@ export function PortfolioCanvas({
               width: moved.width,
               height: moved.height,
               fontSize: moved.fontSize ?? text.fontSize,
+              z: moved.z ?? text.z,
             }
           : text;
       }),
     );
   };
 
-  /** Commits a group result: one round trip for the whole selection. */
-  const saveElements = (next: SelectedElement[]) => {
+  /**
+   * Applies a set of placements and returns the write.
+   *
+   * Returned rather than fired, because the two callers want different things
+   * from the promise. A gesture hands it to `run`, which reports a failure to
+   * the artist and moves on; an undo entry hands it to `track`, which reports
+   * it the same way and then rethrows, so the history learns the step did not
+   * land instead of quietly moving it to the redo side.
+   *
+   * One round trip for the whole set, which is the rule every group write here
+   * follows: half an arrangement applied is worse than none, because the
+   * artist cannot see which half.
+   */
+  const applyAndWrite = (next: Placement[]): Promise<void> => {
+    applyElements(next);
     setSaving(true);
-    run(
-      saveWallLayouts({
-        items: next
-          .filter((element) => element.kind === "item")
-          .map(({ id, x, y, width }) => ({ id, x, y, width })),
-        texts: next.flatMap((element) =>
-          element.kind === "text" && element.fontSize !== undefined
-            ? [
-                {
-                  id: element.id,
-                  x: element.x,
-                  y: element.y,
-                  width: element.width,
-                  height: element.height,
-                  fontSize: element.fontSize,
-                },
-              ]
-            : [],
+    return saveWallLayouts({
+      items: next
+        .filter((element) => element.kind === "item")
+        .map(({ id, x, y, width, z }) => ({ id, x, y, width, z })),
+      texts: next.flatMap((element) =>
+        element.kind === "text" && element.fontSize !== undefined
+          ? [
+              {
+                id: element.id,
+                x: element.x,
+                y: element.y,
+                width: element.width,
+                height: element.height,
+                fontSize: element.fontSize,
+                z: element.z,
+              },
+            ]
+          : [],
+      ),
+    }).finally(() => setSaving(false));
+  };
+
+  /**
+   * Remembers a rearrangement, so Cmd+Z can put it back.
+   *
+   * Everything the artist does to placement on this wall arrives here — a
+   * drag, a resize, a group move, a group scale, an align, a distribute — for
+   * the reason `Placement` exists: they differ in how the new positions are
+   * worked out and not at all in what has to be written to undo them.
+   */
+  const recordArrangement = (what: string, before: Placement[], after: Placement[]) => {
+    record({
+      label: what,
+      undo: () => track(applyAndWrite(before), `Undoing ${what}`),
+      redo: () => track(applyAndWrite(after), `Redoing ${what}`),
+    });
+  };
+
+  /** A group result: applied, written, and recorded as one step. */
+  const applyAndSave = (what: string, before: Placement[], next: Placement[]) => {
+    recordArrangement(what, before, next);
+    run(applyAndWrite(next), "Saving the arrangement");
+  };
+
+  /**
+   * Fires a delete and records it, with the rows it removed as the way back.
+   *
+   * The entry is recorded before the delete has landed, and closes over the
+   * promise rather than the result: an undo pressed in the round trip before
+   * the rows come back then simply queues behind them, instead of finding no
+   * entry and silently reversing whatever the artist did before this.
+   *
+   * Redo re-runs the delete and throws its backup away, which looks careless
+   * and is not. Undo restores the captured rows exactly — ids and all — so
+   * what a redo deletes is the same set the first backup already describes,
+   * and it stays the way back however many times the pair is pressed.
+   */
+  const deleteAndRecord = (what: string, remove: () => Promise<Backup>) => {
+    const removal = remove();
+    record({
+      label: what,
+      undo: () => track(removal.then(restoreDeleted), `Undoing ${what}`),
+      redo: () =>
+        track(
+          remove().then(() => undefined),
+          `Redoing ${what}`,
         ),
-      }).finally(() => setSaving(false)),
-      "Saving the arrangement",
+    });
+    run(removal, `Deleting ${what}`);
+  };
+
+  /**
+   * Records a creation, whose undo is a delete and whose redo is what that
+   * delete gave back.
+   *
+   * The mirror image of the above, and the reason both deletes and creations
+   * come out reversible from one restore endpoint: a row put back carries the
+   * id it had, so the thing created, removed and created again is the same
+   * thing throughout — a text box's page, a piece's photographs and its own
+   * page all survive the round trip.
+   */
+  const recordCreation = (
+    what: string,
+    created: Promise<string>,
+    remove: (id: string) => Promise<Backup>,
+  ) => {
+    let removed: Backup | null = null;
+    record({
+      label: what,
+      undo: async () => {
+        removed = await track(created.then(remove), `Undoing ${what}`);
+      },
+      redo: async () => {
+        if (removed !== null) await track(restoreDeleted(removed), `Redoing ${what}`);
+      },
+    });
+  };
+
+  /**
+   * Puts pieces away, and remembers enough to bring them back where they were.
+   *
+   * The status is carried per piece rather than assumed. Archiving overwrites
+   * it, so a draft put away and restored would come back published — work on
+   * the live site the artist never chose to publish, from a keypress that
+   * claimed only to undo.
+   */
+  const archiveAndRecord = (going: PortfolioItem[]) => {
+    if (going.length === 0) return;
+    const ids = going.map((item) => item.id);
+    const before = going.flatMap((item) =>
+      item.status === "archived" ? [] : [{ id: item.id, status: item.status }],
+    );
+
+    record({
+      label: going.length === 1 ? "the archive" : "archiving the images",
+      undo: () => track(unarchivePortfolioItems(before, scope), "Undoing the archive"),
+      redo: () => track(archivePortfolioItems(ids), "Redoing the archive"),
+    });
+    run(
+      archivePortfolioItems(ids),
+      going.length === 1 ? "Archiving the image" : "Archiving the images",
     );
   };
 
-  const applyAndSave = (next: SelectedElement[]) => {
-    applyElements(next);
-    saveElements(next);
+  /**
+   * Writes a whole text box's content and styling, for an undo step.
+   *
+   * Not `patchText`: that one queues, and a queued write reports its failure
+   * to `onError` rather than to the caller — so the history would move a step
+   * that never landed onto the redo side. The mirror is written here too,
+   * because `updateWallText` derives it server-side and does not revalidate,
+   * which leaves this copy the only one the wall can read.
+   */
+  const writeTextState = (id: string, state: TextState, what: string): Promise<void> => {
+    setTexts((current) =>
+      current.map((text) =>
+        text.id === id ? { ...text, ...state, content: docToPlain(state.rich) } : text,
+      ),
+    );
+    return track(updateWallText(id, state), what);
   };
 
   /**
@@ -525,7 +716,18 @@ export function PortfolioCanvas({
       setShown({ vertical: null, horizontal: null });
       // A press that never moved leaves the selection alone. Clicking one
       // member of a group must not throw the rest of it away.
-      if (group.moved) saveElements(group.latest);
+      if (!group.moved) return;
+      /*
+        `group.start` is the selection as it stood when the gesture began, and
+        every frame was computed from it rather than from the frame before —
+        so it is exactly the "before" this needs, already held for the reason
+        that a clamped element must come back unharmed.
+      */
+      applyAndSave(
+        group.mode === "move" ? "the group move" : "the group scale",
+        group.start,
+        group.latest,
+      );
     };
 
     trackPointer(onMove, onUp);
@@ -625,6 +827,64 @@ export function PortfolioCanvas({
     if (selectedTextId !== null) return;
     void saves.flush();
   }, [selectedTextId, saves]);
+
+  /*
+    The current boxes, readable from an effect that must not re-run per
+    keystroke. The session effect below fires when the artist puts a box down,
+    and needs the box as it stands at that moment — but listing `texts` in its
+    dependencies would run it on every character typed. Written from an effect
+    of its own, declared first so it has already run when that one reads it:
+    effects fire in the order they are declared.
+  */
+  const textsRef = useRef(texts);
+  useEffect(() => {
+    textsRef.current = texts;
+  });
+
+  /**
+   * One editing session in one text box is one undo step.
+   *
+   * The shortcut belongs to the browser while the caret is in the box — see
+   * `swallowsUndo` — so it is only once she has put the box down that the
+   * history has anything to offer, and what it offers is the box as she found
+   * it. Recording per keystroke instead would need the history to hold every
+   * intermediate document, and would then compete with the character-level
+   * undo the artist already has inside the box.
+   *
+   * The whole styling goes with the content, because the formatting bar is
+   * part of the same session: colour, face, size and the marks are all changed
+   * with the box selected, and taking back "what I did to this box" that left
+   * it a different colour would be a strange half of an answer.
+   */
+  const editingRef = useRef<{ id: string; before: TextState } | null>(null);
+  useEffect(() => {
+    const session = editingRef.current;
+    if (session !== null && session.id !== selectedTextId) {
+      const now = textsRef.current.find((text) => text.id === session.id);
+      // Gone means she deleted it, which is its own step and already recorded.
+      if (now !== undefined) {
+        const after = textStateOf(now);
+        if (textStatesDiffer(session.before, after)) {
+          const { id, before } = session;
+          record({
+            label: "the text",
+            undo: () => writeTextState(id, before, "Undoing the text"),
+            redo: () => writeTextState(id, after, "Redoing the text"),
+          });
+        }
+      }
+    }
+
+    const opened =
+      selectedTextId === null
+        ? undefined
+        : textsRef.current.find((text) => text.id === selectedTextId);
+    editingRef.current =
+      opened === undefined ? null : { id: opened.id, before: textStateOf(opened) };
+    // `record` and `writeTextState` are stable for this component's lifetime;
+    // `texts` is deliberately absent, and read through the ref above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTextId]);
 
   function patchText(id: string, patch: TextPatch) {
     const { rich, ...rest } = patch;
@@ -738,6 +998,7 @@ export function PortfolioCanvas({
       originWidth: element.width,
       originHeight: height,
       z: topZ,
+      originZ: element.z,
       aspect,
       moved: false,
       latest: { x: element.x, y: element.y, width: element.width, height },
@@ -840,6 +1101,48 @@ export function PortfolioCanvas({
         } else setSelectedTextId(drag.id);
         return;
       }
+
+      /*
+        Recorded from the drag's own origin fields rather than from a copy of
+        the element taken at pointerdown: they are the numbers every frame was
+        computed against, so they are the position the artist would see undone
+        even when the gesture ended somewhere the snapping decided.
+
+        A text box keeps its `fontSize` on both sides. It is unchanged by a
+        drag, but `applyAndWrite` writes a text row through `saveWallLayouts`,
+        which expects one — and reading it off the current box means undo
+        cannot leave it holding a stale size.
+      */
+      const text = drag.kind === "text" ? texts.find((t) => t.id === drag.id) : undefined;
+      const placement = (
+        at: { x: number; y: number; width: number; height: number },
+        z: number,
+      ): Placement => ({
+        kind: drag.kind === "item" ? "item" : "text",
+        id: drag.id,
+        x: at.x,
+        y: at.y,
+        width: at.width,
+        height: at.height,
+        ...(text === undefined ? {} : { fontSize: text.fontSize }),
+        z,
+      });
+
+      recordArrangement(
+        drag.mode === "move" ? "the move" : "the resize",
+        [
+          placement(
+            {
+              x: drag.originX,
+              y: drag.originY,
+              width: drag.originWidth,
+              height: drag.originHeight,
+            },
+            drag.originZ,
+          ),
+        ],
+        [placement(drag.latest, drag.z)],
+      );
 
       setSaving(true);
       const done = () => setSaving(false);
@@ -944,7 +1247,11 @@ export function PortfolioCanvas({
         {
           label: "Add text",
           icon: Icons.text,
-          onSelect: () => run(createWallText(at, scope), "Adding the text"),
+          onSelect: () => {
+            const creating = createWallText(at, scope);
+            recordCreation("adding the text", creating, deleteWallText);
+            run(creating, "Adding the text");
+          },
         },
         // Only on a main wall: a piece's own page composes that piece, and an
         // archived piece is put away from a main wall, not from one of these.
@@ -987,9 +1294,10 @@ export function PortfolioCanvas({
                 onSelect: () => {
                   const ids = selectedImages.map((element) => element.id);
                   const doomed = new Set(ids);
+                  const going = items.filter((item) => doomed.has(item.id));
                   setItems((current) => current.filter((item) => !doomed.has(item.id)));
                   setSelectedIds(new Set());
-                  run(archivePortfolioItems(ids), "Archiving the images");
+                  archiveAndRecord(going);
                 },
               },
             ]
@@ -1035,7 +1343,7 @@ export function PortfolioCanvas({
                 icon: Icons.archive,
                 onSelect: () => {
                   setItems((current) => current.filter((i) => i.id !== item.id));
-                  run(archivePortfolioItems([item.id]), "Archiving the image");
+                  archiveAndRecord([item]);
                 },
               },
             ]
@@ -1072,7 +1380,7 @@ export function PortfolioCanvas({
           onSelect: () => {
             setTexts((c) => c.filter((t) => t.id !== text.id));
             if (selectedTextId === text.id) setSelectedTextId(null);
-            run(deleteWallText(text.id), "Deleting the text");
+            deleteAndRecord("the text", () => deleteWallText(text.id));
           },
         },
       ],
@@ -1136,8 +1444,16 @@ export function PortfolioCanvas({
       {isGroup && (
         <SelectionToolbar
           count={selectedElements.length}
-          onAlign={(mode) => applyAndSave(alignSelection(selectedElements, mode))}
-          onDistribute={(axis) => applyAndSave(distributeSelection(selectedElements, axis))}
+          onAlign={(mode) =>
+            applyAndSave("the alignment", selectedElements, alignSelection(selectedElements, mode))
+          }
+          onDistribute={(axis) =>
+            applyAndSave(
+              "the spacing",
+              selectedElements,
+              distributeSelection(selectedElements, axis),
+            )
+          }
           onDelete={() => setPendingGroupDelete(selectedElements)}
           onClear={() => setSelectedIds(new Set())}
         />
@@ -1457,13 +1773,30 @@ export function PortfolioCanvas({
           // Elements on a piece's own page never link anywhere.
           allowClickable={linksOnward}
           onCancel={() => {
-            // Cancelling a brand new image removes the draft and its objects;
-            // cancelling an edit simply closes.
+            /*
+              Cancelling a brand new image removes the draft and its objects;
+              cancelling an edit simply closes. Neither is recorded: the artist
+              is putting something down rather than changing the wall, and an
+              undo of a cancel would bring back a dialog she has just dismissed.
+            */
             if (dialog.isNew) run(deletePortfolioItem(dialog.id), "Discarding the image");
             setDialog(null);
           }}
           onSave={(details) => {
-            run(savePortfolioItemDetails(dialog.id, details), "Saving the image");
+            const { id, initial, isNew } = dialog;
+            if (isNew) {
+              // The piece exists from the moment the file was chosen, but it is
+              // this save that puts it on the wall — so this is the step to
+              // take back, and taking it back removes the row the upload made.
+              recordCreation("adding the image", Promise.resolve(id), deletePortfolioItem);
+            } else {
+              record({
+                label: "the details",
+                undo: () => track(savePortfolioItemDetails(id, initial), "Undoing the details"),
+                redo: () => track(savePortfolioItemDetails(id, details), "Redoing the details"),
+              });
+            }
+            run(savePortfolioItemDetails(id, details), "Saving the image");
             setDialog(null);
           }}
         />
@@ -1480,8 +1813,17 @@ export function PortfolioCanvas({
           items={archived}
           onClose={() => setArchivePopup(null)}
           onRestore={(item) => {
+            const { at } = archivePopup;
             setArchived((current) => current.filter((i) => i.id !== item.id));
-            run(restorePortfolioItem(item.id, archivePopup.at, scope), "Restoring the piece");
+            record({
+              label: "the restore",
+              // Re-archiving is what puts it back in the box. Its position on
+              // the wall goes with it untouched, which is why a redo can land
+              // it in the same place rather than at a new pointer.
+              undo: () => track(archivePortfolioItems([item.id]), "Undoing the restore"),
+              redo: () => track(restorePortfolioItem(item.id, at, scope), "Redoing the restore"),
+            });
+            run(restorePortfolioItem(item.id, at, scope), "Restoring the piece");
           }}
           // Same confirmation as deleting a piece from the wall — a right
           // click here reaches the identical dialog below, which does not
@@ -1493,7 +1835,7 @@ export function PortfolioCanvas({
       <ConfirmDialog
         open={pendingGroupDelete !== null}
         title={`Delete ${pendingGroupDelete?.length ?? 0} items?`}
-        body="The selected images, their photographs and the selected text will be removed for good. This cannot be undone."
+        body="The selected images, their photographs and the selected text will be removed from the wall. Cmd+Z brings them back until you leave this page."
         confirmLabel="Delete"
         onCancel={() => setPendingGroupDelete(null)}
         onConfirm={() => {
@@ -1505,12 +1847,11 @@ export function PortfolioCanvas({
           setItems((current) => current.filter((item) => !doomed.has(item.id)));
           setTexts((current) => current.filter((text) => !doomed.has(text.id)));
           setSelectedIds(new Set());
-          run(
+          deleteAndRecord("the selection", () =>
             deleteWallSelection({
               items: going.filter((e) => e.kind === "item").map((e) => e.id),
               texts: going.filter((e) => e.kind === "text").map((e) => e.id),
             }),
-            "Deleting the selection",
           );
         }}
       />
@@ -1518,7 +1859,7 @@ export function PortfolioCanvas({
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Delete this image?"
-        body={`“${pendingDelete?.name ?? ""}” and its photographs will be removed for good. This cannot be undone.`}
+        body={`“${pendingDelete?.name ?? ""}” and its photographs will be removed from the wall. Cmd+Z brings it back until you leave this page.`}
         confirmLabel="Delete"
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => {
@@ -1530,7 +1871,7 @@ export function PortfolioCanvas({
           // so both lists are filtered and only the one that has it changes.
           setItems((c) => c.filter((i) => i.id !== id));
           setArchived((c) => c.filter((i) => i.id !== id));
-          run(deletePortfolioItem(id), "Deleting the image");
+          deleteAndRecord("the image", () => deletePortfolioItem(id));
         }}
       />
     </div>

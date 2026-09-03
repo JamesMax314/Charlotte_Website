@@ -159,6 +159,8 @@ export default async function SettingsPage() {
           photoKey={settings.aboutPhotoKey}
           width={settings.aboutPhotoWidth}
           height={settings.aboutPhotoHeight}
+          lqip={settings.aboutPhotoLqip}
+          alt={settings.aboutPhotoAlt}
         />
         {settings.aboutPhotoKey && (
           <label className="flex max-w-lg flex-col gap-1.5">

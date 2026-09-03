@@ -342,39 +342,41 @@ const sweepPendingDeletions = async (published: SiteSnapshot): Promise<void> => 
 };
 
 /**
- * Gives up an R2 object, deleting it only if the live site does not need it.
+ * Gives up an R2 object. Queues it; never deletes it here.
  *
  * Every delete path goes through here. Deleting immediately was correct while
- * the studio and the site were the same thing; now a piece the artist removes
- * from her draft is still on the published site until she presses the button,
- * and pulling its images out from underneath it would knock holes in pages she
- * had not touched.
+ * the studio and the site were the same thing; then the published revision
+ * arrived, and a piece the artist removed from her draft was still on the live
+ * site until she pressed the button — so keys the live site referenced were
+ * queued and everything else went straight out of the bucket.
  *
- * Also removes the width-ladder derivatives, which the portfolio and artwork
- * deletes never did — the base object went and `-400` and `-800` stayed in the
- * bucket forever.
+ * That remaining immediate delete is now wrong too, and for a second reason:
+ * every delete in the studio is undoable. An object destroyed on the way out
+ * cannot come back, so an undo would restore the row and leave a piece on the
+ * wall with a broken image — the failure being total, silent, and visible only
+ * once she looked. There is no useful test for "she might press Cmd+Z", so the
+ * distinction goes and everything is queued.
+ *
+ * Nothing leaks by doing so. `sweepPendingDeletions` runs on every publish and
+ * removes exactly the queued keys the new revision does not reference, which
+ * is the same answer this function used to compute — taken later, once undo
+ * can no longer change it. The cost is that a bucket holds deleted objects
+ * until the next "Make live", which is the moment the artist decides what the
+ * site contains anyway.
+ *
+ * The sweep also removes the width-ladder derivatives, which the portfolio and
+ * artwork deletes never did — the base object went and `-400` and `-800`
+ * stayed in the bucket forever.
  */
 export const releaseMedia = async (keys: (string | null | undefined)[]): Promise<void> => {
   const wanted = usableKeys(keys);
   if (wanted.length === 0) return;
 
-  const published = await getPublishedRevision();
-  const stillLive = published === null ? new Set<string>() : snapshotMediaKeys(published.snapshot);
-
-  const deferred = wanted.filter((key) => stillLive.has(key));
-  const removable = wanted.filter((key) => !stillLive.has(key));
-
-  const { env } = await getCloudflareContext({ async: true });
-  if (removable.length > 0) {
-    await env.MEDIA.delete(removable.flatMap((key) => [key, ...derivativeKeys(key, WIDTH_LADDER)]));
-  }
-  if (deferred.length > 0) {
-    const db = await getDb();
-    await db
-      .insert(schema.pendingMediaDeletions)
-      .values(deferred.map((storageKey) => ({ storageKey })))
-      .onConflictDoNothing();
-  }
+  const db = await getDb();
+  await db
+    .insert(schema.pendingMediaDeletions)
+    .values(wanted.map((storageKey) => ({ storageKey })))
+    .onConflictDoNothing();
 };
 
 /**
