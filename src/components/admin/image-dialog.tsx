@@ -3,7 +3,11 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { uploadImage } from "@/lib/client-upload";
-import { clearPortfolioImages } from "@/app/admin/portfolio-actions";
+import { clearPortfolioImages, deletePortfolioImage } from "@/app/admin/portfolio-actions";
+import { restoreDeleted } from "@/app/admin/undo-actions";
+import type { Backup } from "@/lib/undo-backup";
+import { useAction } from "./use-action";
+import { useUndo } from "./undo-provider";
 
 export interface ImageDetails {
   name: string;
@@ -48,6 +52,8 @@ export function ImageDialog({
   const [preview, setPreview] = useState(imageSrc);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { run } = useAction();
+  const { record } = useUndo();
 
   // Reset when the dialog is opened for a different image.
   const [lastId, setLastId] = useState(itemId);
@@ -68,17 +74,40 @@ export function ImageDialog({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
+  /**
+   * Swaps the piece's photograph, reversibly.
+   *
+   * A replacement is two writes — the old rows go, a new one arrives — so
+   * undoing it is the same two in reverse, and the rows on both sides are
+   * carried rather than re-derived. The preview is deliberately not touched
+   * from the entry: this dialog is modal, and `swallowsUndo` gives the
+   * shortcut back to the browser for as long as one is open, so an undo can
+   * only ever run once this has closed and the wall behind it has refreshed.
+   */
   async function replaceImage(file: File) {
     setError(null);
     setBusy("Replacing…");
     try {
-      await clearPortfolioImages(itemId);
+      const replaced = await clearPortfolioImages(itemId);
       const uploaded = await uploadImage(file, {
         field: "portfolioItemId",
         parentId: itemId,
         alt: name,
       });
       setPreview(uploaded.src);
+
+      let added: Backup | null = null;
+      record({
+        label: "the replacement image",
+        undo: async () => {
+          added = await deletePortfolioImage(uploaded.id);
+          await restoreDeleted(replaced);
+        },
+        redo: async () => {
+          await clearPortfolioImages(itemId);
+          if (added !== null) await restoreDeleted(added);
+        },
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Upload failed.");
     } finally {
@@ -133,7 +162,7 @@ export function ImageDialog({
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void replaceImage(file);
+              if (file) run(replaceImage(file), "Replacing the image");
             }}
           />
           <button

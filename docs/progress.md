@@ -49,6 +49,13 @@ The product specification is `docs/project-brief.md`.
   artist's order — no search, no filters, and no client JavaScript on the index. A piece
   sells one thing: one product type in her own words, one Etsy link, one price.
 
+- **Her mistakes are reversible while she is on the page.** Cmd+Z (Ctrl+Z on
+  Windows and Linux) undoes anything the studio does — a drag, a group scale, a
+  delete, a setting, an uploaded font — and Shift+Cmd+Z puts it back. The history
+  belongs to the page and is forgotten on leaving it. In a text box the browser's
+  own undo still has the key; the history takes over once she clicks away, where
+  one editing session is one step.
+
 - **Nothing reaches a visitor until the artist says so.** Her saves are immediate
   but private; "Make live" in the studio's top bar copies the whole public site — walls,
   pages, shop, settings, fonts — into one revision that visitors are then served. The
@@ -138,10 +145,11 @@ The product specification is `docs/project-brief.md`.
 | 31    | Deleting a piece works again. `parent_id` never had the `ON DELETE CASCADE` its schema declares, so deleting any of the 13 pieces that owned a page of their own raised a foreign-key error the artist saw only as React #441. D1 cannot be given the clause, so the cascade moved into the application — in the piece, selection and page deletes alike                                                                                                                                                                                                                                                     |
 | 30    | An alignment grid over every free-form wall, switched on in page settings and spaced in columns across the width. Its lines are snap targets in their own right, merged with the edge guides so the nearer of the two wins. Editor only — no visitor ever sees it. Drawn as two repeating gradients and three heavier columns — five elements at any spacing. One element per line, first as dashed borders and then as gradients, put twenty-five full-height fills in every raster tile and made scrolling the editor crawl                                                                                |
 | 33    | Line spacing, chosen in points from the same scrolling ladder the type size uses and applied to the paragraph the caret is in, exactly as the alignment buttons beside it are. Stored as a multiple of the box so it still scales with the wall, and written as an `em` on the block so one paragraph gets one spacing whatever sizes are mixed into it                                                                                                                                                                                                                                                      |
-| 34    | Archive, on the home page and the artist's own custom pages. "Archive image" (or "Archive N images" on a selection) puts a piece away without deleting it — its own page and photographs untouched — and "Add from archive" restores it at the cursor, on any wall, from a shared box of thumbnails with delete-forever on right-click. Not offered on a piece's own page, which has nothing of its own to put away                                                                                                                                                                                        |
+| 34    | Archive, on the home page and the artist's own custom pages. "Archive image" (or "Archive N images" on a selection) puts a piece away without deleting it — its own page and photographs untouched — and "Add from archive" restores it at the cursor, on any wall, from a shared box of thumbnails with delete-forever on right-click. Not offered on a piece's own page, which has nothing of its own to put away                                                                                                                                                                                          |
 | 32    | Performance. The 1102 the artist met in the studio was one server action per keystroke, each revalidating the layout, each layout render hashing the whole site: writes are now queued and coalesced, autosaves no longer revalidate, and the publish hash moved behind its own endpoint. Images are downscaled server-side by the IMAGES binding into AVIF and WebP, `/media` negotiates on `Accept` and caches at the edge, and the LQIP that had been stored since Phase 2 is finally rendered. A follow-up taught `derivativeKeys` about the new encodings, which a delete would otherwise have orphaned |
-| 36    | The top bar on a phone: the mark and the artist's name centred on their own line, with the menu button and Instagram at either end of the line below. The pages, the shop and About drop from the button as one list in reading order, in the flow so the page moves down rather than being covered. Built as a native `<details>` after the first version — a button with an `onClick` — was found on a phone as a hamburger that could be seen and not pressed. Desktop is untouched                                                                                                                                             |
-| 35    | Fixed "View site": it used `<Link>`, so leaving the admin was a client-side transition into a layout whose inline fade-in `<script>` never gets a parse pass — React refused to render it. Swapped for a plain `<a>` to force a full navigation. `/admin` now redirects to the wall (`/admin/portfolio`) instead of opening the shop grid, which moved to `/admin/shop` |
+| 36    | The top bar on a phone: the mark and the artist's name centred on their own line, with the menu button and Instagram at either end of the line below. The pages, the shop and About drop from the button as one list in reading order, in the flow so the page moves down rather than being covered. Built as a native `<details>` after the first version — a button with an `onClick` — was found on a phone as a hamburger that could be seen and not pressed. Desktop is untouched                                                                                                                       |
+| 35    | Fixed "View site": it used `<Link>`, so leaving the admin was a client-side transition into a layout whose inline fade-in `<script>` never gets a parse pass — React refused to render it. Swapped for a plain `<a>` to force a full navigation. `/admin` now redirects to the wall (`/admin/portfolio`) instead of opening the shop grid, which moved to `/admin/shop`                                                                                                                                                                                                                                      |
+| 37    | Undo and redo across the studio, on Cmd+Z and Ctrl+Z, with the history scoped to the page the artist is on and cleared the moment she leaves it. Inside a text box the browser's own character-level undo still wins; the history takes over once she puts the box down, when one editing session is one step. Every delete now reads its rows before removing them and hands them back, and `releaseMedia` stopped deleting from R2 altogether — bytes destroyed on the way out cannot come back                                                                                                            |
 
 ---
 
@@ -161,6 +169,111 @@ Non-obvious decisions that the code alone does not explain.
   `staleTimes.dynamic` defaults to 0. A write that creates or removes a row
   still refreshes; the canvas cannot invent an id. Adding `refresh()` back to an
   autosave restores the cost with no symptom to notice it by.
+
+- **The undo history is a stack of closures, not a log of changes.** The admin
+  has no single shape for "an action" — a drag is a layout patch, a delete is a
+  set of rows to put back, a settings toggle is one column — so a common
+  representation would mean every surface encoding into it and the stack
+  decoding again. `src/lib/undo-stack.ts` holds pairs of thunks recorded where
+  the action is fired, beside the code they mirror. Three of its behaviours are
+  load-bearing and none is visible from a call site: applications are
+  **serialised**, because two quick presses are two writes and concurrent
+  updates to one row let the earlier land second — the ordering fault
+  `write-queue.ts` exists for; `record` is **suppressed while applying**,
+  because an entry's undo goes back through the same path the artist's gesture
+  takes and that path records, so without it the stack grows as it is consumed;
+  and a failure **clears the whole history**, because every entry beneath the
+  failed one was recorded against a state the site is no longer in. Dropping
+  only the failed entry leaves a history that will do something confident and
+  wrong.
+
+- **The shortcut belongs to the browser whenever the caret is in a field.**
+  Inside a text box, an input or a textarea, Cmd+Z is character-level undo, and
+  taking it would mean reimplementing that inside a contenteditable — owning
+  caret restoration through every render, which is the work `RichTextEditor`
+  was written to avoid. So `swallowsUndo` yields there, and the history takes
+  over once focus has left, where one editing session is one step. It yields
+  inside an open `<dialog>` too, for a different reason: a modal traps focus, so
+  anything the history could reverse is behind it and out of sight — and the
+  studio's undo is silent by decision, so the press would look like nothing at
+  all. Several surfaces depend on that second rule rather than merely benefiting
+  from it. `SettingsForm` remounts its fields on undo and the piece dialog
+  records only after its write has succeeded; both are safe precisely because
+  the shortcut cannot fire while a modal is open or a field has the caret.
+
+- **`releaseMedia` deletes nothing, and that is the price of undoable deletes.**
+  It used to remove an object immediately unless the published revision still
+  referenced it. Bytes destroyed on the way out cannot come back, so an undo
+  would restore the row and leave a piece on the wall with a broken image —
+  total, silent, and visible only once the artist looked. There is no useful
+  test for "she might press Cmd+Z", so the distinction went and everything is
+  queued. Nothing leaks: `sweepPendingDeletions` runs on every publish and
+  reaches the same answer the function used to compute, taken later, once undo
+  can no longer change it. The cost is a bucket holding deleted objects until
+  the next "Make live" — which is the moment she decides what the site contains
+  anyway. `discardAsset` in settings-actions.ts also **claims** the key it is
+  given, because setting an asset back to the key it had is a write with no
+  upload behind it and nothing else would drain the queue.
+
+- **A delete's rows survive in the browser, not in the database.** Deletes
+  return what they removed and the undo entry hands it back; there is no
+  tombstone column and no deleted-at, because the history lives only while the
+  artist is on one page and a durable record would outlive what it describes by
+  years. The consequence is that the way back in is a public endpoint carrying
+  rows a browser could have written, which is what `src/lib/undo-backup.ts` is
+  for. Its per-column coercion is **generated from the Drizzle table**, so a
+  column added to `src/db/schema.ts` is understood on the same commit and there
+  is no second list to forget. A required column with no value is refused rather
+  than dropped: dropping it takes the schema default instead, so a piece could
+  come back published when it was a draft with nothing anywhere reporting it.
+
+- **Restore order satisfies the foreign keys, and `parentsFirst` is the case
+  the order cannot express.** `db.batch` runs in a transaction and SQLite checks
+  a foreign key as each row lands, so a child inserted before its parent fails
+  the whole restore. `RESTORE_ORDER` handles the table-to-table cases;
+  `portfolio_items.parent_id` points into its own table, which no table ordering
+  can solve. This is the same missing-cascade family as Phase 31 seen from the
+  other side.
+
+- **A creation and a deletion are the same mechanism run in opposite
+  directions.** Undoing a creation deletes and keeps the backup; redoing it
+  restores that backup — the same row with the same id — so a piece keeps its
+  photographs and its own page across any number of presses. It is why
+  `createWallText` and `addSiteFont` return their generated ids: the browser
+  cannot invent one, and undo has to name what it removes.
+
+- **Redo re-runs a delete and throws its new backup away.** This looks careless
+  and is not: undo restored the captured rows exactly, ids included, so what a
+  redo removes is the set the first backup already describes. Recapturing would
+  be suppressed by the re-entrancy guard anyway.
+
+- **Archiving carries each piece's previous status, and undo restores it.**
+  `archivePortfolioItems` overwrites the column, so a draft put away and brought
+  back would return _published_ — work on the live site the artist never chose
+  to publish, from a keypress that claimed only to undo. `unarchivePortfolioItems`
+  exists rather than a loop over `restorePortfolioItem` because that one places a
+  piece at the pointer, which is right for the archive popup and wrong for an
+  undo: archiving never touched x, y or z, so the position is still in the row.
+
+- **The wall's undo is one currency: a placement.** A drag, a resize, a group
+  move, a group scale, an align and a distribute differ in how the new positions
+  are worked out and not at all in what has to be written to reverse them, so one
+  before-and-after pair of lists undoes all six. `saveWallLayouts` gained an
+  optional `z` for it — a drag brings its element to the front, so undoing one
+  must put the layering back or a piece merely nudged stays in front of
+  everything it used to sit behind, where no further undo can reach it. The `z`
+  is optional and not defaulted, because a group move changes no layering and
+  writing one there would flatten the stack the artist built.
+
+- **An uncontrolled form can only be put back by remounting it.**
+  `defaultValue` is applied on mount and never again, so the revalidation that
+  brings back restored settings re-renders `SettingsForm` without changing a
+  field on screen. Writing to the DOM nodes would fix the plain inputs and not
+  the copy fields, whose editor holds a document in React state behind a hidden
+  input — so the section bumps a `key` instead, after the write, and one
+  mechanism is right for both. The snapshot it restores has to be kept per
+  section, because by the time a submission is in flight the DOM already holds
+  the new values and the old ones exist nowhere else.
 
 - **Nothing expensive may sit on the admin layout's render path.** It re-renders
   on every mutation that revalidates, which is the multiplier that turned
@@ -845,7 +958,7 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   by a browser drawing the legacy pseudo-element and the third is a no-op everywhere else —
   and `list-style: none` alone was tried first and was not enough on the artist's iPhone.
   The `display` also fixes a second-order fault: the legacy marker is an inline-block
-  pseudo-element *inside* the summary, so a block-level child lands on the line beneath it,
+  pseudo-element _inside_ the summary, so a block-level child lands on the line beneath it,
   which is why the hamburger appeared under the triangle rather than beside it.
 
   Writing them as `summary { … }` in `globals.css` is the obvious tidy-up and it is wrong
@@ -853,7 +966,7 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   is its native triangle, so an element selector reaches a summary that wants the opposite
   of this one and silently strips it — on a desktop surface nobody is looking at while
   working on a phone. And a rule that lives only in the stylesheet can fall out of step with
-  the markup that needs it: moving the class there brought the triangle back in *every*
+  the markup that needs it: moving the class there brought the triangle back in _every_
   browser, because a dev stylesheet can be stale while the HTML beside it is not — see
   "Running it locally". The summary is still never laid out as `flex`, which has a history
   of taking the disclosure behaviour with it in WebKit, so the flex box is a span inside it.
