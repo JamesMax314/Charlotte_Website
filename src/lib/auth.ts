@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -96,10 +97,20 @@ export async function isValidSession(value: string | undefined): Promise<boolean
   return timingSafeEqual(await hmac(SESSION_SECRET, String(expiresAt)), signature);
 }
 
-export async function hasValidSession(): Promise<boolean> {
+/**
+ * Memoised per request, because verifying costs a WebCrypto `importKey` and a
+ * signature and nothing about the answer can change mid-request.
+ *
+ * It is asked at least three times on an admin page — the layout gates its own
+ * reads on it, `getSiteSource` consults it to decide draft or live, and the
+ * page or action calls `requireSession` — and again by every guarded read that
+ * goes through `getSiteSource`. On the free tier's 10ms of CPU those repeats
+ * are not free.
+ */
+export const hasValidSession = cache(async (): Promise<boolean> => {
   const store = await cookies();
   return isValidSession(store.get(SESSION_COOKIE)?.value);
-}
+});
 
 /**
  * Gate for admin pages, server actions and route handlers.
