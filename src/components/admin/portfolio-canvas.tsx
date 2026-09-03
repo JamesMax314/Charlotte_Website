@@ -15,6 +15,7 @@ import {
   type WallText,
 } from "@/lib/portfolio";
 import { serialiseDoc, type RichDoc } from "@/lib/rich-text";
+import { SURFACE_LEADING } from "@/lib/type-scale";
 import { createWriteQueue } from "@/lib/write-queue";
 import {
   collectGuides,
@@ -1135,6 +1136,8 @@ export function PortfolioCanvas({
                       // Run sizes are a multiple of this, so the panel can
                       // only show points if it knows what the box is set to.
                       basePt={cqwToPt(text.fontSize)}
+                      // The `leading-snug` below, and on the public wall.
+                      baseLeading={SURFACE_LEADING.wall}
                     />
                   </div>
                 ) : (

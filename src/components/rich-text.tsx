@@ -88,6 +88,14 @@ export function RichTextInline({ doc, fonts }: { doc: RichDoc; fonts: FontOption
             display: "block",
             // Absent means the box's own alignment, which it inherits.
             ...(paragraph.align === undefined ? {} : { textAlign: paragraph.align }),
+            /*
+              `em`, not the unitless number CSS prefers. Unitless is inherited
+              as a ratio and recomputed against each run's own size, so one
+              paragraph mixing two sizes would get two spacings; an `em`
+              resolves here, against the box, and is inherited as that length.
+              Absent leaves the `leading-snug` on the element above.
+            */
+            ...(paragraph.leading === undefined ? {} : { lineHeight: `${paragraph.leading}em` }),
           }}
         >
           {paragraph.runs.length === 0 ? <br /> : <Runs runs={paragraph.runs} fonts={fonts} />}
@@ -120,7 +128,10 @@ export function RichTextBlocks({
           <p
             key={index}
             className={className}
-            style={paragraph.align === undefined ? undefined : { textAlign: paragraph.align }}
+            style={{
+              ...(paragraph.align === undefined ? {} : { textAlign: paragraph.align }),
+              ...(paragraph.leading === undefined ? {} : { lineHeight: `${paragraph.leading}em` }),
+            }}
           >
             <Runs runs={paragraph.runs} fonts={fonts} />
           </p>

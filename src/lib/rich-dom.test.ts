@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import { BUILT_IN_FONTS } from "./fonts";
 import {
   activeAlign,
+  activeLeading,
   alignOfBlock,
   activeSpanMark,
   applyDocToElement,
+  applyLeading,
   applySpanMark,
   clearMarks,
   clearMarksInRange,
   docFromElement,
+  leadingOfBlock,
   markSpan,
   rebaseSizeStyle,
+  setBlockLeading,
 } from "./rich-dom";
 import { docToPlain, type RichDoc } from "./rich-text";
 
@@ -591,5 +595,180 @@ describe("applySpanMark", () => {
     expect(docFromElement(root, BUILT_IN_FONTS)).toEqual([
       { runs: [{ text: "word", colour: "#101010" }] },
     ]);
+  });
+});
+
+/** Puts a selection across an element's contents, as the toolbar acts on. */
+const selectWithin = (node: Node): void => {
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+};
+
+describe("line spacing", () => {
+  it("writes both halves, so the artist sees what is stored", () => {
+    const block = document.createElement("div");
+    setBlockLeading(block, 1.5);
+    expect(block.getAttribute("data-rt-leading")).toBe("1.5");
+    // `em`, never the unitless number: unitless is inherited as a ratio and
+    // recomputed against each run's own size, so one paragraph mixing two
+    // sizes would get two spacings.
+    expect(block.style.lineHeight).toBe("1.5em");
+  });
+
+  it("clears both halves, so nothing is read back from a stripped style", () => {
+    const block = document.createElement("div");
+    setBlockLeading(block, 1.5);
+    setBlockLeading(block, undefined);
+    expect(block.hasAttribute("data-rt-leading")).toBe(false);
+    expect(block.style.lineHeight).toBe("");
+    expect(leadingOfBlock(block)).toBeUndefined();
+  });
+
+  it("reads the spacing off a block", () => {
+    expect(
+      docFromElement(editable('<div data-rt-leading="2" style="line-height: 2em">Airy</div>')),
+    ).toEqual([{ runs: [{ text: "Airy" }], leading: 2 }]);
+  });
+
+  /*
+    The attribute is what is read back, for the same reason a font id is: the
+    style is `em` and the browser is free to hand back a computed length.
+  */
+  it("ignores a line-height with no attribute beside it", () => {
+    expect(docFromElement(editable('<div style="line-height: 2em">Pasted</div>'))).toEqual([
+      { runs: [{ text: "Pasted" }] },
+    ]);
+  });
+
+  it("seeds a stored spacing back into the editor", () => {
+    const el = document.createElement("div");
+    const doc: RichDoc = [{ runs: [{ text: "One" }], leading: 1.8 }];
+    applyDocToElement(el, doc, BUILT_IN_FONTS);
+    expect(docFromElement(el)).toEqual(doc);
+  });
+
+  it("carries the block's spacing onto a shift+Enter line inside it", () => {
+    expect(docFromElement(editable('<div data-rt-leading="2">One<br>Two</div>'))).toEqual([
+      { runs: [{ text: "One" }], leading: 2 },
+      { runs: [{ text: "Two" }], leading: 2 },
+    ]);
+  });
+
+  it("keeps a spacing and an alignment on the same paragraph", () => {
+    expect(
+      docFromElement(editable('<div data-rt-leading="2" style="text-align: center">Mid</div>')),
+    ).toEqual([{ runs: [{ text: "Mid" }], align: "center", leading: 2 }]);
+  });
+});
+
+describe("applyLeading", () => {
+  it("spaces only the paragraph the caret is in", () => {
+    const el = editable("<div>One</div><div>Two</div>");
+    document.body.appendChild(el);
+    selectWithin(el.children[0]);
+
+    applyLeading(el, 2);
+    expect(docFromElement(el)).toEqual([
+      { runs: [{ text: "One" }], leading: 2 },
+      { runs: [{ text: "Two" }] },
+    ]);
+    el.remove();
+  });
+
+  /*
+    The primary gesture, and the one the alignment buttons beside it already
+    have: the caret alone counts as touching the paragraph it sits in. A
+    `Range.intersectsNode` that refused a collapsed range would leave the
+    control doing nothing at all unless she selected text first.
+  */
+  it("spaces the paragraph a collapsed caret sits in, and only that one", () => {
+    const el = editable("<div>One</div><div>Two</div>");
+    document.body.appendChild(el);
+    const range = document.createRange();
+    range.setStart(el.children[1].firstChild!, 1);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    applyLeading(el, 2);
+    expect(docFromElement(el)).toEqual([
+      { runs: [{ text: "One" }] },
+      { runs: [{ text: "Two" }], leading: 2 },
+    ]);
+    el.remove();
+  });
+
+  it("spaces every paragraph a selection reaches", () => {
+    const el = editable("<div>One</div><div>Two</div><div>Three</div>");
+    document.body.appendChild(el);
+    selectWithin(el);
+
+    applyLeading(el, 1.5);
+    expect(docFromElement(el).map((p) => p.leading)).toEqual([1.5, 1.5, 1.5]);
+    el.remove();
+  });
+
+  it("clears a spacing back to the surface's own", () => {
+    const el = editable('<div data-rt-leading="2" style="line-height: 2em">One</div>');
+    document.body.appendChild(el);
+    selectWithin(el.children[0]);
+
+    applyLeading(el, undefined);
+    expect(docFromElement(el)).toEqual([{ runs: [{ text: "One" }] }]);
+    el.remove();
+  });
+
+  /*
+    The shape a bare editor holds before anything has seeded it. There is no
+    block to carry the spacing, so the root is the paragraph — and
+    `docFromElement` reads it back the same way. Safe only because a
+    `data-rt-leading` on the root can have been put there by nothing else; the
+    root's `text-align` is the box's own setting and is deliberately not read.
+  */
+  it("spaces loose text with no block around it", () => {
+    const el = editable("Loose");
+    document.body.appendChild(el);
+    selectWithin(el);
+
+    applyLeading(el, 2);
+    expect(docFromElement(el)).toEqual([{ runs: [{ text: "Loose" }], leading: 2 }]);
+    el.remove();
+  });
+
+  it("does nothing when the selection is outside the editor", () => {
+    const el = editable("<div>One</div>");
+    const elsewhere = editable("<div>Other</div>");
+    document.body.appendChild(el);
+    document.body.appendChild(elsewhere);
+    selectWithin(elsewhere);
+
+    applyLeading(el, 2);
+    expect(docFromElement(el)).toEqual([{ runs: [{ text: "One" }] }]);
+    el.remove();
+    elsewhere.remove();
+  });
+});
+
+describe("activeLeading", () => {
+  it("reports the spacing of the paragraph the caret is in", () => {
+    const el = editable('<div data-rt-leading="1.9">Words</div>');
+    expect(activeLeading(el.children[0].firstChild, el)).toBe(1.9);
+  });
+
+  it("is undefined where she has chosen none, which is not the same as a number", () => {
+    const el = editable("<div>Words</div>");
+    expect(activeLeading(el.children[0].firstChild, el)).toBeUndefined();
+  });
+
+  // Unlike activeAlign, this takes the root in — that is where a bare
+  // editor's one paragraph lives.
+  it("finds a spacing written on the editor root", () => {
+    const el = editable("Loose");
+    setBlockLeading(el, 2);
+    expect(activeLeading(el.firstChild, el)).toBe(2);
   });
 });

@@ -31,6 +31,22 @@ export const PT_STEPS: readonly number[] = [
 ];
 
 /**
+ * The line spacing each surface paints when a paragraph chooses none.
+ *
+ * These are the Tailwind classes those surfaces already carry, written out as
+ * numbers because the toolbar has to *quote* the default in points before the
+ * artist has chosen anything — and it cannot read a class. They must be kept in
+ * step with the markup by hand: change `leading-snug` on the wall's text and
+ * this is the other half of that edit.
+ */
+export const SURFACE_LEADING = {
+  /** `leading-snug`, on the wall's text boxes — the editor and the public wall. */
+  wall: 1.375,
+  /** `leading-relaxed`, on the About, Contact and Privacy copy. */
+  copy: 1.625,
+} as const;
+
+/**
  * The steps a field can actually reach, with the current size guaranteed present.
  *
  * Two rules, and both exist because of how a native `<select>` behaves.

@@ -52,6 +52,7 @@ export function SizeSelect({
   maxPt,
   onChange,
   label,
+  prefix,
   className = "",
 }: {
   /** The size currently in force, in points, rounded for display. */
@@ -64,6 +65,14 @@ export function SizeSelect({
   maxPt: number;
   onChange: (pt: number) => void;
   label: string;
+  /**
+   * A glyph before the value, for when two of these sit side by side.
+   *
+   * Type size and line spacing are both quoted in points, so without it the
+   * toolbar shows two identical-looking "12 pt" buttons and the artist has to
+   * hover each one to find out which is which.
+   */
+  prefix?: React.ReactNode;
   className?: string;
 }) {
   const options = ptOptions(valuePt, minPt, maxPt);
@@ -207,9 +216,12 @@ export function SizeSelect({
           setDropUp(opensUpward());
           setOpen(true);
         }}
-        className="border-line focus:border-ink flex h-7 w-full items-center justify-between gap-2 border bg-transparent px-2 text-xs outline-none"
+        className="border-line focus:border-ink flex h-7 w-full items-center justify-between gap-1 border bg-transparent px-2 text-xs outline-none"
       >
-        <span>{valuePt} pt</span>
+        <span className="flex items-center gap-1">
+          {prefix}
+          {valuePt} pt
+        </span>
         <span aria-hidden className="text-graphite/70 text-[9px]">
           ▼
         </span>
