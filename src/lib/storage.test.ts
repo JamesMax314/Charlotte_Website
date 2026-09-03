@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assetKey, contentHash, derivativeKeys, isSafeKey, usableKeys } from "./storage";
+import { MODERN_FORMATS } from "./image-formats";
 
 const bytesOf = (text: string): ArrayBuffer => new TextEncoder().encode(text).buffer as ArrayBuffer;
 
@@ -27,11 +28,37 @@ describe("assetKey", () => {
 });
 
 describe("derivativeKeys", () => {
-  it("names every rung beside the base key", () => {
+  it("names every rung beside the base key, in every encoding", () => {
     expect(derivativeKeys("site/abc.jpg", [400, 800])).toEqual([
       "site/abc-400.jpg",
+      "site/abc-400.avif",
+      "site/abc-400.webp",
       "site/abc-800.jpg",
+      "site/abc-800.avif",
+      "site/abc-800.webp",
     ]);
+  });
+
+  /*
+    The regression this function was rewritten for. `/media` writes an AVIF or
+    WebP object the first time a browser asks for a rung, so those encodings
+    make up most of what is in the bucket — and while this named only the
+    original extension, every one of them survived the delete that removed the
+    piece. Nothing reads an orphan and nothing reports it; the only symptom is
+    the storage bill. Asserted by name rather than by count so that adding a
+    format to MODERN_FORMATS without revisiting the deletes fails here.
+  */
+  it("names the modern encodings, which a delete would otherwise orphan", () => {
+    const keys = derivativeKeys("artworks/ab12cd34.jpg", [1600]);
+    expect(keys).toContain("artworks/ab12cd34-1600.avif");
+    expect(keys).toContain("artworks/ab12cd34-1600.webp");
+  });
+
+  it("covers every format the pipeline can write", () => {
+    const keys = derivativeKeys("artworks/ab12cd34.jpg", [800]);
+    for (const format of MODERN_FORMATS) {
+      expect(keys).toContain(`artworks/ab12cd34-800.${format.extension}`);
+    }
   });
 
   it("is empty for a key with no extension", () => {
@@ -39,7 +66,24 @@ describe("derivativeKeys", () => {
   });
 
   it("only splits on the final dot", () => {
-    expect(derivativeKeys("site/a.b.jpg", [400])).toEqual(["site/a.b-400.jpg"]);
+    expect(derivativeKeys("site/a.b.jpg", [400])).toEqual([
+      "site/a.b-400.jpg",
+      "site/a.b-400.avif",
+      "site/a.b-400.webp",
+    ]);
+  });
+
+  /*
+    A PNG mark or a WebP upload keeps its own extension in the first slot, so
+    the original is never assumed to be a JPEG — and a source that is already
+    one of the modern formats must not be named twice, or the delete would
+    issue a duplicate key.
+  */
+  it("keeps the source's own extension without repeating it", () => {
+    expect(derivativeKeys("site/mark.webp", [400])).toEqual([
+      "site/mark-400.webp",
+      "site/mark-400.avif",
+    ]);
   });
 });
 
