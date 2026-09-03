@@ -154,13 +154,6 @@ export default async function AboutPage() {
                 {settings.contactEmail}
               </a>
             )}
-
-            {settings.etsyShopUrl && (
-              <p className="text-graphite mt-8 text-sm leading-relaxed">
-                Questions about an order you have already placed are fastest through Etsy messages,
-                since that is where the order details live.
-              </p>
-            )}
           </section>
         </div>
       </div>
