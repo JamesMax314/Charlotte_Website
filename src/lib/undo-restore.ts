@@ -1,8 +1,9 @@
 import "server-only";
-import { eq, inArray } from "drizzle-orm";
+import { eq, getTableColumns, inArray } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import * as schema from "@/db/schema";
 import { getDb } from "./db";
+import { chunk, maxRowsPerInsert } from "./chunk";
 import { claimMedia } from "./publish";
 import {
   backupMediaKeys,
@@ -154,12 +155,25 @@ export const restoreBackup = async (backup: Backup): Promise<void> => {
       the rows and the table agree. `coerceRows` is what makes it true, at
       runtime, against the very schema those types are derived from.
     */
-    statements.push(
-      db
-        .insert(RESTORABLE[table])
-        .values(ordered as never)
-        .onConflictDoNothing(),
-    );
+    const rowsPerInsert = maxRowsPerInsert(Object.keys(getTableColumns(RESTORABLE[table])).length);
+    /*
+      Chunked rather than one `.values()` per table. D1 caps a statement at
+      100 bound parameters and plain SQLite does not, so a restore that put
+      everything for one table in a single insert worked in every local test
+      and against a wide `portfolio_items`/`wall_texts` family — the exact
+      shape a piece with its own page produces — would not in production.
+      `parentsFirst` already ordered `ordered` so a parent's chunk is pushed,
+      and therefore committed, before its child's; slicing preserves that
+      order, and `db.batch` still commits every chunk as one transaction.
+    */
+    for (const group of chunk(ordered, rowsPerInsert)) {
+      statements.push(
+        db
+          .insert(RESTORABLE[table])
+          .values(group as never)
+          .onConflictDoNothing(),
+      );
+    }
   }
 
   if (statements.length === 0) return;

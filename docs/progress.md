@@ -151,6 +151,7 @@ The product specification is `docs/project-brief.md`.
 | 35    | Fixed "View site": it used `<Link>`, so leaving the admin was a client-side transition into a layout whose inline fade-in `<script>` never gets a parse pass — React refused to render it. Swapped for a plain `<a>` to force a full navigation. `/admin` now redirects to the wall (`/admin/portfolio`) instead of opening the shop grid, which moved to `/admin/shop`                                                                                                                                                                                                                                      |
 | 37    | Undo and redo across the studio, on Cmd+Z and Ctrl+Z, with the history scoped to the page the artist is on and cleared the moment she leaves it. Inside a text box the browser's own character-level undo still wins; the history takes over once she puts the box down, when one editing session is one step. Every delete now reads its rows before removing them and hands them back, and `releaseMedia` stopped deleting from R2 altogether — bytes destroyed on the way out cannot come back                                                                                                            |
 | 38    | Copy and paste on every free-form wall, on Cmd+C and Cmd+V, for one element or a whole selection at once, within a page or across pages. A copied piece that owns a page brings that page's contents with it; landing on another piece's own page drops it instead, since an element there can never own one. Undo removes exactly what paste created — `pasteWallSelection` and `deleteWallSelection` share the same shape on purpose                                                                                                                                                                       |
+| 39    | Fixed "Pasting the selection failed" on a piece whose own page holds enough elements: D1 caps a statement at 100 bound parameters, which plain SQLite does not, so a multi-row insert that passed every local test failed in production. `pasteWallSelection` and `restoreBackup` now chunk their inserts through `src/lib/chunk.ts`, kept under the cap in one `db.batch` transaction                                                                                                                                                                                                                       |
 
 ---
 
@@ -1260,6 +1261,21 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
   reach a page built for it, and `pasteWallSelection` does not build one. `clickable` is
   forced off on that landing to match what `createPortfolioItemDraft` already does for every
   new element on that scope, rather than leaving it true and inert only by construction.
+
+- **A multi-row `.values([...])` insert must stay under D1's 100 bound parameters, and
+  nothing local catches it if it does not.** Plain SQLite has no such limit, so a query that
+  binds one parameter per column per row passes on a developer's machine and in every test
+  that fakes D1 by recording SQL rather than executing it — and then fails in production the
+  first time a table wide enough or a row count large enough multiplies past 100, as a
+  redacted React error naming neither the query nor the limit. `pasteWallSelection` hit this
+  pasting a piece whose own page held a modest gallery of images; `restoreBackup` carries the
+  identical shape for the same family on undo and redo. `src/lib/chunk.ts` is the fix for
+  both — `maxRowsPerInsert` divides the cap by the table's column count, `chunk` splits the
+  rows, and `db.batch` still commits every resulting statement as one transaction. Any future
+  multi-row insert of artist-controlled data needs the same treatment; a single piece's own
+  page or a large group selection is exactly the shape this codebase lets her build.
+  `portfolio-actions.paste.test.ts` runs the real actions against `node:sqlite` with the cap
+  enforced, because that is the one thing a SQL-recording fake cannot catch.
 
 ---
 
