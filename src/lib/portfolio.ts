@@ -449,6 +449,18 @@ export const clampTo = (value: number, bounds: { min: number; max: number }): nu
   Math.min(Math.max(value, bounds.min), bounds.max);
 
 /**
+ * How far a pasted selection is nudged from its source, in canvas-width
+ * percent, for one press of paste. Also the step between successive presses
+ * of the same clipboard, so two pastes in a row do not land on top of each
+ * other.
+ *
+ * Lives here rather than beside `pasteWallSelection` in portfolio-actions.ts:
+ * a `"use server"` file may only export async functions, and the canvas needs
+ * this same number to compute the offset it asks that action for.
+ */
+export const PASTE_OFFSET_STEP = 3;
+
+/**
  * The `sizes` figure for one piece on the wall, above `md`, in `vw`.
  *
  * A wall element's width is a percentage of the *canvas*, and the canvas is a

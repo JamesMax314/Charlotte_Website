@@ -9,6 +9,7 @@ import {
   coverImage,
   cqwToPt,
   HOME_WALL,
+  PASTE_OFFSET_STEP,
   textStyle,
   type PortfolioItem,
   type WallScope,
@@ -48,6 +49,7 @@ import {
   deletePortfolioItem,
   deleteWallSelection,
   deleteWallText,
+  pasteWallSelection,
   restorePortfolioItem,
   savePortfolioItemDetails,
   savePortfolioLayout,
@@ -58,6 +60,8 @@ import {
 } from "@/app/admin/portfolio-actions";
 import { restoreDeleted } from "@/app/admin/undo-actions";
 import type { Backup } from "@/lib/undo-backup";
+import { swallowsUndo } from "@/lib/undo-keys";
+import { wallClipboard } from "@/lib/wall-clipboard";
 import { RichTextEditor } from "./rich-text-editor";
 import { RichTextInline } from "@/components/rich-text";
 import { BUILT_IN_FONTS, type FontOption } from "@/lib/fonts";
@@ -557,6 +561,32 @@ export function PortfolioCanvas({
     what: string,
     created: Promise<string>,
     remove: (id: string) => Promise<Backup>,
+  ) => {
+    let removed: Backup | null = null;
+    record({
+      label: what,
+      undo: async () => {
+        removed = await track(created.then(remove), `Undoing ${what}`);
+      },
+      redo: async () => {
+        if (removed !== null) await track(restoreDeleted(removed), `Redoing ${what}`);
+      },
+    });
+  };
+
+  /**
+   * The group form of `recordCreation`, for a paste that can create pieces
+   * and text boxes together.
+   *
+   * `deleteWallSelection` is always the `remove`: it already collects
+   * whatever a copied piece brought with it — its own page, its photographs —
+   * exactly as an ordinary group delete does, so undoing a paste and undoing
+   * a delete of the same shape go through the same cascade.
+   */
+  const recordGroupCreation = (
+    what: string,
+    created: Promise<{ items: string[]; texts: string[] }>,
+    remove: (ids: { items: string[]; texts: string[] }) => Promise<Backup>,
   ) => {
     let removed: Backup | null = null;
     record({
@@ -1423,6 +1453,73 @@ export function PortfolioCanvas({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedIds]);
+
+  /*
+    Copy and paste, read fresh on every render into a ref rather than a
+    dependency array — the same reason `textsRef` exists below the text save
+    queue: the listener below is attached once, and a `[selectedIds, ...]`
+    dependency list would tear it down and rebuild it on every drag frame this
+    component re-renders for, for a handler that only ever fires on a keypress.
+    Each returns whether it did anything, which is what the listener uses to
+    decide whether the browser's own clipboard should be pre-empted at all.
+  */
+  const wallKeysRef = useRef({
+    copy: (): boolean => false,
+    paste: (): boolean => false,
+  });
+  useEffect(() => {
+    wallKeysRef.current = {
+      copy: () => {
+        if (selectedIds.size === 0) return false;
+        const chosen = elements.filter((element) => selectedIds.has(element.id));
+        wallClipboard.copy(
+          chosen.filter((element) => element.kind === "item").map((element) => element.id),
+          chosen.filter((element) => element.kind === "text").map((element) => element.id),
+        );
+        return true;
+      },
+      paste: () => {
+        const clipboard = wallClipboard.read();
+        if (clipboard === null) return false;
+
+        const step = wallClipboard.nextPasteOffset();
+        const pasting = pasteWallSelection(
+          { items: [...clipboard.items], texts: [...clipboard.texts] },
+          scope,
+          { x: PASTE_OFFSET_STEP * step, y: PASTE_OFFSET_STEP * step },
+        );
+
+        recordGroupCreation("the paste", pasting, deleteWallSelection);
+        run(
+          pasting.then((created) => {
+            setSelectedIds(new Set([...created.items, ...created.texts]));
+          }),
+          "Pasting the selection",
+        );
+        return true;
+      },
+    };
+  });
+
+  /*
+    Cmd+C / Cmd+V, wherever the artist is not typing. `swallowsUndo` already
+    draws that line for the undo shortcut, and pre-empting it while a text box
+    or a dialog has focus would fight the browser's own clipboard.
+  */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key !== "c" && key !== "v") return;
+      if (swallowsUndo(event.target)) return;
+
+      const acted = key === "c" ? wallKeysRef.current.copy() : wallKeysRef.current.paste();
+      if (acted) event.preventDefault();
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const grip = (dragging: boolean) =>
     `absolute right-0 bottom-0 h-7 w-7 cursor-nwse-resize touch-none transition-opacity ${

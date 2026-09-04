@@ -150,6 +150,7 @@ The product specification is `docs/project-brief.md`.
 | 36    | The top bar on a phone: the mark and the artist's name centred on their own line, with the menu button and Instagram at either end of the line below. The pages, the shop and About drop from the button as one list in reading order, in the flow so the page moves down rather than being covered. Built as a native `<details>` after the first version — a button with an `onClick` — was found on a phone as a hamburger that could be seen and not pressed. Desktop is untouched                                                                                                                       |
 | 35    | Fixed "View site": it used `<Link>`, so leaving the admin was a client-side transition into a layout whose inline fade-in `<script>` never gets a parse pass — React refused to render it. Swapped for a plain `<a>` to force a full navigation. `/admin` now redirects to the wall (`/admin/portfolio`) instead of opening the shop grid, which moved to `/admin/shop`                                                                                                                                                                                                                                      |
 | 37    | Undo and redo across the studio, on Cmd+Z and Ctrl+Z, with the history scoped to the page the artist is on and cleared the moment she leaves it. Inside a text box the browser's own character-level undo still wins; the history takes over once she puts the box down, when one editing session is one step. Every delete now reads its rows before removing them and hands them back, and `releaseMedia` stopped deleting from R2 altogether — bytes destroyed on the way out cannot come back                                                                                                            |
+| 38    | Copy and paste on every free-form wall, on Cmd+C and Cmd+V, for one element or a whole selection at once, within a page or across pages. A copied piece that owns a page brings that page's contents with it; landing on another piece's own page drops it instead, since an element there can never own one. Undo removes exactly what paste created — `pasteWallSelection` and `deleteWallSelection` share the same shape on purpose                                                                                                                                                                       |
 
 ---
 
@@ -1235,6 +1236,30 @@ failed` on every attempt to delete one of the 13 pieces (of 47) that owned eleme
 - **There is no `tailwind.config.ts`.** Tailwind v4 is CSS-first: the `@theme` block in
   `src/app/globals.css` is the equivalent, and is the correct place for token edits.
   (CLAUDE.md's UI-tweak rule names both files; only `globals.css` exists.)
+
+- **The wall clipboard is a module singleton, not undo's context.** `UndoProvider` clears
+  its history on every pathname change because an entry closes over state that is about to
+  unmount — but a copied selection is only a set of ids, with nothing to go stale, and the
+  artist expects it to survive walking from one page to another to paste it there. A plain
+  value in `src/lib/wall-clipboard.ts` does exactly that within one tab and needs no code to
+  arrange it: it is simply gone on a reload, because the module is loaded fresh from
+  nothing. Moving it into the undo context or `useState` would either clear it on every
+  navigation or tie its lifetime to a component that unmounts between the copy and the paste.
+
+- **Paste's undo is `deleteWallSelection` run forward, not a shape of its own.**
+  `pasteWallSelection` returns exactly the `{items, texts}` shape `deleteWallSelection`
+  already accepts, so undoing a paste — including one that copied a piece with its own page —
+  goes through the same cascade a group delete does, and redo is `restoreBackup` putting the
+  same rows back, precisely as every other creation on the wall works. No new undo primitive
+  exists for this feature; `recordGroupCreation` in `portfolio-canvas.tsx` is `recordCreation`
+  widened from one id to two lists.
+
+- **Copying a piece with its own page duplicates that page one level down, except onto
+  another piece's page.** `isInteractive` requires `parent_id === null`, which a piece
+  landing on another piece's page can never have — so a copy that landed there could never
+  reach a page built for it, and `pasteWallSelection` does not build one. `clickable` is
+  forced off on that landing to match what `createPortfolioItemDraft` already does for every
+  new element on that scope, rather than leaving it true and inert only by construction.
 
 ---
 
