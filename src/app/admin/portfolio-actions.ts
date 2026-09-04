@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import * as schema from "@/db/schema";
 import { getDb } from "@/lib/db";
+import { chunk, maxRowsPerInsert } from "@/lib/chunk";
 import { releaseMedia } from "@/lib/publish";
 import { deletePiecesWithPages } from "@/lib/portfolio-deletes";
 import { mergeBackups, type Backup } from "@/lib/undo-backup";
@@ -866,10 +867,29 @@ export async function pasteWallSelection(
     itemId: itemIdMap.get(image.itemId)!,
   }));
 
+  /*
+    Chunked, not one `.values()` per table. D1 caps a statement at 100 bound
+    parameters — plain SQLite has no such limit, which is exactly why this
+    passed every local test until a piece's own page held enough elements: an
+    artist's own gallery-style piece can easily carry more rows than
+    `100 / columns` allows in one insert. Splitting keeps every statement
+    under the cap while the surrounding `db.batch` still commits them as one
+    transaction, so the paste is still all-or-nothing.
+  */
+  const rowsPerInsert = (
+    table: typeof schema.portfolioItems | typeof schema.wallTexts | typeof schema.portfolioImages,
+  ) => maxRowsPerInsert(Object.keys(getTableColumns(table)).length);
+
   const statements: BatchItem<"sqlite">[] = [
-    ...(newItems.length > 0 ? [db.insert(schema.portfolioItems).values(newItems)] : []),
-    ...(newTexts.length > 0 ? [db.insert(schema.wallTexts).values(newTexts)] : []),
-    ...(newImages.length > 0 ? [db.insert(schema.portfolioImages).values(newImages)] : []),
+    ...chunk(newItems, rowsPerInsert(schema.portfolioItems)).map((group) =>
+      db.insert(schema.portfolioItems).values(group),
+    ),
+    ...chunk(newTexts, rowsPerInsert(schema.wallTexts)).map((group) =>
+      db.insert(schema.wallTexts).values(group),
+    ),
+    ...chunk(newImages, rowsPerInsert(schema.portfolioImages)).map((group) =>
+      db.insert(schema.portfolioImages).values(group),
+    ),
   ];
   // `batch` is typed as a non-empty tuple; the guard at the top of this
   // function (at least one source row) is what makes that true.
