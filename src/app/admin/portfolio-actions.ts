@@ -703,3 +703,181 @@ export async function deleteWallSelection(selection: {
   refresh();
   return backup;
 }
+
+/**
+ * Duplicates a copied selection onto a wall, with fresh ids throughout.
+ *
+ * The rows are read fresh from the database rather than trusted from the
+ * browser, exactly as every other action here treats its input as a
+ * suggestion — an id that matches nothing is silently skipped. A piece that
+ * owns a page — clickable, with no parent of its own — brings that page's
+ * own pieces and text with it, one level down and no further: the same limit
+ * `deletePiecesWithPages` enforces from the other side.
+ *
+ * Landing on a piece's own page is the exception. An element there can never
+ * itself own a page — `isInteractive` in src/lib/portfolio.ts requires no
+ * `parent_id`, which a piece's page can never give it — so a copied piece's
+ * page is dropped rather than built somewhere nothing could ever reach it,
+ * and `clickable` is forced off to match how `createPortfolioItemDraft`
+ * treats every new element on that scope.
+ *
+ * Image rows point at the same storage key rather than a fresh upload.
+ * `releaseMedia` already treats a key as shareable between pieces — one still
+ * referenced anywhere stays out of the deletion queue — and the source row
+ * goes on referencing it throughout, so there is nothing here to claim.
+ */
+export async function pasteWallSelection(
+  selection: { items: string[]; texts: string[] },
+  scope: WallScope,
+  offset: { x: number; y: number },
+): Promise<{ items: string[]; texts: string[] }> {
+  await requireSession();
+  const db = await getDb();
+
+  const sourceItems = selection.items.length
+    ? await db
+        .select()
+        .from(schema.portfolioItems)
+        .where(inArray(schema.portfolioItems.id, selection.items))
+    : [];
+  const sourceTexts = selection.texts.length
+    ? await db.select().from(schema.wallTexts).where(inArray(schema.wallTexts.id, selection.texts))
+    : [];
+
+  if (sourceItems.length === 0 && sourceTexts.length === 0) return { items: [], texts: [] };
+
+  // Only when the copy lands somewhere its page could actually be reached —
+  // an element on a piece's own page can never itself own one.
+  const ownedPageParents =
+    scope.kind === "piece"
+      ? []
+      : sourceItems
+          .filter((item) => item.clickable && item.parentId === null)
+          .map((item) => item.id);
+
+  const pageItems = ownedPageParents.length
+    ? await db
+        .select()
+        .from(schema.portfolioItems)
+        .where(inArray(schema.portfolioItems.parentId, ownedPageParents))
+    : [];
+  const pageTexts = ownedPageParents.length
+    ? await db
+        .select()
+        .from(schema.wallTexts)
+        .where(inArray(schema.wallTexts.parentId, ownedPageParents))
+    : [];
+
+  const allItemIds = [...sourceItems.map((i) => i.id), ...pageItems.map((i) => i.id)];
+  const images = allItemIds.length
+    ? await db
+        .select()
+        .from(schema.portfolioImages)
+        .where(inArray(schema.portfolioImages.itemId, allItemIds))
+    : [];
+
+  const itemIdMap = new Map<string, string>();
+  for (const item of [...sourceItems, ...pageItems]) itemIdMap.set(item.id, crypto.randomUUID());
+  const textIdMap = new Map<string, string>();
+  for (const text of [...sourceTexts, ...pageTexts]) textIdMap.set(text.id, crypto.randomUUID());
+
+  // Fresh, unique slugs — sequential rather than parallel, because two pasted
+  // pieces sharing a name must not race `uniqueSlug` into picking the same one.
+  const usedSlugs = new Set<string>();
+  const freshSlug = async (base: string, id: string): Promise<string> => {
+    const candidate = await uniqueSlug(base, undefined, id);
+    let slug = candidate;
+    let n = 1;
+    while (usedSlugs.has(slug)) {
+      n += 1;
+      slug = `${candidate}-${n}`;
+    }
+    usedSlugs.add(slug);
+    return slug;
+  };
+
+  // One shared layer order for the pasted group, ranked by where its members
+  // already sat relative to each other — so a piece pasted from behind a text
+  // box stays behind it, while the whole group comes to the front of the wall
+  // it lands on.
+  const ranked = [...sourceItems, ...sourceTexts].sort((a, b) => a.z - b.z);
+  const baseZ = await nextZ();
+  const zFor = (id: string) => baseZ + ranked.findIndex((row) => row.id === id);
+
+  const now = new Date();
+
+  // Parents before children: `sourceItems` (which every `pageItems.parentId`
+  // points into) are pushed first, and one `db.insert().values(...)` inserts
+  // in the order given, so this order is what satisfies the foreign key.
+  const newItems: (typeof schema.portfolioItems.$inferInsert)[] = [];
+  for (const item of sourceItems) {
+    newItems.push({
+      ...item,
+      id: itemIdMap.get(item.id)!,
+      slug: await freshSlug(item.name, itemIdMap.get(item.id)!),
+      ...scopeColumns(scope),
+      x: clampTo(item.x + offset.x, WALL_LIMITS.x),
+      y: Math.max(item.y + offset.y, 0),
+      z: zFor(item.id),
+      clickable: scope.kind === "piece" ? false : item.clickable,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  for (const item of pageItems) {
+    newItems.push({
+      ...item,
+      id: itemIdMap.get(item.id)!,
+      slug: await freshSlug(item.name, itemIdMap.get(item.id)!),
+      // Stays on its own piece's page, unmoved — only the piece it belongs to
+      // has a new id.
+      parentId: itemIdMap.get(item.parentId!)!,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const newTexts: (typeof schema.wallTexts.$inferInsert)[] = [];
+  for (const text of sourceTexts) {
+    newTexts.push({
+      ...text,
+      id: textIdMap.get(text.id)!,
+      ...scopeColumns(scope),
+      x: clampTo(text.x + offset.x, WALL_LIMITS.x),
+      y: Math.max(text.y + offset.y, 0),
+      z: zFor(text.id),
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  for (const text of pageTexts) {
+    newTexts.push({
+      ...text,
+      id: textIdMap.get(text.id)!,
+      parentId: itemIdMap.get(text.parentId!)!,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const newImages: (typeof schema.portfolioImages.$inferInsert)[] = images.map((image) => ({
+    ...image,
+    id: crypto.randomUUID(),
+    itemId: itemIdMap.get(image.itemId)!,
+  }));
+
+  const statements: BatchItem<"sqlite">[] = [
+    ...(newItems.length > 0 ? [db.insert(schema.portfolioItems).values(newItems)] : []),
+    ...(newTexts.length > 0 ? [db.insert(schema.wallTexts).values(newTexts)] : []),
+    ...(newImages.length > 0 ? [db.insert(schema.portfolioImages).values(newImages)] : []),
+  ];
+  // `batch` is typed as a non-empty tuple; the guard at the top of this
+  // function (at least one source row) is what makes that true.
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
+
+  refresh();
+  return {
+    items: sourceItems.map((item) => itemIdMap.get(item.id)!),
+    texts: sourceTexts.map((text) => textIdMap.get(text.id)!),
+  };
+}
